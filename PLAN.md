@@ -8,9 +8,9 @@ Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 
 - [x] 独立仓库 `~/kitbundle/`(从 bundle-addon-app 复制,含 Function 扩展 `extensions/addon-discount/` 和全部 UI)
 - [x] 合规 webhook:`customers/data_request` / `customers/redact` / `shop/redact` → `app/routes/webhooks.compliance.tsx`
 - [x] 新 `shopify.app.toml` 模板(待 `shopify app config link` 填 client_id)
-- [ ] 新 Shopify app(Dev Dashboard,**Public distribution**)← 你来创建
-- [ ] 新 GitHub 仓库 + 新 Railway 项目(Postgres)← 你来创建
-- [ ] dev store (test2) 安装测试 Function
+- [x] 新 Shopify app KitBundle(client_id f7b9d6e2…,Public distribution 已设)
+- [x] GitHub github.com/biglookshan-ai/kitbundle + Railway(addon-discount-production-bb4d.up.railway.app,Postgres)
+- [x] dev store kitbundle-dev.myshopify.com(非Plus+测试数据)安装并验证:Function 折扣在购物车/checkout 生效 ✅(2026-07-17)
 
 ## Phase 2 — 功能迁移(把新 UI 接回 Function 引擎)
 现在仓库里有两套系统:
@@ -18,6 +18,8 @@ Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 
 - **原生折扣版**(cinegearpro 专用,这个仓库里要移除):`app.accessories.*`、`accessory-config*.ts`、`accessory_select.liquid`
 
 任务:
+0. 安装后自动激活 Function 折扣(现在要手动进 Discount settings 点激活;上架版应 afterAuth 自动创建)
+0.5 前台购物车刷新做主题无关(Horizon 等非 Dawn 主题的 drawer 组件不同;Section Rendering API + 组件探测 + /cart 兜底)
 1. 移除原生折扣版代码(accessories 路由/模型/前台块),避免双系统混淆
 2. 把 accessories 版做的**前台美化**(卡片、bundle tiles、缩略图条、View more、You save)移植到 Function 版前台 `addon_save.liquid`/JS
 3. 把 accessories 版的**编辑器改进**(变体限定、主品变体联动、副标题、多 bundle 各自折扣率)确认 Function 版编辑器都有(大部分本来就有)

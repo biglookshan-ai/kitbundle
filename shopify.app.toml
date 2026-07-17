@@ -34,6 +34,5 @@ redirect_urls = [
 ]
 
 [build]
-include_config_on_deploy = true
 # Pinned to the Railway-hosted app; local `shopify app dev` must not rewrite it.
 automatically_update_urls_on_dev = false
