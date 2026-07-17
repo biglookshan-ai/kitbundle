@@ -38,12 +38,12 @@ export default function Bundles() {
       ) : (
         <BlockStack gap="400">
           {bundle.length > 0 && (
-            <SectionCard title={`Bundles (${bundle.length})`}>
+            <SectionCard title="Bundles" count={bundle.length}>
               <OfferTable rows={bundle} kind="bundle" />
             </SectionCard>
           )}
           {sale.length > 0 && (
-            <SectionCard title={`Limited-time sale bundles (${sale.length})`}>
+            <SectionCard title="Limited-time sale bundles" count={sale.length}>
               <OfferTable rows={sale} kind="sale" />
             </SectionCard>
           )}

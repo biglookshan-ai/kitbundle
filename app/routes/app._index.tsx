@@ -8,6 +8,7 @@ import {
   Button,
   BlockStack,
   InlineStack,
+  InlineGrid,
   Badge,
   Box,
   Banner,
@@ -18,8 +19,9 @@ import {
 import {
   ImageIcon,
   ProductIcon,
+  PackageIcon,
+  PlusCircleIcon,
   GiftCardIcon,
-  DiscountIcon,
   CheckCircleIcon,
 } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -59,20 +61,26 @@ function StatTile({
   return (
     <div
       onClick={onClick}
-      style={{ cursor: onClick ? "pointer" : "default", flex: "1 1 150px" }}
+      style={{ cursor: onClick ? "pointer" : "default" }}
     >
       <Card>
-        <BlockStack gap="200">
-          <InlineStack gap="150" blockAlign="center">
+        <InlineStack gap="300" blockAlign="center" wrap={false}>
+          <Box
+            background="bg-surface-secondary"
+            padding="200"
+            borderRadius="200"
+          >
             <Icon source={icon} tone="subdued" />
+          </Box>
+          <BlockStack gap="050">
+            <Text as="p" variant="headingLg">
+              {value}
+            </Text>
             <Text as="span" variant="bodySm" tone="subdued">
               {label}
             </Text>
-          </InlineStack>
-          <Text as="p" variant="heading2xl">
-            {value}
-          </Text>
-        </BlockStack>
+          </BlockStack>
+        </InlineStack>
       </Card>
     </div>
   );
@@ -107,7 +115,7 @@ export default function Dashboard() {
         )}
 
         {/* Stat tiles */}
-        <InlineStack gap="300" wrap>
+        <InlineGrid columns={{ xs: 2, sm: 2, md: 4 }} gap="300">
           <StatTile
             icon={ProductIcon}
             label="Products"
@@ -115,13 +123,13 @@ export default function Dashboard() {
             onClick={() => navigate("/app/bundles")}
           />
           <StatTile
-            icon={DiscountIcon}
+            icon={PackageIcon}
             label="Bundles"
             value={stats.bundle + stats.sale}
             onClick={() => navigate("/app/bundles")}
           />
           <StatTile
-            icon={ProductIcon}
+            icon={PlusCircleIcon}
             label="Add-ons"
             value={stats.addon + stats.free}
             onClick={() => navigate("/app/addons")}
@@ -132,7 +140,7 @@ export default function Dashboard() {
             value={campaignCount}
             onClick={() => navigate("/app/gifts")}
           />
-        </InlineStack>
+        </InlineGrid>
 
         <Layout>
           <Layout.Section>

@@ -142,17 +142,22 @@ export function useConfigureProduct() {
 
 export function SectionCard({
   title,
+  count,
   children,
 }: {
   title: string;
+  count?: number;
   children: React.ReactNode;
 }) {
   return (
     <Card padding="0">
-      <Box padding="300" borderBlockEndWidth="025" borderColor="border">
-        <Text as="h3" variant="headingSm">
-          {title}
-        </Text>
+      <Box padding="400" borderBlockEndWidth="025" borderColor="border">
+        <InlineStack gap="200" blockAlign="center">
+          <Text as="h3" variant="headingSm">
+            {title}
+          </Text>
+          {typeof count === "number" && <Badge tone="info">{String(count)}</Badge>}
+        </InlineStack>
       </Box>
       {children}
     </Card>

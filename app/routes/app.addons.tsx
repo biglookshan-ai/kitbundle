@@ -38,12 +38,12 @@ export default function Addons() {
       ) : (
         <BlockStack gap="400">
           {addon.length > 0 && (
-            <SectionCard title={`Add-ons (${addon.length})`}>
+            <SectionCard title="Add-ons" count={addon.length}>
               <OfferTable rows={addon} kind="addon" />
             </SectionCard>
           )}
           {free.length > 0 && (
-            <SectionCard title={`Free add-ons (${free.length})`}>
+            <SectionCard title="Free add-ons" count={free.length}>
               <OfferTable rows={free} kind="free" />
             </SectionCard>
           )}
