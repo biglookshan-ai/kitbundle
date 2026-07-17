@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 name = "KitBundle"
-application_url = "https://shopify.dev/apps/default-app-home"
+application_url = "https://addon-discount-production-bb4d.up.railway.app"
 embedded = true
 client_id = "f7b9d6e29086498ce53bd02ed0d8ff44"
 
@@ -27,8 +27,13 @@ api_version = "2026-10"
   compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 
 [auth]
-redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+redirect_urls = [
+  "https://addon-discount-production-bb4d.up.railway.app/auth/callback",
+  "https://addon-discount-production-bb4d.up.railway.app/auth/shopify/callback",
+  "https://addon-discount-production-bb4d.up.railway.app/api/auth/callback"
+]
 
 [build]
 include_config_on_deploy = true
-automatically_update_urls_on_dev = true
+# Pinned to the Railway-hosted app; local `shopify app dev` must not rewrite it.
+automatically_update_urls_on_dev = false
