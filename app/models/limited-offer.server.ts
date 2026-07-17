@@ -129,7 +129,11 @@ export async function reconcileLimitedOffers(
       startsAt,
       endsAt,
       combinesWith: {
-        productDiscounts: false, // don't stack with the main node on the same line
+        // Must combine so the MAIN node can still discount ADD-ONS while a
+        // limited bundle is in the cart. Double-discount on the limited bundle
+        // line itself is avoided in run.js: the limited node emits only the
+        // extra % that compounds with the main node's normal % up to the deep %.
+        productDiscounts: true,
         orderDiscounts: true,
         shippingDiscounts: true,
       },

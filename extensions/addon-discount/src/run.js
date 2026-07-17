@@ -276,15 +276,33 @@ export function run(input) {
       const isAcc = !!(/** @type {any} */ (line)?.cgpFor?.value);
       if (isAcc && !groupHasProduct(group, pid)) continue;
 
-      const percent = clampPercent(group.limited.discountPercent);
-      if (percent <= 0) continue;
+      const deep = clampPercent(group.limited.discountPercent);
+      if (deep <= 0) continue;
+      // The limited node now COMBINES with the main node (so add-ons still get
+      // discounted while a limited bundle is in the cart). To avoid double-
+      // discounting the limited bundle line, emit only the EXTRA % that compounds
+      // with the main node's price on this line up to the deep price:
+      //   end mode → main gives 0, so emit the full deep %.
+      //   revert   → main gives the normal %, so emit `extra` where
+      //              (1 - normal)(1 - extra) = (1 - deep).
+      const endMode = group.limited.mode === "end";
+      const normal = clampPercent(group.discountPercent);
+      let emit;
+      if (endMode || normal <= 0) {
+        emit = deep;
+      } else if (deep <= normal) {
+        emit = 0; // limited isn't deeper than the standing price
+      } else {
+        emit = 100 * (1 - (1 - deep / 100) / (1 - normal / 100));
+      }
+      if (emit <= 0) continue;
       const cap = mainQtyByGrp.get(grp) ?? 1;
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       limited.push({
-        message: `Limited offer ${percent}% off`,
+        message: `Limited offer ${deep}% off`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
-        value: { percentage: { value: percent.toFixed(1) } },
+        value: { percentage: { value: emit.toFixed(2) } },
       });
     }
     return limited.length === 0
