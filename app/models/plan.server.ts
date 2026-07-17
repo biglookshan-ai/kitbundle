@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { PRO_PLAN, BILLING_TEST } from "../shopify.server";
+import { PRO_PLAN, BILLING_TEST, BILLING_ENABLED } from "../shopify.server";
 import { FREE_PRODUCT_LIMIT, FREE_CAMPAIGN_LIMIT } from "./plan";
 
 /**
@@ -40,6 +40,7 @@ export async function canConfigureProduct(
   shop: string,
   productId: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (!BILLING_ENABLED) return { ok: true }; // free launch → no limits
   if (await hasPro(billing)) return { ok: true };
   const existing = await prisma.bundleConfig.findMany({
     where: { shop },
@@ -55,6 +56,7 @@ export async function canCreateCampaign(
   billing: Billing,
   shop: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (!BILLING_ENABLED) return { ok: true }; // free launch → no limits
   if (await hasPro(billing)) return { ok: true };
   const count = await prisma.giftCampaign.count({ where: { shop } });
   if (count < FREE_CAMPAIGN_LIMIT) return { ok: true };

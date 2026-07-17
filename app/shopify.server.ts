@@ -13,6 +13,12 @@ export { PRO_PLAN } from "./models/plan";
  * before App Store launch so real merchants are actually billed.
  */
 export const BILLING_TEST = process.env.SHOPIFY_BILLING_TEST !== "false";
+/**
+ * Master switch. Launch FREE: with this off (default) everything is unlimited,
+ * the Plan page is hidden, and no billing calls happen. Flip BILLING_ENABLED=true
+ * in Railway later to turn on the Pro plan + free-tier limits — no code changes.
+ */
+export const BILLING_ENABLED = process.env.BILLING_ENABLED === "true";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { ensureFunctionDiscount } from "./models/function-discount.server";

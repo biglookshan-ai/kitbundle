@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
 import {
   Page,
@@ -14,11 +15,17 @@ import {
   Box,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { authenticate, PRO_PLAN, BILLING_TEST } from "../shopify.server";
+import {
+  authenticate,
+  PRO_PLAN,
+  BILLING_TEST,
+  BILLING_ENABLED,
+} from "../shopify.server";
 import { FREE_PRODUCT_LIMIT, FREE_CAMPAIGN_LIMIT } from "../models/plan";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing } = await authenticate.admin(request);
+  if (!BILLING_ENABLED) throw redirect("/app"); // free launch → no plan page
   const { hasActivePayment, appSubscriptions } = await billing.check({
     plans: [PRO_PLAN],
     isTest: BILLING_TEST,

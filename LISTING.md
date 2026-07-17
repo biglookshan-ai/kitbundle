@@ -38,10 +38,10 @@ activates itself, and you add the storefront block from the theme editor.
 - Add-ons, bundles, free gifts and countdown sales in one app
 - Native theme app extension — clean install/uninstall, no leftover code
 
-## Pricing
-- **Free** — 1 product with offers + 1 gift campaign. All offer types.
-- **Pro — $9.99/month, 14-day free trial** — Unlimited products & campaigns,
-  limited-time offers, priority support.
+## Pricing (LAUNCH: free)
+Launching 100% free — all features, unlimited. Billing is built and gated behind
+`BILLING_ENABLED` (off), so a paid Pro tier ($9.99/mo, 14-day trial) can be
+switched on later without code changes.
 
 ## Required URLs
 - App URL: https://addon-discount-production-bb4d.up.railway.app
