@@ -2,13 +2,34 @@ import "@shopify/shopify-app-remix/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  BillingInterval,
   shopifyApp,
 } from "@shopify/shopify-app-remix/server";
+
+import { PRO_PLAN } from "./models/plan";
+export { PRO_PLAN } from "./models/plan";
+/**
+ * Test charges while developing; set SHOPIFY_BILLING_TEST=false in Railway
+ * before App Store launch so real merchants are actually billed.
+ */
+export const BILLING_TEST = process.env.SHOPIFY_BILLING_TEST !== "false";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { ensureFunctionDiscount } from "./models/function-discount.server";
 
 const shopify = shopifyApp({
+  billing: {
+    [PRO_PLAN]: {
+      trialDays: 14,
+      lineItems: [
+        {
+          amount: 9.99,
+          currencyCode: "USD",
+          interval: BillingInterval.Every30Days,
+        },
+      ],
+    },
+  },
   hooks: {
     // Runs on install / re-auth. Activate the Function's automatic discount so
     // merchants never have to do it manually; failures are non-fatal (the

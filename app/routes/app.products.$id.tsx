@@ -37,6 +37,7 @@ import {
 } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { canConfigureProduct } from "../models/plan.server";
 import {
   readConfig,
   saveConfig,
@@ -74,8 +75,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const productId = `gid://shopify/Product/${params.id}`;
+
+  const gate = await canConfigureProduct(billing, session.shop, productId);
+  if (!gate.ok) return { ok: false, error: gate.error };
 
   const formData = await request.formData();
   const raw = String(formData.get("config") ?? "");

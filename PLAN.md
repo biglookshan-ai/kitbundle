@@ -39,13 +39,14 @@ Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 
 
 **合规**
 - [x] 三个隐私 webhook(HMAC 验证由 authenticate.webhook 处理)
-- [ ] 隐私政策 URL(需要写一份,放官网或 GitHub Pages)
-- [ ] 数据最小化说明:本 app 不存客户个人数据,只存店铺配置
+- [x] 隐私政策页 /privacy(app 内公开路由,无需外部托管)
+- [x] 数据最小化:不存客户个人数据(privacy 页已声明)
 
-**计费**(如收费)
-- [ ] 用 Shopify Billing API(managed pricing 或 appSubscriptionCreate),禁止外部收费
-- [ ] 免费试用建议 7–14 天
-- [ ] 决定定价:建议 freemium(N 个 bundle 免费,更多收月费)
+**计费**(2026-07-17 完成)
+- [x] Shopify Billing API(shopifyApp billing config,Pro $9.99/月 + 14 天试用,BILLING_TEST 开关)
+- [x] Freemium 服务端 gating:Free=1 产品+1 赠品活动,超限保存拦截并提示升级(app/models/plan.server.ts)
+- [x] Plan 页(/app/plan):方案对比 + 升级/取消订阅
+- [ ] 上架前:Railway 设 SHOPIFY_BILLING_TEST=false(切真实计费)
 
 **功能与质量**
 - [ ] app 必须"开箱有用":安装后有引导(empty state 已有,需加 onboarding 步骤说明)
@@ -54,10 +55,10 @@ Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 
 - [ ] 错误状态处理、Polaris UI 规范(已用 Polaris)
 
 **Listing 素材**
-- [ ] app 名称(不能含 "Shopify")、图标 1200x1200、截图 1600x900 ×3+
-- [ ] 简介/详细描述/定价说明(英文为主)
-- [ ] 支持邮箱、支持 URL、隐私政策 URL
-- [ ] 演示店(建议用 dev store 配好示例 bundle)
+- [x] Listing 文案初稿(LISTING.md:名称/简介/长描述/定价/测试说明)
+- [ ] 图标 1200x1200、feature 1600x900、截图 ×3+(需设计,见 LISTING.md 清单)
+- [x] 支持邮箱/隐私URL/app URL(见 LISTING.md)
+- [ ] 演示店配好示例 bundle + 存储密码
 
 **提审**
 - [ ] 审核测试说明(怎么装、怎么配一个 bundle、去哪看折扣)

@@ -21,6 +21,8 @@ import {
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { ImageIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
+import { canCreateCampaign } from "../models/plan.server";
 import { getCampaign, saveCampaign } from "../models/gift-campaign.server";
 import {
   emptyCampaign,
@@ -41,13 +43,24 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const form = await request.formData();
   let campaign: GiftCampaign;
   try {
     campaign = JSON.parse(String(form.get("campaign")));
   } catch {
     return { ok: false, error: "Invalid payload" };
+  }
+  // Gate NEW campaigns only — editing an existing one is always allowed.
+  const exists = campaign.id
+    ? await prisma.giftCampaign.findFirst({
+        where: { shop: session.shop, id: campaign.id },
+        select: { id: true },
+      })
+    : null;
+  if (!exists) {
+    const gate = await canCreateCampaign(billing, session.shop);
+    if (!gate.ok) return { ok: false, error: gate.error };
   }
   if (
     campaign.triggerProducts.length === 0 &&

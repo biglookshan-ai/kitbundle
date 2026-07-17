@@ -26,6 +26,7 @@ export default function App() {
         </Link>
         <Link to="/app/gifts">Gift campaigns</Link>
         <Link to="/app/discount">Discount settings</Link>
+        <Link to="/app/plan">Plan</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>
