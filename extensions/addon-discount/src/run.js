@@ -89,6 +89,21 @@ function allPresentUnder(group, present) {
   );
 }
 
+/**
+ * How many COMPLETE kits of `group` exist under a grp tag: the min of the main
+ * quantity and every accessory's quantity. A bundle is 1:1, so bumping only the
+ * main's quantity does NOT create more discounted kits.
+ */
+function kitCount(group, mainQty, qmap) {
+  let n = Math.max(0, Number(mainQty) || 0);
+  const accessories = Array.isArray(group?.accessories) ? group.accessories : [];
+  for (const a of accessories) {
+    const q = (qmap && qmap.get(a?.productId)) ?? 0;
+    if (q < n) n = q;
+  }
+  return n;
+}
+
 function groupHasProduct(group, pid) {
   const accessories = Array.isArray(group?.accessories) ? group.accessories : [];
   return accessories.some((a) => a?.productId === pid);
@@ -119,6 +134,8 @@ export function run(input) {
   const presentQty = new Map();
   /** @type {Map<string, Set<string>>} */
   const presentByGrp = new Map(); // kit instance tag -> product ids present under it
+  /** @type {Map<string, Map<string, number>>} */
+  const qtyByGrp = new Map(); // kit instance tag -> (product id -> quantity)
   /** @type {Map<string, any>} */
   const mainConfigByGrp = new Map(); // tag -> backing main's config
   /** @type {Map<string, number>} */
@@ -143,6 +160,15 @@ export function run(input) {
         presentByGrp.set(grp, set);
       }
       set.add(pid);
+      // Track quantity per (grp, product) so a bundle can be capped to the number
+      // of COMPLETE kits present (a bundle is 1:1 — bumping only the main's
+      // quantity must not discount the extra mains).
+      let qmap = qtyByGrp.get(grp);
+      if (!qmap) {
+        qmap = new Map();
+        qtyByGrp.set(grp, qmap);
+      }
+      qmap.set(pid, (qmap.get(pid) ?? 0) + qty);
     }
 
     // A line only acts as a MAIN (its config drives add-on/free/bundle prices)
@@ -278,31 +304,18 @@ export function run(input) {
 
       const deep = clampPercent(group.limited.discountPercent);
       if (deep <= 0) continue;
-      // The limited node now COMBINES with the main node (so add-ons still get
-      // discounted while a limited bundle is in the cart). To avoid double-
-      // discounting the limited bundle line, emit only the EXTRA % that compounds
-      // with the main node's price on this line up to the deep price:
-      //   end mode → main gives 0, so emit the full deep %.
-      //   revert   → main gives the normal %, so emit `extra` where
-      //              (1 - normal)(1 - extra) = (1 - deep).
-      const endMode = group.limited.mode === "end";
-      const normal = clampPercent(group.discountPercent);
-      let emit;
-      if (endMode || normal <= 0) {
-        emit = deep;
-      } else if (deep <= normal) {
-        emit = 0; // limited isn't deeper than the standing price
-      } else {
-        emit = 100 * (1 - (1 - deep / 100) / (1 - normal / 100));
-      }
-      if (emit <= 0) continue;
-      const cap = mainQtyByGrp.get(grp) ?? 1;
+      // The limited node COMBINES with the main node (so add-ons still get
+      // discounted while a limited bundle is in the cart). Shopify applies the
+      // GREATER of two combining product discounts on the same line, so we emit
+      // the FULL deep %: max(main's normal %, deep %) = deep inside the window;
+      // after expiry this node is time-gated off and only the main % remains.
+      const cap = kitCount(group, mainQtyByGrp.get(grp) ?? 0, qtyByGrp.get(grp));
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       limited.push({
         message: `Limited offer ${deep}% off`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
-        value: { percentage: { value: emit.toFixed(2) } },
+        value: { percentage: { value: deep.toFixed(1) } },
       });
     }
     return limited.length === 0
@@ -404,10 +417,13 @@ export function run(input) {
           const endMode =
             group.limited && group.limited.enabled && group.limited.mode === "end";
           const pct = endMode ? 0 : clampPercent(group.discountPercent);
-          if (pct > 0) {
+          // Only complete kits get the bundle price — extra mains stay full price.
+          const cap = kitCount(group, mainQtyByGrp.get(grp) ?? 0, qtyByGrp.get(grp));
+          const qty = Math.min(lineQty, cap);
+          if (pct > 0 && qty > 0) {
             discounts.push({
               message: `Bundle ${pct}% off`,
-              targets: [{ cartLine: { id: line.id, quantity: lineQty } }],
+              targets: [{ cartLine: { id: line.id, quantity: qty } }],
               value: { percentage: { value: pct.toFixed(1) } },
             });
           }
@@ -425,6 +441,7 @@ export function run(input) {
       const present = presentByGrp.get(grp);
 
       let best = 0;
+      let bestGroup = null;
       if (lo) {
         // Limited bundle line: the main node only ever applies the NORMAL price
         // (per-accessory override, else group), and nothing at all when the
@@ -439,6 +456,7 @@ export function run(input) {
           // A bundle is ONE discount on the whole kit: the group %, not any
           // per-accessory override (those are an add-on-only concept).
           best = endMode ? 0 : clampPercent(group.discountPercent);
+          bestGroup = group;
         }
       } else {
         // Plain bundle line: best matching bundle group by membership, using the
@@ -448,12 +466,20 @@ export function run(input) {
           if (!groupHasProduct(group, pid)) continue;
           if (!allPresentUnder(group, present)) continue;
           const percent = clampPercent(group.discountPercent);
-          if (percent > best) best = percent;
+          if (percent > best) {
+            best = percent;
+            bestGroup = group;
+          }
         }
       }
 
       if (best <= 0) continue;
-      const cap = mainQtyByGrp.get(grp) ?? 1;
+      // Cap to complete kits so extra mains don't inflate the discounted count.
+      const cap = kitCount(
+        bestGroup,
+        mainQtyByGrp.get(grp) ?? 0,
+        qtyByGrp.get(grp),
+      );
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       discounts.push({

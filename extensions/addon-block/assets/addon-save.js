@@ -1131,10 +1131,13 @@
         // stale ones so the cart/Function match this card exactly.
         return Math.max(0, Math.min(100, Number(group.discountPercent) || 0));
       }
-      // Tag `_cgp_lo` only while the offer is actually live, so the time-gated
-      // node governs the price; after expiry the main node takes over.
+      // Always tag `_cgp_lo` when the bundle HAS a limited offer configured, and
+      // let the time-gated discount node decide whether the deep price applies
+      // (it only fires inside its Shopify startsAt/endsAt window). Relying on a
+      // client-side "is it live now?" check was unreliable — the very first add
+      // could tag nothing and show the normal price. The node is authoritative.
       function offerIdFor(state) {
-        return hasLimited && state === "active" ? group.offerId || null : null;
+        return hasLimited ? group.offerId || null : null;
       }
 
       function storeSelection(state, offerId) {
