@@ -21,7 +21,7 @@ import { ImageIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { listConfigsDetailed } from "../models/addon-config.server";
-import { findExistingDiscount } from "../models/function-discount.server";
+import { ensureFunctionDiscount } from "../models/function-discount.server";
 import {
   displayCode,
   groupBucket,
@@ -36,10 +36,14 @@ function numericOf(gid: string) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const [detailed, discount] = await Promise.all([
+  // Self-heal: the Function's activation discount should be created on install
+  // (afterAuth), but the new embedded token-exchange flow doesn't always run
+  // that hook — so ensure it here too (idempotent, no-ops when it exists).
+  const [detailed, ensured] = await Promise.all([
     listConfigsDetailed(admin, session.shop),
-    findExistingDiscount(admin).catch(() => null),
+    ensureFunctionDiscount(admin).catch(() => ({ ok: false })),
   ]);
+  const discount = ensured.ok;
 
   const products = detailed.map((d) => {
     const counts: Record<Bucket, number> = { bundle: 0, sale: 0, addon: 0, free: 0 };
