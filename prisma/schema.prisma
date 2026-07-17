@@ -8,9 +8,12 @@ generator client {
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+// Local dev uses SQLite (no external DB needed). Before wiring Railway for
+// production, flip provider back to "postgresql" and restore `prisma migrate
+// deploy` in shopify.web.toml / package.json setup (see PLAN.md).
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
 }
 
 model Session {
