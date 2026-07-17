@@ -1,11 +1,9 @@
-# KitBundle — public-distribution app (Shopify App Store).
-# Run `shopify app config link` once to create/link the NEW app in the Dev
-# Dashboard; the CLI fills in client_id. Keep distribution = PUBLIC so the
-# discount Function works on every plan (custom distribution requires Plus).
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 name = "KitBundle"
-application_url = "https://REPLACE-WITH-RAILWAY-URL.up.railway.app"
+application_url = "https://shopify.dev/apps/default-app-home"
 embedded = true
+client_id = "f7b9d6e29086498ce53bd02ed0d8ff44"
 
 [access_scopes]
 # read/write_products: read + write the offer config product metafield.
@@ -14,7 +12,7 @@ scopes = "read_products,write_products,write_discounts"
 use_legacy_install_flow = false
 
 [webhooks]
-api_version = "2026-07"
+api_version = "2026-10"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
@@ -24,21 +22,12 @@ api_version = "2026-07"
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
-  # Mandatory privacy webhooks — App Store requirement.
   [[webhooks.subscriptions]]
-  compliance_topics = [
-    "customers/data_request",
-    "customers/redact",
-    "shop/redact",
-  ]
   uri = "/webhooks/compliance"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
 
 [auth]
-redirect_urls = [
-  "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/auth/callback",
-  "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/auth/shopify/callback",
-  "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/api/auth/callback"
-]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
 
 [build]
 include_config_on_deploy = true
