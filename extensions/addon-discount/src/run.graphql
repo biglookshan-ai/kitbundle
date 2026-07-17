@@ -1,0 +1,51 @@
+# Input for the product-discount Function (add-on / bundle / free / gift).
+# Comments count toward the 3000-char input-query limit, so keep them short.
+query RunInput {
+  discountNode {
+    metafield(namespace: "$app:limited", key: "offer") {
+      value
+    }
+    giftMeta: metafield(namespace: "$app:gift", key: "campaign") {
+      value
+    }
+  }
+  cart {
+    lines {
+      id
+      quantity
+      cgpGrp: attribute(key: "_cgp_grp") {
+        value
+      }
+      cgpFor: attribute(key: "_addon_for") {
+        value
+      }
+      cgpFree: attribute(key: "_cgp_free") {
+        value
+      }
+      cgpLo: attribute(key: "_cgp_lo") {
+        value
+      }
+      cgpBid: attribute(key: "_cgp_bid") {
+        value
+      }
+      cgpGift: attribute(key: "_cgp_gift") {
+        value
+      }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          id
+          product {
+            id
+            addonConfig: metafield(namespace: "custom", key: "addon_config") {
+              value
+            }
+            giftTrigger: metafield(namespace: "custom", key: "gift_trigger") {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}

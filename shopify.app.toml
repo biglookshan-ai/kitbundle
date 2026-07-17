@@ -1,0 +1,45 @@
+# Bundle Pro — public-distribution app (Shopify App Store).
+# Run `shopify app config link` once to create/link the NEW app in the Dev
+# Dashboard; the CLI fills in client_id. Keep distribution = PUBLIC so the
+# discount Function works on every plan (custom distribution requires Plus).
+
+name = "bundle-pro"
+application_url = "https://REPLACE-WITH-RAILWAY-URL.up.railway.app"
+embedded = true
+
+[access_scopes]
+# read/write_products: read + write the offer config product metafield.
+# write_discounts: create the automatic discount that activates the Function.
+scopes = "read_products,write_products,write_discounts"
+use_legacy_install_flow = false
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  # Mandatory privacy webhooks — App Store requirement.
+  [[webhooks.subscriptions]]
+  compliance_topics = [
+    "customers/data_request",
+    "customers/redact",
+    "shop/redact",
+  ]
+  uri = "/webhooks/compliance"
+
+[auth]
+redirect_urls = [
+  "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/auth/callback",
+  "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/auth/shopify/callback",
+  "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/api/auth/callback"
+]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
