@@ -6,6 +6,11 @@ import {
   parseConfig,
   countAccessories,
   summarizeConfig,
+  groupBucket,
+  displayCode,
+  offerStateOf,
+  isEndedSale,
+  type Bucket,
   type AddonConfig,
   type ProductSummary,
 } from "./addon-config";
@@ -322,4 +327,75 @@ export async function listConfigsDetailed(
     });
   }
   return out;
+}
+
+/**
+ * Build the admin overview: per-product summaries + per-bucket group lists +
+ * counts. Shared by the Dashboard and the Bundles / Add-ons list pages so they
+ * all read the same source.
+ */
+export async function buildOffersOverview(admin: AdminGraphql, shop: string) {
+  const detailed = await listConfigsDetailed(admin, shop);
+
+  const products = detailed.map((d) => {
+    const counts: Record<Bucket, number> = {
+      bundle: 0,
+      sale: 0,
+      addon: 0,
+      free: 0,
+    };
+    let accessoryCount = 0;
+    for (const g of d.config.groups) {
+      if (g.archived) continue;
+      counts[groupBucket(g)] += 1;
+      accessoryCount += g.accessories.length;
+    }
+    return {
+      id: d.productId,
+      numericId: d.numericId,
+      title: d.title,
+      image: d.image,
+      accessoryCount,
+      updatedAt: d.updatedAt,
+      counts,
+    };
+  });
+
+  const lists: Record<Bucket, any[]> = {
+    bundle: [],
+    sale: [],
+    addon: [],
+    free: [],
+  };
+  for (const d of detailed) {
+    for (const g of d.config.groups) {
+      if (g.archived) continue;
+      const bucket = groupBucket(g);
+      lists[bucket].push({
+        key: d.numericId + ":" + g.id,
+        groupId: g.id,
+        code: displayCode(g),
+        title: g.title,
+        productTitle: d.title,
+        productImage: d.image,
+        numericId: d.numericId,
+        accessoryCount: g.accessories.length,
+        discountPercent: g.discountPercent,
+        saleState: bucket === "sale" ? offerStateOf(g.limited) : null,
+        dim: bucket === "sale" ? isEndedSale(g) : false,
+      });
+    }
+  }
+
+  return {
+    products,
+    lists,
+    stats: {
+      products: products.length,
+      bundle: lists.bundle.length,
+      sale: lists.sale.length,
+      addon: lists.addon.length,
+      free: lists.free.length,
+    },
+  };
 }

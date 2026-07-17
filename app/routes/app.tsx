@@ -25,10 +25,12 @@ export default function App() {
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
         <Link to="/app" rel="home">
-          Home
+          Dashboard
         </Link>
-        <Link to="/app/gifts">Gift campaigns</Link>
-        <Link to="/app/discount">Discount settings</Link>
+        <Link to="/app/bundles">Bundles</Link>
+        <Link to="/app/addons">Add-ons</Link>
+        <Link to="/app/gifts">Free gifts</Link>
+        <Link to="/app/settings">Settings</Link>
         {billingEnabled ? <Link to="/app/plan">Plan</Link> : null}
       </NavMenu>
       <Outlet />
