@@ -81,3 +81,14 @@ model GiftCampaign {
 
   @@index([shop])
 }
+
+// Per-shop app settings (opt-in behaviors). One row per shop.
+model ShopSettings {
+  shop      String  @id
+  // When true, KitBundle tags products that have a live offer with `offerTag`,
+  // so a merchant's search/collections (or a custom search engine) can find
+  // them. Off by default — a public app must not touch product tags uninvited.
+  tagOffers Boolean @default(false)
+  offerTag  String  @default("kitbundle")
+  updatedAt DateTime @updatedAt @default(now())
+}

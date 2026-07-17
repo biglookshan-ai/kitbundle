@@ -1,4 +1,5 @@
 import prisma from "../db.server";
+import { syncOfferTag } from "./shop-settings.server";
 import {
   METAFIELD_NAMESPACE,
   METAFIELD_KEY,
@@ -80,12 +81,16 @@ export async function saveConfig(
   config: AddonConfig,
 ): Promise<{ ok: boolean; userErrors: string[] }> {
   const hasGroups = config.groups.length > 0;
+  const hasLiveOffer = config.groups.some(
+    (g) => !g.archived && g.accessories.length > 0,
+  );
 
   if (!hasGroups) {
     await clearMetafield(admin, product.id);
     await prisma.bundleConfig.deleteMany({
       where: { shop, productId: product.id },
     });
+    await syncOfferTag(admin, shop, product.id, false); // remove our tag
     return { ok: true, userErrors: [] };
   }
 
@@ -143,6 +148,7 @@ export async function saveConfig(
     },
   });
 
+  await syncOfferTag(admin, shop, product.id, hasLiveOffer);
 
   return { ok: true, userErrors: [] };
 }

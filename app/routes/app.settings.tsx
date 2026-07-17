@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
 import {
@@ -12,6 +13,9 @@ import {
   Badge,
   List,
   Icon,
+  Checkbox,
+  TextField,
+  Box,
 } from "@shopify/polaris";
 import { CheckCircleIcon, AlertTriangleIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -21,31 +25,53 @@ import {
   findDiscountFunctionId,
   findExistingDiscount,
 } from "../models/function-discount.server";
+import {
+  getShopSettings,
+  saveShopSettings,
+} from "../models/shop-settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   await ensureFunctionDiscount(admin).catch(() => {}); // self-heal
-  const [functionId, existing] = await Promise.all([
+  const [functionId, existing, settings] = await Promise.all([
     findDiscountFunctionId(admin),
     findExistingDiscount(admin),
+    getShopSettings(session.shop),
   ]);
   return {
     functionId,
     activated: Boolean(existing),
     status: existing?.status ?? null,
+    settings,
   };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const form = await request.formData();
+  const intent = String(form.get("intent") || "activate");
+  if (intent === "settings") {
+    const settings = await saveShopSettings(session.shop, {
+      tagOffers: form.get("tagOffers") === "true",
+      offerTag: String(form.get("offerTag") || "kitbundle"),
+    });
+    return { ok: true, settings };
+  }
   return await ensureFunctionDiscount(admin);
 };
 
 export default function Settings() {
-  const { functionId, activated, status } = useLoaderData<typeof loader>();
+  const { functionId, activated, status, settings } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const settingsFetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const active = activated || fetcher.data?.ok;
+
+  const [tagOffers, setTagOffers] = useState(settings.tagOffers);
+  const [offerTag, setOfferTag] = useState(settings.offerTag);
+  const savingSettings = settingsFetcher.state !== "idle";
+  const savedSettings = settingsFetcher.data?.ok;
 
   return (
     <Page>
@@ -84,9 +110,9 @@ export default function Settings() {
                   repair it if it was ever deleted.
                 </Text>
 
-                {fetcher.data?.error && (
+                {(fetcher.data as any)?.error && (
                   <Banner tone="critical" title="Could not activate">
-                    <p>{fetcher.data.error}</p>
+                    <p>{(fetcher.data as any).error}</p>
                   </Banner>
                 )}
                 {!functionId && !active && (
@@ -108,6 +134,58 @@ export default function Settings() {
                     </Button>
                   </InlineStack>
                 )}
+              </BlockStack>
+            </Card>
+
+            {/* Search & discovery tag */}
+            <Card>
+              <BlockStack gap="300">
+                <Text as="h2" variant="headingMd">
+                  Search &amp; discovery tag
+                </Text>
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Add a product tag to every product that has a live offer, so
+                  you can find bundled products in Shopify search, build automated
+                  collections, or feed a custom search engine. Only KitBundle&apos;s
+                  own tag is added or removed — your other tags are untouched.
+                </Text>
+                <Checkbox
+                  label="Tag products that have a live offer"
+                  checked={tagOffers}
+                  onChange={setTagOffers}
+                />
+                <Box width="240px">
+                  <TextField
+                    label="Tag"
+                    autoComplete="off"
+                    value={offerTag}
+                    onChange={setOfferTag}
+                    disabled={!tagOffers}
+                    helpText="Lowercase, no spaces (e.g. kitbundle, has-bundle)."
+                  />
+                </Box>
+                <InlineStack gap="200" blockAlign="center">
+                  <Button
+                    loading={savingSettings}
+                    onClick={() =>
+                      settingsFetcher.submit(
+                        {
+                          intent: "settings",
+                          tagOffers: String(tagOffers),
+                          offerTag,
+                        },
+                        { method: "POST" },
+                      )
+                    }
+                  >
+                    Save
+                  </Button>
+                  {savedSettings && (
+                    <Text as="span" tone="success" variant="bodySm">
+                      Saved. Re-save a product to apply the tag.
+                    </Text>
+                  )}
+                </InlineStack>
               </BlockStack>
             </Card>
 
