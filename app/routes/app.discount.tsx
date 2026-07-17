@@ -23,6 +23,8 @@ import {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
+  // Self-heal here too, so opening this page directly also activates it.
+  await ensureFunctionDiscount(admin).catch(() => {});
   const [functionId, existing] = await Promise.all([
     findDiscountFunctionId(admin),
     findExistingDiscount(admin),
