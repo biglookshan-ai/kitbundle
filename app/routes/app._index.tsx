@@ -11,6 +11,7 @@ import {
   InlineStack,
   IndexTable,
   Badge,
+  Banner,
   EmptyState,
   Box,
   ButtonGroup,
@@ -20,6 +21,7 @@ import { ImageIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { listConfigsDetailed } from "../models/addon-config.server";
+import { findExistingDiscount } from "../models/function-discount.server";
 import {
   displayCode,
   groupBucket,
@@ -34,7 +36,10 @@ function numericOf(gid: string) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const detailed = await listConfigsDetailed(admin, session.shop);
+  const [detailed, discount] = await Promise.all([
+    listConfigsDetailed(admin, session.shop),
+    findExistingDiscount(admin).catch(() => null),
+  ]);
 
   const products = detailed.map((d) => {
     const counts: Record<Bucket, number> = { bundle: 0, sale: 0, addon: 0, free: 0 };
@@ -80,6 +85,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     products,
     lists,
+    discountActive: Boolean(discount),
     stats: {
       products: products.length,
       bundle: lists.bundle.length,
@@ -91,7 +97,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function Index() {
-  const { products, lists, stats } = useLoaderData<typeof loader>();
+  const { products, lists, stats, discountActive } =
+    useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
 
@@ -122,6 +129,19 @@ export default function Index() {
         </button>
       </TitleBar>
       <BlockStack gap="500">
+        {!discountActive && (
+          <Banner
+            tone="warning"
+            title="Discounts are not active"
+            action={{ content: "Fix it", url: "/app/discount" }}
+          >
+            <p>
+              The automatic discount that powers your offers is missing (it may
+              have been deleted). Offers will show at full price until it is
+              restored.
+            </p>
+          </Banner>
+        )}
         <Layout>
           <Layout.Section>
             <BlockStack gap="300">

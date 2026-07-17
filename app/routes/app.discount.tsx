@@ -15,116 +15,28 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-// Must match the title given to the automatic discount we create.
-const DISCOUNT_TITLE = "Add-on & Bundle discount";
-// The Function's API type for product discounts.
-const PRODUCT_DISCOUNT_API_TYPE = "product_discounts";
+import {
+  ensureFunctionDiscount,
+  findDiscountFunctionId,
+  findExistingDiscount,
+} from "../models/function-discount.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-
-  // 1. Locate our deployed discount Function.
-  const fnResp = await admin.graphql(
-    `#graphql
-      query DiscountFunctions {
-        shopifyFunctions(first: 50) {
-          nodes { id title apiType }
-        }
-      }`,
-  );
-  const fnJson = await fnResp.json();
-  const fn = (fnJson?.data?.shopifyFunctions?.nodes ?? []).find(
-    (n: any) => n.apiType === PRODUCT_DISCOUNT_API_TYPE,
-  );
-
-  // 2. See if the automatic discount already exists.
-  const discResp = await admin.graphql(
-    `#graphql
-      query ExistingAutoDiscounts {
-        automaticDiscountNodes(first: 50) {
-          nodes {
-            id
-            automaticDiscount {
-              __typename
-              ... on DiscountAutomaticApp { title status }
-            }
-          }
-        }
-      }`,
-  );
-  const discJson = await discResp.json();
-  const existing = (discJson?.data?.automaticDiscountNodes?.nodes ?? []).find(
-    (n: any) => n.automaticDiscount?.title === DISCOUNT_TITLE,
-  );
-
+  const [functionId, existing] = await Promise.all([
+    findDiscountFunctionId(admin),
+    findExistingDiscount(admin),
+  ]);
   return {
-    functionId: fn?.id ?? null,
+    functionId,
     activated: Boolean(existing),
-    status: existing?.automaticDiscount?.status ?? null,
+    status: existing?.status ?? null,
   };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-
-  const fnResp = await admin.graphql(
-    `#graphql
-      query DiscountFunctions {
-        shopifyFunctions(first: 50) {
-          nodes { id apiType }
-        }
-      }`,
-  );
-  const fnJson = await fnResp.json();
-  const fn = (fnJson?.data?.shopifyFunctions?.nodes ?? []).find(
-    (n: any) => n.apiType === PRODUCT_DISCOUNT_API_TYPE,
-  );
-  if (!fn) {
-    return {
-      ok: false,
-      error:
-        "No product-discount function found. Deploy the app first with `shopify app deploy`.",
-    };
-  }
-  // (success path returns { ok: true, error: null } below)
-
-  const resp = await admin.graphql(
-    `#graphql
-      mutation CreateAddonDiscount($automaticAppDiscount: DiscountAutomaticAppInput!) {
-        discountAutomaticAppCreate(automaticAppDiscount: $automaticAppDiscount) {
-          automaticAppDiscount { discountId }
-          userErrors { field message }
-        }
-      }`,
-    {
-      variables: {
-        automaticAppDiscount: {
-          title: DISCOUNT_TITLE,
-          functionId: fn.id,
-          startsAt: new Date().toISOString(),
-          combinesWith: {
-            productDiscounts: true,
-            orderDiscounts: true,
-            shippingDiscounts: true,
-          },
-        },
-      },
-    },
-  );
-  const json = await resp.json();
-  const errs = json?.data?.discountAutomaticAppCreate?.userErrors ?? [];
-  if (errs.length > 0) {
-    // "Title must be unique" means our discount already exists — it's already
-    // doing its job, so treat any uniqueness/exists error as activated.
-    const onlyDuplicate = errs.every((e: any) =>
-      /unique|already exists|taken/i.test(e.message ?? ""),
-    );
-    if (onlyDuplicate) {
-      return { ok: true, error: null };
-    }
-    return { ok: false, error: errs.map((e: any) => e.message).join("; ") };
-  }
-  return { ok: true, error: null };
+  return await ensureFunctionDiscount(admin);
 };
 
 export default function DiscountSettings() {
@@ -208,12 +120,13 @@ export default function DiscountSettings() {
               </Text>
               <List type="number">
                 <List.Item>
-                  Deploy the app (<code>shopify app deploy</code>).
+                  The discount is activated automatically when the app is
+                  installed — this page just shows its status (and can repair
+                  it if it was deleted).
                 </List.Item>
-                <List.Item>Activate the discount here.</List.Item>
                 <List.Item>
-                  Add the “Add On &amp; Save” block to your product template in
-                  the theme editor.
+                  Add the “Bundle &amp; Add-ons” block to your product template
+                  in the theme editor.
                 </List.Item>
                 <List.Item>Configure products on the Home page.</List.Item>
               </List>

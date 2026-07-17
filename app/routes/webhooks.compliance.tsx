@@ -24,6 +24,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       break;
     case "SHOP_REDACT":
       await db.bundleConfig.deleteMany({ where: { shop } }).catch(() => {});
+      await db.giftCampaign.deleteMany({ where: { shop } }).catch(() => {});
       await db.session.deleteMany({ where: { shop } }).catch(() => {});
       break;
     default:

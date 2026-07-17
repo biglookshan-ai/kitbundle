@@ -12,6 +12,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (session) {
     await db.session.deleteMany({ where: { shop } });
   }
+  // Clean uninstall: drop the shop's config rows too. (Shopify removes the
+  // app-owned discount, metafields and theme blocks by itself.)
+  await db.bundleConfig.deleteMany({ where: { shop } }).catch(() => {});
+  await db.giftCampaign.deleteMany({ where: { shop } }).catch(() => {});
 
   return new Response();
 };

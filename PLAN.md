@@ -17,10 +17,13 @@ Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 
 - **Function 版**(要保留为核心):`extensions/addon-discount/`(Function)、`app.products.$id.tsx`(bundle/addon 编辑器)、`app.gifts.*`(赠品活动)、`addon_save.liquid`
 - **原生折扣版**(cinegearpro 专用,这个仓库里要移除):`app.accessories.*`、`accessory-config*.ts`、`accessory_select.liquid`
 
-任务:
-0. 安装后自动激活 Function 折扣(现在要手动进 Discount settings 点激活;上架版应 afterAuth 自动创建)
-0.5 前台购物车刷新做主题无关(Horizon 等非 Dawn 主题的 drawer 组件不同;Section Rendering API + 组件探测 + /cart 兜底)
-1. 移除原生折扣版代码(accessories 路由/模型/前台块),避免双系统混淆
+任务(2026-07-17 完成一批):
+- [x] 安装后自动激活 Function 折扣(afterAuth hook → ensureFunctionDiscount;Discount settings 变为状态/修复页;首页加"折扣丢失"警示横幅)
+- [x] 前台购物车刷新主题无关兜底(非 Dawn 主题:广播 cart:refresh 事件 + 整页刷新)
+- [x] 移除原生折扣版代码(accessories 路由/模型/前台块)
+- [x] 移除 CGP 专属 promo:* 标签写入(公开 app 不该动商家产品 tag)
+- [x] 品牌化:折扣节点标题 CGP-LO/CGP-GIFT → KitBundle offer/gift;主折扣 "KitBundle discount"(兼容旧标题);block 名 "Bundle & Add-ons";卸载/shop_redact 全量清库
+- [ ] (可选)前台 cgp-* CSS 类名改名 —— 顾客不可见,暂不动
 2. 把 accessories 版做的**前台美化**(卡片、bundle tiles、缩略图条、View more、You save)移植到 Function 版前台 `addon_save.liquid`/JS
 3. 把 accessories 版的**编辑器改进**(变体限定、主品变体联动、副标题、多 bundle 各自折扣率)确认 Function 版编辑器都有(大部分本来就有)
 4. 购物车折扣名用 bundle 名(Function 的 discount title 同样可自定义)

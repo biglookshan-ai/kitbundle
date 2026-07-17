@@ -25,7 +25,7 @@ const LO_NAMESPACE = "$app:limited";
 const LO_KEY = "offer";
 
 function nodeTitle(numericId: string, offerId: string) {
-  return `CGP-LO ${numericId}:${offerId}`;
+  return `KitBundle offer ${numericId}:${offerId}`;
 }
 
 async function findFunctionId(admin: AdminGraphql): Promise<string | null> {
@@ -82,7 +82,7 @@ export async function reconcileLimitedOffers(
       }`,
   );
   const listJson = await listResp.json();
-  const prefix = `CGP-LO ${numericId}:`;
+  const prefix = `KitBundle offer ${numericId}:`;
   const existing = new Map<string, string>(); // offerId -> DiscountAutomaticNode id
   for (const n of listJson?.data?.discountNodes?.nodes ?? []) {
     const title = n?.discount?.title;

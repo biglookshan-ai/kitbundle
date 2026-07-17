@@ -1876,6 +1876,22 @@
   // theme's cart sections (Section Rendering API), updates the count, opens the
   // drawer. Any failure here never affects the completed add-to-cart.
   function refreshCartUI() {
+    // Unknown theme (no Dawn-style cart elements): broadcast the events many
+    // themes listen for, then hard-reload as the universal fallback so the
+    // header count / drawer are always correct.
+    if (!detectSections().length) {
+      try {
+        document.dispatchEvent(
+          new CustomEvent("cart:refresh", { bubbles: true }),
+        );
+        document.documentElement.dispatchEvent(
+          new CustomEvent("cart:change", { bubbles: true }),
+        );
+      } catch (e) {}
+      return new Promise(function () {
+        window.location.reload();
+      });
+    }
     return renderCartSections()
       .then(updateCount)
       .then(openDrawer)
@@ -2379,6 +2395,8 @@
               try {
                 cartEl.renderContents(resp);
               } catch (e) {}
+            } else if (!cartEl) {
+              return refreshCartUI(); // unknown theme → universal fallback
             }
           });
         });

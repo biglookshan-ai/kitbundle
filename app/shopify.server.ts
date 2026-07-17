@@ -6,8 +6,22 @@ import {
 } from "@shopify/shopify-app-remix/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import { ensureFunctionDiscount } from "./models/function-discount.server";
 
 const shopify = shopifyApp({
+  hooks: {
+    // Runs on install / re-auth. Activate the Function's automatic discount so
+    // merchants never have to do it manually; failures are non-fatal (the
+    // Discount settings page can repair later).
+    afterAuth: async ({ admin }) => {
+      try {
+        const r = await ensureFunctionDiscount(admin);
+        if (!r.ok) console.warn("KitBundle discount activation:", r.error);
+      } catch (e) {
+        console.warn("KitBundle discount activation failed:", e);
+      }
+    },
+  },
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.January25,
