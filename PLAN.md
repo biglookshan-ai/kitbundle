@@ -1,11 +1,11 @@
-# Bundle Pro — App Store 版总计划
+# KitBundle — App Store 版总计划
 
 Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 在**任何套餐**都能用 Function,这是整个项目的前提)。
 
 官方要求原文:https://shopify.dev/docs/apps/launch/shopify-app-store/app-store-requirements
 
 ## 现状(Phase 1 已完成)
-- [x] 独立仓库 `~/bundle-pro/`(从 bundle-addon-app 复制,含 Function 扩展 `extensions/addon-discount/` 和全部 UI)
+- [x] 独立仓库 `~/kitbundle/`(从 bundle-addon-app 复制,含 Function 扩展 `extensions/addon-discount/` 和全部 UI)
 - [x] 合规 webhook:`customers/data_request` / `customers/redact` / `shop/redact` → `app/routes/webhooks.compliance.tsx`
 - [x] 新 `shopify.app.toml` 模板(待 `shopify app config link` 填 client_id)
 - [ ] 新 Shopify app(Dev Dashboard,**Public distribution**)← 你来创建
@@ -64,6 +64,6 @@ Function 版折扣 app,公开分发上架 Shopify App Store(公开分发的 app 
 - 关注审核反馈周期(通常 5–10 个工作日/轮)
 
 ## 你现在要做的三件事(我做不了的)
-1. **创建 app**:在 `~/bundle-pro/` 跑 `shopify app config link` → "Create new app" → 名字 bundle-pro → 组织选你的;然后 Dev Dashboard 里把 Distribution 设为 **Public**
-2. **GitHub**:新建空仓库(如 biglookshan-ai/bundle-pro),告诉我地址,我来推
+1. **创建 app**:在 `~/kitbundle/` 跑 `shopify app config link` → "Create new app" → 名字 kitbundle → 组织选你的;然后 Dev Dashboard 里把 Distribution 设为 **Public**
+2. **GitHub**:新建空仓库(如 biglookshan-ai/kitbundle),告诉我地址,我来推
 3. **Railway**:新项目 + Postgres 插件 + 环境变量(SHOPIFY_API_KEY/SECRET、SHOPIFY_APP_URL、DATABASE_URL、SCOPES),连 GitHub 仓库自动部署

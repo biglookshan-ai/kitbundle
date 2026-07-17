@@ -1,9 +1,9 @@
-# Bundle Pro — public-distribution app (Shopify App Store).
+# KitBundle — public-distribution app (Shopify App Store).
 # Run `shopify app config link` once to create/link the NEW app in the Dev
 # Dashboard; the CLI fills in client_id. Keep distribution = PUBLIC so the
 # discount Function works on every plan (custom distribution requires Plus).
 
-name = "bundle-pro"
+name = "KitBundle"
 application_url = "https://REPLACE-WITH-RAILWAY-URL.up.railway.app"
 embedded = true
 
