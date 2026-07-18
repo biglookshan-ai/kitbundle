@@ -1878,7 +1878,7 @@
         return reconcileGifts()
           .catch(function () {})
           .then(function () {
-            return refreshCartUI();
+            return refreshCartUI(true); // explicit add → open the drawer
           });
       })
       .then(function () {
@@ -1941,27 +1941,38 @@
   // Best-effort cart refresh, fully decoupled from the add. Re-renders the
   // theme's cart sections (Section Rendering API), updates the count, opens the
   // drawer. Any failure here never affects the completed add-to-cart.
-  function refreshCartUI() {
+  // Refresh the cart UI. `shouldOpen` = open the drawer (only after an explicit
+  // "Add to cart", never on passive reconciles). cartBusy is held for the whole
+  // refresh so the fetch-watcher ignores our OWN section fetches (otherwise
+  // rerenderDrawer's /cart/update.js would retrigger the watcher → open loop).
+  function refreshCartUI(shouldOpen) {
+    cartBusy = true;
+    var done = function () {
+      cartBusy = false;
+    };
     var cartEl =
       document.querySelector("cart-notification") ||
       document.querySelector("cart-drawer");
-    // Preferred: the theme's OWN renderContents (native, reliable) fed by a
-    // fresh sections response, then open the drawer.
+    // Preferred: the theme's OWN renderContents (native, reliable).
     if (
       cartEl &&
       typeof cartEl.getSectionsToRender === "function" &&
       typeof cartEl.renderContents === "function"
     ) {
       return rerenderDrawer()
-        .then(openDrawer)
-        .catch(function () {});
+        .then(function () {
+          if (shouldOpen) openDrawer();
+        })
+        .then(done, done);
     }
     // Dawn-style section containers but no cart element API: inject sections.
     if (detectSections().length) {
       return renderCartSections()
         .then(updateCount)
-        .then(openDrawer)
-        .catch(function () {});
+        .then(function () {
+          if (shouldOpen) openDrawer();
+        })
+        .then(done, done);
     }
     // Unknown theme: broadcast common events, then hard-reload as a last resort.
     try {
@@ -2121,7 +2132,9 @@
           selector.addEventListener("change", function () {
             if (selector.checked) {
               giftChoice[c.id] = h;
-              reconcileGifts().then(refreshCartUI);
+              reconcileGifts().then(function () {
+                return refreshCartUI(false);
+              });
               renderGiftPromo(root);
             }
           });
@@ -2318,7 +2331,9 @@
             .then(function () {
               clearTimeout(window.__cgpRecTimer);
               window.__cgpRecTimer = setTimeout(function () {
-                reconcileGifts().then(refreshCartUI);
+                reconcileGifts().then(function () {
+                  return refreshCartUI(false); // passive → don't force-open
+                });
               }, 60);
             })
             .catch(function () {});
