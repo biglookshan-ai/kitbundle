@@ -2085,50 +2085,71 @@
       var handles = c.giftHandles || [];
       if (!handles.length) return;
       any = true;
-      var box = el("div", "cgp-giftp");
-      box.style.cssText =
-        "border:1px solid #e0435c;border-radius:8px;padding:12px 14px;margin:12px 0;";
-      var badge = el("div", "cgp-giftp__badge", c.badge || "🎁 Free gift");
-      badge.style.cssText = "font-weight:600;color:#e0435c;margin-bottom:6px;";
-      box.appendChild(badge);
-
-      if (c.rewardMode === "choice" && handles.length > 1) {
+      // Reuse the .cgp-free styling so all free gifts look the same (images,
+      // FREE badge, single-select radios) whether they come from a campaign or
+      // a product free group.
+      var section = el("div", "cgp-free");
+      section.appendChild(
+        el("div", "cgp-free__heading", c.badge || "🎁 Free gift"),
+      );
+      var choice = c.rewardMode === "choice" && handles.length > 1;
+      if (choice) {
+        section.appendChild(
+          el("div", "cgp-free__sub", "Choose your free gift:"),
+        );
         if (!giftChoice[c.id]) giftChoice[c.id] = handles[0];
-        var lbl = el("div", null, "Choose your free gift:");
-        lbl.style.cssText = "font-size:13px;opacity:.75;margin-bottom:6px;";
-        box.appendChild(lbl);
-        handles.forEach(function (h) {
-          var row = el("label", "cgp-giftp__opt");
-          row.style.cssText =
-            "display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;";
-          var input = el("input");
-          input.type = "radio";
-          input.name = "cgp-gift-" + c.id;
-          input.value = h;
-          if (giftChoice[c.id] === h) input.checked = true;
-          input.addEventListener("change", function () {
-            giftChoice[c.id] = h;
-            reconcileGifts();
-            renderGiftPromo(root);
-          });
-          var name = el("span", null, h);
-          row.appendChild(input);
-          row.appendChild(name);
-          box.appendChild(row);
-          fetchProduct(h).then(function (data) {
-            if (data) name.textContent = (data.title || h) + " — FREE";
-          });
-        });
-      } else {
-        var line = el("div", null, "Free with purchase");
-        line.style.cssText = "font-size:13px;";
-        box.appendChild(line);
-        fetchProduct(handles[0]).then(function (data) {
-          line.textContent =
-            "Free with purchase: " + (data && data.title ? data.title : handles[0]);
-        });
       }
-      host.appendChild(box);
+      var list = el("div", "cgp-free__list");
+      section.appendChild(list);
+
+      handles.forEach(function (h) {
+        var row = el(choice ? "label" : "div", "cgp-free__row");
+        list.appendChild(row);
+
+        var selector;
+        if (choice) {
+          selector = el("input", "cgp-free__radio");
+          selector.type = "radio";
+          selector.name = "cgp-gift-" + c.id;
+          selector.checked = giftChoice[c.id] === h;
+          selector.addEventListener("change", function () {
+            if (selector.checked) {
+              giftChoice[c.id] = h;
+              reconcileGifts();
+              renderGiftPromo(root);
+            }
+          });
+        } else {
+          selector = el("span", "cgp-check is-on is-locked", "✓");
+          selector.setAttribute("aria-label", "Free gift (included)");
+        }
+        row.appendChild(selector);
+
+        var thumb = el("div", "cgp-free__thumb");
+        row.appendChild(thumb);
+
+        var info = el("div", "cgp-free__info");
+        var nameRow = el("div", "cgp-free__name-row");
+        var nameEl = el("span", "cgp-free__name", h);
+        nameRow.appendChild(nameEl);
+        nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
+        info.appendChild(nameRow);
+        row.appendChild(info);
+
+        fetchProduct(h).then(function (data) {
+          if (!data) return;
+          nameEl.textContent = data.title || h;
+          var img = data.featured_image || (data.images && data.images[0]);
+          if (img) {
+            var im = el("img");
+            im.src = img;
+            im.alt = data.title;
+            im.loading = "lazy";
+            thumb.appendChild(im);
+          }
+        });
+      });
+      host.appendChild(section);
     });
     host.hidden = !any;
   }
