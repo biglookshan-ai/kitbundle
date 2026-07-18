@@ -2138,13 +2138,11 @@
           selector.name = "cgp-gift-" + c.id;
           selector.checked = giftChoice[c.id] === h;
           selector.addEventListener("change", function () {
-            if (selector.checked) {
-              giftChoice[c.id] = h;
-              reconcileGifts().then(function () {
-                return refreshCartUI(false);
-              });
-              renderGiftPromo(root);
-            }
+            // Preference only — never mutates the cart. The chosen gift is added
+            // as its own pair on the NEXT Add to cart (or auto-filled by the
+            // reconcile when a new trigger main appears). Existing cart gifts are
+            // left alone, so picks across adds coexist and nothing pops open.
+            if (selector.checked) giftChoice[c.id] = h;
           });
         } else {
           selector = el("span", "cgp-check is-on is-locked", "✓");
@@ -2201,39 +2199,55 @@
         var updates = {};
         var adds = []; // { handle, quantity, campId }
 
-        // (A) Campaign gifts: keep the chosen gift at its allowance.
+        // (A) Campaign gifts — each add is its own main+gift pair (1:1):
+        //   allowance = qualifying trigger qty × perQualifying.
+        //   - total gift units OVER allowance  → trim the excess (a main was
+        //     removed); the customer's existing gift CHOICES are never swapped.
+        //   - total gift units UNDER allowance → fill the difference with the
+        //     currently-chosen gift (so a newly-added main gets a fresh gift,
+        //     and different picks across adds coexist — variety allowed).
+        //   - allowance 0 → remove all gift lines.
         (giftCampaigns || []).forEach(function (c) {
-          var desired = chosenGift(c); // fixed = first; choice = customer's pick
-          if (!desired) return;
           var trig = {};
           (c.triggerProductIds || []).forEach(function (id) {
             trig[String(id)] = true;
           });
-          var qty = 0;
+          var qual = 0;
           items.forEach(function (it) {
             if (it.properties && it.properties._cgp_gift) return; // skip gifts
-            if (trig[String(it.product_id)]) qty += it.quantity || 0;
+            if (trig[String(it.product_id)]) qual += it.quantity || 0;
           });
-          var allowance = giftActive(c) ? qty * (Number(c.perQualifying) || 1) : 0;
+          var allowance = giftActive(c) ? qual * (Number(c.perQualifying) || 1) : 0;
           var giftLines = items.filter(function (it) {
             return it.properties && String(it.properties._cgp_gift) === String(c.id);
           });
-          var kept = [];
-          giftLines.forEach(function (it) {
-            if (allowance > 0 && it.handle === desired) kept.push(it);
-            else updates[it.key] = 0; // orphan / switched-away / expired
-          });
-          if (allowance <= 0) return;
-          if (kept.length === 0) {
-            adds.push({ handle: desired, quantity: allowance, campId: c.id });
-          } else {
-            kept.forEach(function (it, idx) {
-              if (idx === 0) {
-                if ((it.quantity || 0) !== allowance) updates[it.key] = allowance;
-              } else {
-                updates[it.key] = 0; // collapse duplicates into one line
-              }
+          var total = giftLines.reduce(function (s, it) {
+            return s + (it.quantity || 0);
+          }, 0);
+
+          if (allowance <= 0) {
+            giftLines.forEach(function (it) {
+              updates[it.key] = 0;
             });
+            return;
+          }
+          if (total > allowance) {
+            var over = total - allowance;
+            for (var i = giftLines.length - 1; i >= 0 && over > 0; i--) {
+              var it = giftLines[i];
+              var cur = it.quantity || 0;
+              var take = Math.min(cur, over);
+              updates[it.key] = cur - take; // 0 removes the line
+              over -= take;
+            }
+          } else if (total < allowance) {
+            var desired = chosenGift(c);
+            if (desired)
+              adds.push({
+                handle: desired,
+                quantity: allowance - total,
+                campId: c.id,
+              });
           }
         });
 
