@@ -278,11 +278,6 @@
       true,
     );
 
-    // One cart reconcile (gift allowance + orphan cleanup), now and after any
-    // cart change. Bundle/add-on pricing is the Function's job — no line surgery.
-    installCartWatcher();
-    reconcileGifts();
-
     var loading = root.querySelector("[data-cgp-loading]");
     if (loading) loading.style.display = "none";
   }
@@ -1838,30 +1833,64 @@
               properties: freeProps(ctx.mainProductId),
             });
         });
+        // Campaign gift: add the CHOSEN gift as its own pair with this add. No
+        // background reconcile touches it afterwards — the customer deletes what
+        // they don't want, and the Function prices only up to the main count
+        // (extra gifts revert to full price on their own).
+        (giftCampaigns || []).forEach(function (c) {
+          if (!giftActive(c)) return;
+          var desired = chosenGift(c);
+          if (!desired) return;
+          items.push({
+            handle: desired,
+            quantity: Number(c.perQualifying) || 1,
+            _giftCampId: c.id, // resolved to a variant id + tag below
+          });
+        });
+
         if (!items.length && mv.id) items.push({ id: mv.id, quantity: 1 });
 
-        var body = { items: items };
-        if (cart && typeof cart.getSectionsToRender === "function") {
-          body.sections = cart
-            .getSectionsToRender()
-            .map(function (s) {
-              return s.id;
-            })
-            .join(",");
-          body.sections_url = window.location.pathname;
-        }
-        return fetch("/cart/add.js", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(body),
-        }).then(function (r) {
-          return r.json().then(function (b) {
-            if (b && b.status) throw b; // Shopify error payload
-            if (!r.ok) throw b;
-            return b;
+        // Resolve any gift entries (by handle) to a variant id + _cgp_gift tag,
+        // then drop any that couldn't resolve, before sending the add.
+        return Promise.all(
+          items.map(function (it) {
+            if (!it._giftCampId) return null;
+            return fetchProduct(it.handle).then(function (data) {
+              var v = data && firstAvailable(data);
+              it.id = v && v.id;
+              it.properties = { _cgp_gift: it._giftCampId };
+              delete it._giftCampId;
+              delete it.handle;
+            });
+          }),
+        ).then(function () {
+          var finalItems = items.filter(function (it) {
+            return it.id;
+          });
+          if (!finalItems.length) return null;
+          var body = { items: finalItems };
+          if (cart && typeof cart.getSectionsToRender === "function") {
+            body.sections = cart
+              .getSectionsToRender()
+              .map(function (s) {
+                return s.id;
+              })
+              .join(",");
+            body.sections_url = window.location.pathname;
+          }
+          return fetch("/cart/add.js", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify(body),
+          }).then(function (r) {
+            return r.json().then(function (b) {
+              if (b && b.status) throw b; // Shopify error payload
+              if (!r.ok) throw b;
+              return b;
+            });
           });
         });
       })
@@ -1872,14 +1901,7 @@
         ctx.mainInCart = true; // the main is now in the cart
         clearSelection(ctx);
         document.dispatchEvent(new CustomEvent("cgp:addon:added"));
-        // Add any campaign free gift now that its trigger is in the cart, THEN
-        // refresh the drawer from fresh sections (the add response is stale once
-        // the gift line is added). reconcileGifts() no-ops when there are none.
-        return reconcileGifts()
-          .catch(function () {})
-          .then(function () {
-            return refreshCartUI(true); // explicit add → open the drawer
-          });
+        return refreshCartUI(true); // explicit add → open the drawer
       })
       .then(function () {
         setTimeout(function () {
@@ -2179,130 +2201,6 @@
     host.hidden = !any;
   }
 
-  // THE cart reconcile. One coherent pass over the cart — no bundle line
-  // splitting/untagging (the discount Function is the pricing authority and
-  // caps each bundle to complete kits, so stray tagged lines simply aren't
-  // over-discounted). This only:
-  //   (A) keeps each campaign's chosen gift at its allowance, removing orphan or
-  //       switched-away gift lines (so a "free" gift is never left at full price)
-  //   (B) removes legacy product free-gift lines whose main is gone.
-  // Callers refresh the drawer afterwards.
-  function reconcileGifts() {
-    if (cartBusy) return Promise.resolve();
-    cartBusy = true;
-    return fetch("/cart.js", { headers: { Accept: "application/json" } })
-      .then(function (r) {
-        return r.json();
-      })
-      .then(function (cart) {
-        var items = cart.items || [];
-        var updates = {};
-        var adds = []; // { handle, quantity, campId }
-
-        // (A) Campaign gifts — each add is its own main+gift pair (1:1):
-        //   allowance = qualifying trigger qty × perQualifying.
-        //   - total gift units OVER allowance  → trim the excess (a main was
-        //     removed); the customer's existing gift CHOICES are never swapped.
-        //   - total gift units UNDER allowance → fill the difference with the
-        //     currently-chosen gift (so a newly-added main gets a fresh gift,
-        //     and different picks across adds coexist — variety allowed).
-        //   - allowance 0 → remove all gift lines.
-        (giftCampaigns || []).forEach(function (c) {
-          var trig = {};
-          (c.triggerProductIds || []).forEach(function (id) {
-            trig[String(id)] = true;
-          });
-          var qual = 0;
-          items.forEach(function (it) {
-            if (it.properties && it.properties._cgp_gift) return; // skip gifts
-            if (trig[String(it.product_id)]) qual += it.quantity || 0;
-          });
-          var allowance = giftActive(c) ? qual * (Number(c.perQualifying) || 1) : 0;
-          var giftLines = items.filter(function (it) {
-            return it.properties && String(it.properties._cgp_gift) === String(c.id);
-          });
-          var total = giftLines.reduce(function (s, it) {
-            return s + (it.quantity || 0);
-          }, 0);
-
-          if (allowance <= 0) {
-            giftLines.forEach(function (it) {
-              updates[it.key] = 0;
-            });
-            return;
-          }
-          if (total > allowance) {
-            var over = total - allowance;
-            for (var i = giftLines.length - 1; i >= 0 && over > 0; i--) {
-              var it = giftLines[i];
-              var cur = it.quantity || 0;
-              var take = Math.min(cur, over);
-              updates[it.key] = cur - take; // 0 removes the line
-              over -= take;
-            }
-          } else if (total < allowance) {
-            var desired = chosenGift(c);
-            if (desired)
-              adds.push({
-                handle: desired,
-                quantity: allowance - total,
-                campId: c.id,
-              });
-          }
-        });
-
-        // (B) Legacy product free-gift lines: drop any whose main is gone.
-        var freeByMain = {};
-        items.forEach(function (it) {
-          if (!(it.properties && it.properties._cgp_free)) return;
-          var k = String(it.properties._cgp_free_for || "");
-          (freeByMain[k] = freeByMain[k] || []).push(it);
-        });
-        Object.keys(freeByMain).forEach(function (mainId) {
-          var present =
-            mainId &&
-            items.some(function (it) {
-              return String(it.product_id) === mainId;
-            });
-          if (!present)
-            freeByMain[mainId].forEach(function (it) {
-              updates[it.key] = 0;
-            });
-        });
-
-        if (!Object.keys(updates).length && !adds.length) return;
-        var chain = Promise.resolve();
-        if (Object.keys(updates).length) {
-          chain = chain.then(function () {
-            return cartPost("/cart/update.js", { updates: updates });
-          });
-        }
-        adds.forEach(function (a) {
-          chain = chain.then(function () {
-            return fetchProduct(a.handle).then(function (data) {
-              if (!data) return;
-              var v = firstAvailable(data);
-              if (!v) return;
-              return cartPost("/cart/add.js", {
-                items: [
-                  {
-                    id: v.id,
-                    quantity: a.quantity,
-                    properties: { _cgp_gift: a.campId },
-                  },
-                ],
-              });
-            });
-          });
-        });
-        return chain;
-      })
-      .catch(function () {})
-      .then(function () {
-        cartBusy = false;
-      });
-  }
-
   function bootGifts(root) {
     if (window.__cgpGiftsBooted) return;
     var node = root.querySelector("[data-cgp-gifts]");
@@ -2314,9 +2212,9 @@
       raw = null;
     }
     if (!raw || !raw.length) return;
-    // Normalise the product's gift_trigger entries into the campaign shape
-    // reconcileGifts expects (accepts both `triggers`/`gifts` and the older
-    // `triggerProductIds`/`giftHandles`).
+    // Normalise the product's gift_trigger entries into the campaign shape used
+    // by the promo UI + the commit's gift-add (accepts both `triggers`/`gifts`
+    // and the older `triggerProductIds`/`giftHandles`).
     giftCampaigns = raw.map(function (e) {
       return {
         id: e.id,
@@ -2331,38 +2229,10 @@
     });
     if (!giftCampaigns.length) return;
     window.__cgpGiftsBooted = true;
-    installCartWatcher();
+    // No cart watcher / reconcile: gifts are added (paired) on Add to cart, and
+    // the discount Function prices them (free up to the main count). The customer
+    // deletes what they don't want; nothing is auto-added or swapped.
     renderGiftPromo(root);
-    reconcileGifts();
-  }
-
-  // Run the ONE reconcile after any cart mutation the customer makes in the
-  // drawer (delete a main, change qty…). Skipped while our own reconcile is
-  // running (cartBusy) so it never fights itself, then refreshes the drawer.
-  function installCartWatcher() {
-    if (window.__cgpWatch) return;
-    window.__cgpWatch = true;
-    var orig = window.fetch;
-    if (typeof orig !== "function") return;
-    window.fetch = function (input) {
-      var res = orig.apply(this, arguments);
-      try {
-        var u = typeof input === "string" ? input : (input && input.url) || "";
-        if (!cartBusy && /\/cart\/(change|update|add|clear)/.test(u)) {
-          res
-            .then(function () {
-              clearTimeout(window.__cgpRecTimer);
-              window.__cgpRecTimer = setTimeout(function () {
-                reconcileGifts().then(function () {
-                  return refreshCartUI(false); // passive → don't force-open
-                });
-              }, 60);
-            })
-            .catch(function () {});
-        }
-      } catch (e) {}
-      return res;
-    };
   }
 
   function cartPost(url, body) {
