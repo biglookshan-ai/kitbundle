@@ -1794,9 +1794,11 @@
             "b" +
             Date.now().toString(36) +
             Math.random().toString(36).slice(2, 7);
-          var n = String(b.items.length); // how many accessories a full kit has
+          // Only HIDDEN tags (underscore-prefixed) — no visible "Bundle: name"
+          // property. The bundle name is shown via the discount message instead,
+          // so it disappears automatically when the kit breaks (main removed).
           var props = function (extra) {
-            var p = { _cgp_grp: grp, _cgp_n: n, Bundle: b.name };
+            var p = { _cgp_grp: grp };
             if (b.offerId) p._cgp_lo = b.offerId;
             if (b.bid) p._cgp_bid = b.bid; // which bundle group (main discount)
             if (extra) for (var k in extra) p[k] = extra[k];

@@ -314,7 +314,7 @@ export function run(input) {
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       limited.push({
-        message: `Limited offer ${deep}% off`,
+        message: `${group.title || "Bundle"} · limited ${deep}% off`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: deep.toFixed(1) } },
       });
@@ -511,7 +511,7 @@ export function run(input) {
           const qty = Math.min(lineQty, cap);
           if (pct > 0 && qty > 0) {
             discounts.push({
-              message: `Bundle ${pct}% off`,
+              message: `${group.title || "Bundle"} · ${pct}% off`,
               targets: [{ cartLine: { id: line.id, quantity: qty } }],
               value: { percentage: { value: pct.toFixed(1) } },
             });
@@ -572,7 +572,7 @@ export function run(input) {
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       discounts.push({
-        message: `Bundle ${best}% off`,
+        message: `${(bestGroup && bestGroup.title) || "Bundle"} · ${best}% off`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: best.toFixed(1) } },
       });
