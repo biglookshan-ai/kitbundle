@@ -14,13 +14,13 @@ import {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const { lists } = await buildOffersOverview(admin, session.shop);
-  return { addon: lists.addon, free: lists.free };
+  return { addon: lists.addon };
 };
 
 export default function Addons() {
-  const { addon, free } = useLoaderData<typeof loader>();
+  const { addon } = useLoaderData<typeof loader>();
   const configure = useConfigureProduct();
-  const empty = addon.length === 0 && free.length === 0;
+  const empty = addon.length === 0;
 
   return (
     <Page>
@@ -37,16 +37,9 @@ export default function Addons() {
         />
       ) : (
         <BlockStack gap="400">
-          {addon.length > 0 && (
-            <SectionCard title="Add-ons" count={addon.length}>
-              <OfferTable rows={addon} kind="addon" />
-            </SectionCard>
-          )}
-          {free.length > 0 && (
-            <SectionCard title="Free add-ons" count={free.length}>
-              <OfferTable rows={free} kind="free" />
-            </SectionCard>
-          )}
+          <SectionCard title="Add-ons" count={addon.length}>
+            <OfferTable rows={addon} kind="addon" />
+          </SectionCard>
         </BlockStack>
       )}
     </Page>

@@ -167,7 +167,9 @@ const LIMITED_MODE_OPTIONS = [
   { label: "End — hide the bundle (full price)", value: "end" },
 ];
 
-const TAB_TYPES = ["bundle", "addon", "free"] as const;
+// Free gifts are now their own feature (see Free gifts / campaigns), so the
+// product editor only configures Bundles and Add-ons.
+const TAB_TYPES = ["bundle", "addon"] as const;
 type GroupType = (typeof TAB_TYPES)[number];
 
 /** ISO string -> value for a <input type="datetime-local"> in the browser tz. */
@@ -212,14 +214,13 @@ function blankGroup(type: GroupType): AddonGroup {
   const titles: Record<GroupType, string> = {
     bundle: "Bundle & Save",
     addon: "Add On & Save",
-    free: "🎁 Free gift",
   };
   return {
     id: newGroupId(),
     code: newCode(),
     title: titles[type],
     type,
-    discountPercent: type === "free" ? 100 : 10,
+    discountPercent: 10,
     accessories: [],
   };
 }
@@ -264,7 +265,8 @@ export default function ProductConfig() {
     const hash = decodeURIComponent(window.location.hash.replace("#", ""));
     if (!hash) return;
     const g = groups.find((x) => x.id === hash);
-    if (g && !g.archived) setTab(Math.max(0, TAB_TYPES.indexOf(g.type)));
+    if (g && !g.archived)
+      setTab(Math.max(0, (TAB_TYPES as readonly string[]).indexOf(g.type)));
     const t = setTimeout(() => {
       const node = document.getElementById(hash);
       if (!node) return;
@@ -430,14 +432,8 @@ export default function ProductConfig() {
   const TAB_LABELS = [
     `Bundle (${countOf("bundle")})`,
     `Add-on (${countOf("addon")})`,
-    `Free add-on (${countOf("free")})`,
   ];
-  const addLabel =
-    currentType === "bundle"
-      ? "Add bundle"
-      : currentType === "free"
-        ? "Add free gift"
-        : "Add add-on";
+  const addLabel = currentType === "bundle" ? "Add bundle" : "Add add-on";
 
   return (
     <Page
@@ -478,8 +474,7 @@ export default function ProductConfig() {
                 <Card>
                   <BlockStack gap="200" inlineAlign="center">
                     <Text as="p" variant="bodyMd" tone="subdued">
-                      No {currentType === "free" ? "free add-ons" : currentType + "s"}{" "}
-                      yet.
+                      No {currentType + "s"} yet.
                     </Text>
                     <Button
                       variant="primary"
