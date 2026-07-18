@@ -178,8 +178,9 @@ export function run(input) {
     // shared `_cgp_grp`, nor make its own add-ons eligible.
     const isAccessory = !!(/** @type {any} */ (line)?.cgpFor?.value);
     const isFreeGift = !!(/** @type {any} */ (line)?.cgpFree?.value);
+    const isGift = !!(/** @type {any} */ (line)?.cgpGift?.value);
     const raw = product?.addonConfig?.value;
-    if (raw && !isAccessory && !isFreeGift) {
+    if (raw && !isAccessory && !isFreeGift && !isGift) {
       let config;
       try {
         config = JSON.parse(raw);
@@ -381,6 +382,42 @@ export function run(input) {
   const remaining = new Map();
   for (const [apid, e] of addonEligible) remaining.set(apid, e.allowance);
 
+  // 2c. GIFT-CAMPAIGN eligibility, handled by the MAIN node (not a separate gift
+  //     node — a 3rd product-discount would be dropped when a limited-bundle node
+  //     is also active). Read each trigger product's `gift_trigger` stamp:
+  //       allowance[campId] += (trigger line qty) × perQualifying
+  //       giftIds[campId]    = the campaign's gift product ids
+  //     Then `_cgp_gift`-tagged lines get 100% off up to allowance.
+  /** @type {Map<string, number>} */
+  const giftAllow = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const giftIdsByCamp = new Map();
+  for (const line of lines) {
+    if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
+    const raw = /** @type {any} */ (line?.merchandise)?.product?.giftTrigger
+      ?.value;
+    if (!raw) continue;
+    let entries;
+    try {
+      entries = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(entries)) continue;
+    const q = Number(line?.quantity) || 0;
+    for (const e of entries) {
+      const cid = e && e.id;
+      if (!cid) continue;
+      const perQ = Number(e.perQualifying) || 1;
+      giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + q * perQ);
+      if (!giftIdsByCamp.has(cid))
+        giftIdsByCamp.set(
+          cid,
+          new Set((Array.isArray(e.giftIds) ? e.giftIds : []).map(String)),
+        );
+    }
+  }
+
   // 3. Apply.
   /** @type {FunctionRunResult["discounts"]} */
   const discounts = [];
@@ -398,6 +435,25 @@ export function run(input) {
     const addonFor = /** @type {any} */ (line)?.cgpFor?.value;
     const free = /** @type {any} */ (line)?.cgpFree?.value;
     const bid = /** @type {any} */ (line)?.cgpBid?.value;
+
+    // CAMPAIGN GIFT line: 100% off up to the campaign's allowance, and only if
+    // the product really is one of that campaign's gifts (tamper-safe).
+    const giftCamp = /** @type {any} */ (line)?.cgpGift?.value;
+    if (giftCamp) {
+      const rem = giftAllow.get(giftCamp) ?? 0;
+      const set = giftIdsByCamp.get(giftCamp);
+      const valid = !set || set.size === 0 || set.has(gidTail(pid));
+      if (rem > 0 && valid) {
+        const q = Math.min(lineQty, rem);
+        giftAllow.set(giftCamp, rem - q);
+        discounts.push({
+          message: "🎁 Free gift",
+          targets: [{ cartLine: { id: line.id, quantity: q } }],
+          value: { percentage: { value: "100.0" } },
+        });
+      }
+      continue; // gift lines are handled here only
+    }
 
     // A MAIN line is normally never discounted. A main is any line NOT tagged as
     // an accessory (`_addon_for`) or a free gift (`_cgp_free`) — the shared

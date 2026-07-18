@@ -119,6 +119,8 @@ async function restampProducts(
       id: c.id,
       triggers: triggerGids.map(gidTail),
       gifts: c.giftProducts.map((g) => g.handle).filter(Boolean),
+      // Numeric gift product ids — the discount Function matches gift lines by id.
+      giftIds: c.giftProducts.map((g) => gidTail(g.id)).filter(Boolean),
       perQualifying: Math.max(1, c.perQualifying || 1),
       badge: c.badgeText || "",
       rewardMode: c.rewardMode,
@@ -341,11 +343,23 @@ export async function saveCampaign(
 ): Promise<{ ok: boolean; errors: string[] }> {
   const prev = await prisma.giftCampaign.findFirst({ where: { shop, id: c.id } });
 
-  // 1. Discount node (time-gated) + rules metafield.
-  const node = await reconcileNode(admin, c, prev?.nodeId ?? null);
-  const errors = [...node.errors];
-  if (node.nodeId && prev?.nodeId) {
-    errors.push(...(await writeNodeRules(admin, node.nodeId, c)));
+  // 1. Gifts are now priced by the MAIN discount node (which reads each trigger
+  //    product's gift_trigger stamp), so this campaign needs NO separate
+  //    automatic-discount node. A separate node would be a 3rd product-discount
+  //    that Shopify drops when a limited-bundle node is also active. Delete any
+  //    node left from older versions.
+  const errors: string[] = [];
+  if (prev?.nodeId) {
+    const resp = await admin.graphql(
+      `#graphql
+        mutation DeleteGiftNode($id: ID!) {
+          discountAutomaticDelete(id: $id) { userErrors { message } }
+        }`,
+      { variables: { id: prev.nodeId } },
+    );
+    const json = await resp.json();
+    for (const e of json?.data?.discountAutomaticDelete?.userErrors ?? [])
+      errors.push(e.message);
   }
 
   // 2. Persist (source of truth).
@@ -361,7 +375,7 @@ export async function saveCampaign(
     triggerProductsJson: JSON.stringify(c.triggerProducts),
     triggerCollectionsJson: JSON.stringify(c.triggerCollections),
     giftProductsJson: JSON.stringify(c.giftProducts),
-    nodeId: node.nodeId ?? prev?.nodeId ?? null,
+    nodeId: null, // no separate gift node any more
   };
   await prisma.giftCampaign.upsert({
     where: { id: c.id },
