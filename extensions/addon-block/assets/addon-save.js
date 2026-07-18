@@ -1864,28 +1864,21 @@
           });
         });
       })
-      .then(function (response) {
+      .then(function () {
         cta.classList.remove("is-loading");
         cta.classList.add("is-done");
         cta.textContent = "✓ Added to cart";
         ctx.mainInCart = true; // the main is now in the cart
         clearSelection(ctx);
         document.dispatchEvent(new CustomEvent("cgp:addon:added"));
-        if (cart && typeof cart.renderContents === "function") {
-          // Dawn keeps an `is-empty` class on the cart element while the cart is
-          // empty, which hides the line items. Its own product-form clears it
-          // after adding; we must do the same or the drawer renders blank.
-          if (cart.classList.contains("is-empty")) {
-            cart.classList.remove("is-empty");
-          }
-          try {
-            cart.renderContents(response);
-          } catch (e) {
+        // Add any campaign free gift now that its trigger is in the cart, THEN
+        // refresh the drawer from fresh sections (the add response is stale once
+        // the gift line is added). reconcileGifts() no-ops when there are none.
+        return reconcileGifts()
+          .catch(function () {})
+          .then(function () {
             return refreshCartUI();
-          }
-        } else {
-          return refreshCartUI();
-        }
+          });
       })
       .then(function () {
         setTimeout(function () {
