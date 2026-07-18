@@ -1941,10 +1941,15 @@
   // Best-effort cart refresh, fully decoupled from the add. Re-renders the
   // theme's cart sections (Section Rendering API), updates the count, opens the
   // drawer. Any failure here never affects the completed add-to-cart.
-  // Refresh the cart UI. `shouldOpen` = open the drawer (only after an explicit
-  // "Add to cart", never on passive reconciles). cartBusy is held for the whole
-  // refresh so the fetch-watcher ignores our OWN section fetches (otherwise
-  // rerenderDrawer's /cart/update.js would retrigger the watcher → open loop).
+  // Refresh the cart UI. `shouldOpen` = open the drawer (ONLY after an explicit
+  // "Add to cart"). cartBusy is held for the whole refresh so the fetch-watcher
+  // ignores our own section fetches (else rerenderDrawer's /cart/update.js would
+  // retrigger the watcher → open loop).
+  //
+  // NB: the theme's native renderContents() (Dawn) OPENS the drawer as a side
+  // effect, so we only use it when shouldOpen is true. For passive refreshes we
+  // inject fresh sections in place, which updates the (closed) drawer WITHOUT
+  // popping it open.
   function refreshCartUI(shouldOpen) {
     cartBusy = true;
     var done = function () {
@@ -1953,19 +1958,17 @@
     var cartEl =
       document.querySelector("cart-notification") ||
       document.querySelector("cart-drawer");
-    // Preferred: the theme's OWN renderContents (native, reliable).
+
     if (
+      shouldOpen &&
       cartEl &&
       typeof cartEl.getSectionsToRender === "function" &&
       typeof cartEl.renderContents === "function"
     ) {
-      return rerenderDrawer()
-        .then(function () {
-          if (shouldOpen) openDrawer();
-        })
-        .then(done, done);
+      return rerenderDrawer().then(done, done); // native render (opens drawer)
     }
-    // Dawn-style section containers but no cart element API: inject sections.
+
+    // Passive update, or no native cart API: inject sections in place.
     if (detectSections().length) {
       return renderCartSections()
         .then(updateCount)
@@ -1974,16 +1977,21 @@
         })
         .then(done, done);
     }
-    // Unknown theme: broadcast common events, then hard-reload as a last resort.
+
+    // Unknown theme: broadcast common events; only hard-reload on an explicit add.
     try {
       document.dispatchEvent(new CustomEvent("cart:refresh", { bubbles: true }));
       document.documentElement.dispatchEvent(
         new CustomEvent("cart:change", { bubbles: true }),
       );
     } catch (e) {}
-    return new Promise(function () {
-      window.location.reload();
-    });
+    if (shouldOpen) {
+      return new Promise(function () {
+        window.location.reload();
+      });
+    }
+    done();
+    return Promise.resolve();
   }
 
   function detectSections() {
