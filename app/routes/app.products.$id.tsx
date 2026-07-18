@@ -422,7 +422,9 @@ export default function ProductConfig() {
 
   const numericId = product.id.replace("gid://shopify/Product/", "");
   const activeGroups = groups.filter((g) => !g.archived);
-  const archivedGroups = groups.filter((g) => g.archived);
+  // Free is now its own feature (Free gifts); don't surface legacy free groups
+  // (active or archived) in the product editor.
+  const archivedGroups = groups.filter((g) => g.archived && g.type !== "free");
   const countOf = (t: GroupType) =>
     activeGroups.filter((g) => g.type === t).length;
   const currentType = TAB_TYPES[tab];

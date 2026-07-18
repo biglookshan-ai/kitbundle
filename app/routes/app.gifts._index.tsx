@@ -63,7 +63,7 @@ export default function GiftCampaigns() {
 
   return (
     <Page>
-      <TitleBar title="Gift campaigns" />
+      <TitleBar title="Free gifts" />
       <BlockStack gap="400">
         {fetcher.data?.error && (
           <Banner tone="critical">{fetcher.data.error}</Banner>
@@ -74,7 +74,7 @@ export default function GiftCampaigns() {
 
         <InlineStack align="space-between" blockAlign="center">
           <Text as="h2" variant="headingMd">
-            Gift with purchase
+            Free gift offers
           </Text>
           <InlineStack gap="200">
             <Button
