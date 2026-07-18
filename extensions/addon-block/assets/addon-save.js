@@ -278,9 +278,10 @@
       true,
     );
 
-    // Keep bundle tags + free gifts honest: run now and after every cart change.
+    // One cart reconcile (gift allowance + orphan cleanup), now and after any
+    // cart change. Bundle/add-on pricing is the Function's job — no line surgery.
     installCartWatcher();
-    reconcileBundles();
+    reconcileGifts();
 
     var loading = root.querySelector("[data-cgp-loading]");
     if (loading) loading.style.display = "none";
@@ -1941,26 +1942,37 @@
   // theme's cart sections (Section Rendering API), updates the count, opens the
   // drawer. Any failure here never affects the completed add-to-cart.
   function refreshCartUI() {
-    // Unknown theme (no Dawn-style cart elements): broadcast the events many
-    // themes listen for, then hard-reload as the universal fallback so the
-    // header count / drawer are always correct.
-    if (!detectSections().length) {
-      try {
-        document.dispatchEvent(
-          new CustomEvent("cart:refresh", { bubbles: true }),
-        );
-        document.documentElement.dispatchEvent(
-          new CustomEvent("cart:change", { bubbles: true }),
-        );
-      } catch (e) {}
-      return new Promise(function () {
-        window.location.reload();
-      });
+    var cartEl =
+      document.querySelector("cart-notification") ||
+      document.querySelector("cart-drawer");
+    // Preferred: the theme's OWN renderContents (native, reliable) fed by a
+    // fresh sections response, then open the drawer.
+    if (
+      cartEl &&
+      typeof cartEl.getSectionsToRender === "function" &&
+      typeof cartEl.renderContents === "function"
+    ) {
+      return rerenderDrawer()
+        .then(openDrawer)
+        .catch(function () {});
     }
-    return renderCartSections()
-      .then(updateCount)
-      .then(openDrawer)
-      .catch(function () {});
+    // Dawn-style section containers but no cart element API: inject sections.
+    if (detectSections().length) {
+      return renderCartSections()
+        .then(updateCount)
+        .then(openDrawer)
+        .catch(function () {});
+    }
+    // Unknown theme: broadcast common events, then hard-reload as a last resort.
+    try {
+      document.dispatchEvent(new CustomEvent("cart:refresh", { bubbles: true }));
+      document.documentElement.dispatchEvent(
+        new CustomEvent("cart:change", { bubbles: true }),
+      );
+    } catch (e) {}
+    return new Promise(function () {
+      window.location.reload();
+    });
   }
 
   function detectSections() {
@@ -2044,7 +2056,8 @@
   // ---- Gift campaigns (cross-product "gift with purchase") ----
   // Theme-readable snapshot of active campaigns (set by bootGifts).
   var giftCampaigns = null;
-  var giftReconciling = false;
+  // Single guard for the one cart reconcile pass (prevents overlap/recursion).
+  var cartBusy = false;
 
   function giftActive(c) {
     var now = Date.now();
@@ -2108,7 +2121,7 @@
           selector.addEventListener("change", function () {
             if (selector.checked) {
               giftChoice[c.id] = h;
-              reconcileGifts();
+              reconcileGifts().then(refreshCartUI);
               renderGiftPromo(root);
             }
           });
@@ -2147,13 +2160,17 @@
     host.hidden = !any;
   }
 
-  // Keep each campaign's gift line at the unlocked allowance
-  // (qualifying qty x perQualifying). The Function caps the discount server-side;
-  // this is the UX side that adds/trims the gift line.
+  // THE cart reconcile. One coherent pass over the cart — no bundle line
+  // splitting/untagging (the discount Function is the pricing authority and
+  // caps each bundle to complete kits, so stray tagged lines simply aren't
+  // over-discounted). This only:
+  //   (A) keeps each campaign's chosen gift at its allowance, removing orphan or
+  //       switched-away gift lines (so a "free" gift is never left at full price)
+  //   (B) removes legacy product free-gift lines whose main is gone.
+  // Callers refresh the drawer afterwards.
   function reconcileGifts() {
-    if (giftReconciling || !giftCampaigns || !giftCampaigns.length)
-      return Promise.resolve();
-    giftReconciling = true;
+    if (cartBusy) return Promise.resolve();
+    cartBusy = true;
     return fetch("/cart.js", { headers: { Accept: "application/json" } })
       .then(function (r) {
         return r.json();
@@ -2162,7 +2179,9 @@
         var items = cart.items || [];
         var updates = {};
         var adds = []; // { handle, quantity, campId }
-        giftCampaigns.forEach(function (c) {
+
+        // (A) Campaign gifts: keep the chosen gift at its allowance.
+        (giftCampaigns || []).forEach(function (c) {
           var desired = chosenGift(c); // fixed = first; choice = customer's pick
           if (!desired) return;
           var trig = {};
@@ -2178,12 +2197,10 @@
           var giftLines = items.filter(function (it) {
             return it.properties && String(it.properties._cgp_gift) === String(c.id);
           });
-          // Keep only gift lines that match the desired gift; drop the rest
-          // (allowance gone, or the customer switched to a different gift).
           var kept = [];
           giftLines.forEach(function (it) {
             if (allowance > 0 && it.handle === desired) kept.push(it);
-            else updates[it.key] = 0;
+            else updates[it.key] = 0; // orphan / switched-away / expired
           });
           if (allowance <= 0) return;
           if (kept.length === 0) {
@@ -2198,6 +2215,27 @@
             });
           }
         });
+
+        // (B) Legacy product free-gift lines: drop any whose main is gone.
+        var freeByMain = {};
+        items.forEach(function (it) {
+          if (!(it.properties && it.properties._cgp_free)) return;
+          var k = String(it.properties._cgp_free_for || "");
+          (freeByMain[k] = freeByMain[k] || []).push(it);
+        });
+        Object.keys(freeByMain).forEach(function (mainId) {
+          var present =
+            mainId &&
+            items.some(function (it) {
+              return String(it.product_id) === mainId;
+            });
+          if (!present)
+            freeByMain[mainId].forEach(function (it) {
+              updates[it.key] = 0;
+            });
+        });
+
+        if (!Object.keys(updates).length && !adds.length) return;
         var chain = Promise.resolve();
         if (Object.keys(updates).length) {
           chain = chain.then(function () {
@@ -2226,7 +2264,7 @@
       })
       .catch(function () {})
       .then(function () {
-        giftReconciling = false;
+        cartBusy = false;
       });
   }
 
@@ -2263,7 +2301,9 @@
     reconcileGifts();
   }
 
-  // Run reconcile after any cart mutation (delete main, change qty, …).
+  // Run the ONE reconcile after any cart mutation the customer makes in the
+  // drawer (delete a main, change qty…). Skipped while our own reconcile is
+  // running (cartBusy) so it never fights itself, then refreshes the drawer.
   function installCartWatcher() {
     if (window.__cgpWatch) return;
     window.__cgpWatch = true;
@@ -2273,19 +2313,13 @@
       var res = orig.apply(this, arguments);
       try {
         var u = typeof input === "string" ? input : (input && input.url) || "";
-        if (
-          !reconciling &&
-          !giftReconciling &&
-          /\/cart\/(change|update|add|clear)/.test(u)
-        ) {
+        if (!cartBusy && /\/cart\/(change|update|add|clear)/.test(u)) {
           res
             .then(function () {
               clearTimeout(window.__cgpRecTimer);
               window.__cgpRecTimer = setTimeout(function () {
-                var p = reconcileBundles();
-                if (p && p.then) p.then(reconcileGifts);
-                else reconcileGifts();
-              }, 50);
+                reconcileGifts().then(refreshCartUI);
+              }, 60);
             })
             .catch(function () {});
         }
@@ -2306,194 +2340,6 @@
       .catch(function () {});
   }
 
-  // Removing a line-item property in place via /cart/change.js is unreliable, so
-  // we remove the tagged line and re-add the same variant/quantity as a PLAIN,
-  // untagged product.
-  function untagLine(it) {
-    return cartPost("/cart/change.js", { id: it.key, quantity: 0 }).then(
-      function () {
-        return cartPost("/cart/add.js", {
-          items: [{ id: it.variant_id, quantity: it.quantity || 1 }],
-        });
-      },
-    );
-  }
-
-  // A bundle's main + accessories share a `_cgp_grp` tag; the main is the line
-  // WITHOUT `_addon_for`. We keep bundle tags correct by:
-  //   1. stripping tags from a group whose main was removed (orphans), and
-  //   2. keeping only ONE tagged unit per accessory per bundle instance —
-  //      splitting any extra quantity (or duplicate line) into a plain,
-  //      untagged, full-price product.
-  var reconciling = false;
-  function reconcileBundles() {
-    if (reconciling) return;
-    reconciling = true;
-    return fetch("/cart.js", { headers: { Accept: "application/json" } })
-      .then(function (r) {
-        return r.json();
-      })
-      .then(function (cart) {
-        var byGrp = {};
-        (cart.items || []).forEach(function (it) {
-          var grp = it.properties && it.properties._cgp_grp;
-          if (!grp) return;
-          (byGrp[grp] = byGrp[grp] || []).push(it);
-        });
-
-        // Collect every fix into ONE batched quantity update + ONE batched add,
-        // instead of remove+re-add per line, so the cart settles fast.
-        var updates = {}; // lineKey -> new quantity (0 = remove the line)
-        var adds = []; // plain (untagged) re-adds: { id: variantId, quantity }
-
-        Object.keys(byGrp).forEach(function (grp) {
-          var lines = byGrp[grp];
-          var hasMain = lines.some(function (it) {
-            return !(it.properties && it.properties._addon_for);
-          });
-          var accProducts = {};
-          var expectedN = 0;
-          lines.forEach(function (it) {
-            var p = it.properties || {};
-            if (p._cgp_n) expectedN = parseInt(p._cgp_n, 10) || expectedN;
-            if (p._addon_for) accProducts[String(it.product_id)] = true;
-          });
-          var accCount = Object.keys(accProducts).length;
-
-          // Broken kit (main removed OR an accessory removed): untag every line.
-          if (!hasMain || (expectedN > 0 && accCount < expectedN)) {
-            lines.forEach(function (it) {
-              updates[it.key] = 0;
-              adds.push({ id: it.variant_id, quantity: it.quantity || 1 });
-            });
-            return;
-          }
-
-          // Complete kit: keep ONE tagged unit per accessory; split the rest off
-          // as plain, untagged products.
-          var seen = {};
-          lines.forEach(function (it) {
-            if (!(it.properties && it.properties._addon_for)) return; // skip main
-            var pid = String(it.product_id);
-            if (!seen[pid]) {
-              seen[pid] = true;
-              if (it.quantity > 1) {
-                updates[it.key] = 1;
-                adds.push({ id: it.variant_id, quantity: it.quantity - 1 });
-              }
-            } else {
-              updates[it.key] = 0;
-              adds.push({ id: it.variant_id, quantity: it.quantity || 1 });
-            }
-          });
-        });
-
-        // Free gifts: one-to-one with their main, max ONE unit per gift product.
-        // We scan all `_cgp_free` lines in the cart (page-independent) and group
-        // them by `_cgp_free_for` (their main's product id) so cleanup works
-        // even when the customer is on a different product page.
-        //   - main gone         -> remove every free line tied to that main
-        //   - main present, >1  -> keep ONE per gift product, split the rest off
-        // Auto-restore (re-adding a deleted gift) only happens for the CURRENT
-        // page's gifts (freeReqs).
-        var items = cart.items || [];
-        /** @type {Object<string, Array<any>>} */
-        var freeByMain = {};
-        items.forEach(function (it) {
-          if (!(it.properties && it.properties._cgp_free)) return;
-          var key = String(it.properties._cgp_free_for || "");
-          (freeByMain[key] = freeByMain[key] || []).push(it);
-        });
-        Object.keys(freeByMain).forEach(function (mainId) {
-          var lines = freeByMain[mainId];
-          var mainPresent =
-            mainId &&
-            items.some(function (it) {
-              return String(it.product_id) === mainId;
-            });
-          if (!mainPresent) {
-            // Main gone -> gift is gone too (one-to-one). Just remove, don't
-            // re-add at full price.
-            lines.forEach(function (it) {
-              updates[it.key] = 0;
-            });
-            return;
-          }
-          // Main present: at most ONE tagged unit per gift product.
-          var seen = {};
-          lines.forEach(function (it) {
-            var pid = String(it.product_id);
-            if (!seen[pid]) {
-              seen[pid] = true;
-              if (it.quantity > 1) {
-                updates[it.key] = 1;
-                adds.push({ id: it.variant_id, quantity: it.quantity - 1 });
-              }
-            } else {
-              updates[it.key] = 0;
-              adds.push({ id: it.variant_id, quantity: it.quantity || 1 });
-            }
-          });
-        });
-
-        // NOTE: a gift the customer deletes is NOT auto-restored — once removed
-        // in the cart it stays gone. It can still be re-added by adding the kit
-        // again (commit re-adds a gift that isn't already in the cart).
-
-        if (!Object.keys(updates).length && !adds.length) return;
-
-        var step = Object.keys(updates).length
-          ? cartPost("/cart/update.js", { updates: updates })
-          : Promise.resolve();
-
-        return step.then(function () {
-          // Pure removals (e.g. deleting a main drops its free gift) have no
-          // re-adds — still re-render the drawer so the change shows.
-          if (!adds.length) return rerenderDrawer();
-          var cartEl =
-            document.querySelector("cart-notification") ||
-            document.querySelector("cart-drawer");
-          var body = {
-            items: adds.map(function (a) {
-              return {
-                id: a.id,
-                quantity: a.quantity,
-                properties: a.properties || {},
-              };
-            }),
-          };
-          if (cartEl && typeof cartEl.getSectionsToRender === "function") {
-            body.sections = cartEl.getSectionsToRender().map(function (s) {
-              return s.id;
-            });
-            body.sections_url = window.location.pathname;
-          }
-          return cartPost("/cart/add.js", body).then(function (resp) {
-            if (
-              cartEl &&
-              typeof cartEl.renderContents === "function" &&
-              resp &&
-              resp.sections
-            ) {
-              if (cartEl.classList.contains("is-empty")) {
-                cartEl.classList.remove("is-empty");
-              }
-              try {
-                cartEl.renderContents(resp);
-              } catch (e) {}
-            } else if (!cartEl) {
-              return refreshCartUI(); // unknown theme → universal fallback
-            }
-          });
-        });
-      })
-      .then(function () {
-        reconciling = false;
-      })
-      .catch(function () {
-        reconciling = false;
-      });
-  }
 
   // Re-render the cart drawer via the theme's own renderContents, fed by a fresh
   // POST /cart/update.js (a no-op update that returns the rendered sections).
