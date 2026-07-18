@@ -385,15 +385,17 @@ export function run(input) {
   // 2c. GIFT-CAMPAIGN eligibility, handled by the MAIN node (not a separate gift
   //     node — a 3rd product-discount would be dropped when a limited-bundle node
   //     is also active). Read each trigger product's `gift_trigger` stamp:
-  //       allowance[campId] += (trigger line qty) × perQualifying
-  //       giftIds[campId]    = the campaign's gift product ids
-  //     Then `_cgp_gift`-tagged lines get 100% off up to allowance.
+  //       allowance[campId] += (qualifying line qty) × perQualifying
+  //     A "qualifying" line is a real purchase unit: a plain/shared/bundle MAIN.
+  //     Bundle & add-on COMPONENTS (`_addon_for`) do NOT count — otherwise one
+  //     bundle (with several trigger components) would inflate the gift count.
   /** @type {Map<string, number>} */
   const giftAllow = new Map();
   /** @type {Map<string, Set<string>>} */
   const giftIdsByCamp = new Map();
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
+    if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
     const raw = /** @type {any} */ (line?.merchandise)?.product?.giftTrigger
       ?.value;
     if (!raw) continue;
@@ -418,6 +420,42 @@ export function run(input) {
     }
   }
 
+  // Distribute each campaign's allowance across its gift lines ROUND-ROBIN (one
+  // free unit per gift line per pass), so several different gifts each stay free
+  // and a manually-bumped quantity on one gift doesn't starve the others — the
+  // extra units just fall outside the allowance and stay full price.
+  /** @type {Map<string, number>} */ // cart line id -> free quantity
+  const giftFreeQty = new Map();
+  {
+    /** @type {Map<string, Array<{id: string, pid: string, qty: number}>>} */
+    const byCamp = new Map();
+    for (const line of lines) {
+      const cid = /** @type {any} */ (line)?.cgpGift?.value;
+      if (!cid) continue;
+      const pid = /** @type {any} */ (line?.merchandise)?.product?.id;
+      const set = giftIdsByCamp.get(cid);
+      if (set && set.size > 0 && !set.has(gidTail(pid))) continue; // not a valid gift
+      const arr = byCamp.get(cid) ?? [];
+      arr.push({ id: line.id, pid, qty: Number(line?.quantity) || 0 });
+      byCamp.set(cid, arr);
+    }
+    for (const [cid, glines] of byCamp) {
+      let rem = giftAllow.get(cid) ?? 0;
+      let progressed = true;
+      while (rem > 0 && progressed) {
+        progressed = false;
+        for (const g of glines) {
+          if (rem <= 0) break;
+          if ((giftFreeQty.get(g.id) ?? 0) < g.qty) {
+            giftFreeQty.set(g.id, (giftFreeQty.get(g.id) ?? 0) + 1);
+            rem -= 1;
+            progressed = true;
+          }
+        }
+      }
+    }
+  }
+
   // 3. Apply.
   /** @type {FunctionRunResult["discounts"]} */
   const discounts = [];
@@ -436,19 +474,14 @@ export function run(input) {
     const free = /** @type {any} */ (line)?.cgpFree?.value;
     const bid = /** @type {any} */ (line)?.cgpBid?.value;
 
-    // CAMPAIGN GIFT line: 100% off up to the campaign's allowance, and only if
-    // the product really is one of that campaign's gifts (tamper-safe).
+    // CAMPAIGN GIFT line: free quantity was pre-computed round-robin above.
     const giftCamp = /** @type {any} */ (line)?.cgpGift?.value;
     if (giftCamp) {
-      const rem = giftAllow.get(giftCamp) ?? 0;
-      const set = giftIdsByCamp.get(giftCamp);
-      const valid = !set || set.size === 0 || set.has(gidTail(pid));
-      if (rem > 0 && valid) {
-        const q = Math.min(lineQty, rem);
-        giftAllow.set(giftCamp, rem - q);
+      const fq = giftFreeQty.get(line.id) ?? 0;
+      if (fq > 0) {
         discounts.push({
           message: "🎁 Free gift",
-          targets: [{ cartLine: { id: line.id, quantity: q } }],
+          targets: [{ cartLine: { id: line.id, quantity: fq } }],
           value: { percentage: { value: "100.0" } },
         });
       }
