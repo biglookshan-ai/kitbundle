@@ -502,6 +502,7 @@ export default function ProductConfig() {
                   >
                     <GroupCard
                       group={group}
+                      productHandle={product.handle}
                       prices={priceMap}
                       compareAt={compareMap}
                       variants={variantMap}
@@ -591,6 +592,7 @@ export default function ProductConfig() {
 
 function GroupCard({
   group,
+  productHandle,
   prices,
   compareAt,
   variants,
@@ -607,6 +609,7 @@ function GroupCard({
   onUpdateAccessory,
 }: {
   group: AddonGroup;
+  productHandle: string;
   prices: Record<string, number>;
   compareAt: Record<string, number>;
   variants: Record<string, { id: string; title: string; price?: number; compareAt?: number }[]>;
@@ -750,6 +753,38 @@ function GroupCard({
             </Box>
           )}
         </InlineStack>
+
+        {isBundle && (
+          <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+            <BlockStack gap="100">
+              <Text as="span" variant="bodySm" fontWeight="medium">
+                Search deep-link
+              </Text>
+              <Text as="span" variant="bodySm" tone="subdued">
+                Code <b>{group.code}</b> — link customers straight to this bundle
+                (auto-selected) with:
+              </Text>
+              <Box
+                background="bg-surface"
+                padding="150"
+                borderRadius="100"
+                borderWidth="025"
+                borderColor="border"
+              >
+                <Text as="span" variant="bodySm" tone="subdued">
+                  <code>
+                    /products/{productHandle}?kb_bundle={group.code}
+                  </code>
+                </Text>
+              </Box>
+              <Text as="span" variant="bodySm" tone="subdued">
+                Your search engine can read every bundle from this product’s{" "}
+                <code>custom.addon_config</code> metafield and link to it with
+                that code.
+              </Text>
+            </BlockStack>
+          </Box>
+        )}
 
         {!isFree && mainVariants.length > 1 && (
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">

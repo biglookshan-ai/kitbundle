@@ -1448,7 +1448,43 @@
       paint();
       // Re-render once the main product loads (for its thumbnail + total price).
       ctx.bundlePaints.push(paint);
+
+      // Deep link (⑤): /products/x?kb_bundle=<code|id> → auto-select this bundle,
+      // scroll to it and flash it. Lets a search result land on the right kit.
+      var want = deepLinkBundle();
+      if (
+        want &&
+        !window.__cgpDeepDone &&
+        (String(group.code || "").toLowerCase() === want.toLowerCase() ||
+          String(group.id) === want)
+      ) {
+        window.__cgpDeepDone = true;
+        var st = hasLimited ? offerState(group) : "active";
+        if (st !== "ended") {
+          if (bundleReady()) setSelected(true, st, offerIdFor(st));
+          else setExpanded(true);
+          setTimeout(function () {
+            try {
+              card.scrollIntoView({ behavior: "smooth", block: "center" });
+            } catch (e) {}
+            card.classList.add("cgp-bundle--flash");
+            setTimeout(function () {
+              card.classList.remove("cgp-bundle--flash");
+            }, 2200);
+          }, 350);
+        }
+      }
     });
+  }
+
+  // The `kb_bundle` deep-link value (bundle code or id), or null.
+  function deepLinkBundle() {
+    try {
+      var m = window.location.search.match(/[?&]kb_bundle=([^&]+)/);
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   function contentRow(ctx, data, percent, tag, isMain, sel, imgOverride, priceOverride) {
