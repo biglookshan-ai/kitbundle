@@ -1544,10 +1544,35 @@
   // main it belongs to and the gift's current variant.
   var freeReqs = [];
 
+  // Product-level FREE gift: each free group = "choose ONE free gift". The
+  // customer picks one option (radio); it's added free alongside the main. Each
+  // group contributes its chosen gift to ctx.freeItems / freeReqs, rebuilt on
+  // every change so commit + reconcile always see the current pick.
   function renderFree(ctx, groups, root) {
     var wrap = root.querySelector("[data-cgp-free]");
     if (!wrap || !groups.length) return;
-    groups.forEach(function (group) {
+    var chosenByGroup = {}; // groupKey -> { productId, current }
+
+    function rebuild() {
+      ctx.freeItems = [];
+      freeReqs = freeReqs.filter(function (r) {
+        return r.mainId !== ctx.mainProductId;
+      });
+      Object.keys(chosenByGroup).forEach(function (k) {
+        var c = chosenByGroup[k];
+        if (!c) return;
+        ctx.freeItems.push({ productId: c.productId, current: c.current });
+        freeReqs.push({
+          mainId: ctx.mainProductId,
+          mainHandle: ctx.mainHandle,
+          giftProductId: c.productId,
+          current: c.current,
+        });
+      });
+      ctx.onChange();
+    }
+
+    groups.forEach(function (group, gi) {
       Promise.all(
         (group.accessories || []).map(function (a) {
           return fetchProduct(a.handle);
@@ -1555,33 +1580,76 @@
       ).then(function (datas) {
         var items = datas.filter(function (d) {
           if (!d) return false;
-          // "Hide when sold out": drop gifts with no available variant.
           if (group.hideWhenSoldOut && !accInStock(group, d)) return false;
           return true;
         });
-        if (!items.length) return; // whole gift group sold out -> hide section
+        if (!items.length) return;
         wrap.hidden = false;
         var section = el("div", "cgp-free");
         section.appendChild(
-          el("h2", "cgp-free__heading", group.title || "🎁 Free gift"),
+          el("div", "cgp-free__heading", group.title || "🎁 Free gift"),
         );
+        if (items.length > 1) {
+          section.appendChild(
+            el("div", "cgp-free__sub", "Choose your free gift:"),
+          );
+        }
         var list = el("div", "cgp-free__list");
         section.appendChild(list);
         wrap.appendChild(section);
-        items.forEach(function (data) {
-          var row = el("div", "cgp-free__row");
+
+        var groupKey = "fg" + gi + "_" + (group.id || gi);
+        var radioName = "cgp-free-" + groupKey;
+        var single = items.length > 1;
+
+        items.forEach(function (data, idx) {
+          var row = el("label", "cgp-free__row");
           list.appendChild(row);
-          renderFreeItem(ctx, row, group, data);
+          var cur = renderFreeItem(ctx, row, group, data, {
+            single: single,
+            radioName: radioName,
+            checked: idx === 0,
+            onPick: function (current) {
+              chosenByGroup[groupKey] = {
+                productId: String(data.id),
+                current: current,
+              };
+              rebuild();
+            },
+          });
+          if (idx === 0) {
+            chosenByGroup[groupKey] = {
+              productId: String(data.id),
+              current: cur,
+            };
+          }
         });
+        rebuild();
       });
     });
   }
 
-  function renderFreeItem(ctx, row, group, data) {
+  function renderFreeItem(ctx, row, group, data, opts) {
     row.innerHTML = "";
     var offered = offeredVariants(group, data);
     var chosen = firstAvailableIn(offered);
     var link = data.handle ? "/products/" + data.handle : null;
+
+    // Single-select radio when the group offers a choice; else a locked ✓.
+    var selector;
+    if (opts.single) {
+      selector = el("input", "cgp-free__radio");
+      selector.type = "radio";
+      selector.name = opts.radioName;
+      selector.checked = !!opts.checked;
+      selector.addEventListener("change", function () {
+        if (selector.checked) opts.onPick(current);
+      });
+    } else {
+      selector = el("span", "cgp-check is-on is-locked", "✓");
+      selector.setAttribute("aria-label", "Free gift (included)");
+    }
+    row.appendChild(selector);
 
     var thumb = el(link ? "a" : "div", "cgp-free__thumb");
     if (link) thumb.href = link;
@@ -1603,7 +1671,6 @@
     nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
     info.appendChild(nameRow);
 
-    // Price sits in the info column (left), like add-on rows.
     var price = el("div", "cgp-free__price");
     price.appendChild(el("span", "cgp-free__now", money(0, ctx.currency)));
     if (ctx.showStrike) {
@@ -1623,14 +1690,20 @@
         select.appendChild(opt);
       });
       select.value = String(chosen.id);
+      // Changing the variant of the currently-picked gift updates the cart plan.
+      select.addEventListener("change", function () {
+        if (!opts.single || (row.querySelector("input") || {}).checked) {
+          opts.onPick(current);
+        }
+      });
+      // Clicking the dropdown shouldn't toggle the row's radio.
+      select.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      });
       info.appendChild(select);
     }
     row.appendChild(info);
-
-    // Always-selected, locked round selector (gift can't be removed here).
-    var lockCheck = el("span", "cgp-check is-on is-locked", "✓");
-    lockCheck.setAttribute("aria-label", "Free gift (included)");
-    row.appendChild(lockCheck);
 
     function current() {
       if (select) {
@@ -1643,13 +1716,9 @@
       return chosen;
     }
 
-    ctx.freeItems.push({ productId: String(data.id), current: current });
-    freeReqs.push({
-      mainId: ctx.mainProductId,
-      mainHandle: ctx.mainHandle,
-      giftProductId: String(data.id),
-      current: current,
-    });
+    // ctx.freeItems / freeReqs are managed centrally by renderFree.rebuild()
+    // (via chosenByGroup) so single- and single-item groups stay consistent.
+    return current;
   }
 
   // Line item properties that mark a free gift. `_cgp_free_for` ties the gift
