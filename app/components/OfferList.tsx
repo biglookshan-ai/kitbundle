@@ -83,7 +83,32 @@ function fmtDate(iso: string | null) {
 function SaleStatusBadge({ state }: { state: OfferRow["saleState"] }) {
   if (state === "active") return <Badge tone="success">Live</Badge>;
   if (state === "upcoming") return <Badge tone="info">Scheduled</Badge>;
-  return <Badge tone="critical">Ended</Badge>;
+  return <Badge>Ended</Badge>;
+}
+
+/** Light-red "sale" chip for discounts — visually distinct from the green Live
+ *  status badge so a discount never reads as a status. */
+function DiscountChip({ label }: { label: string }) {
+  return (
+    <Box
+      background="bg-surface-critical"
+      paddingBlock="050"
+      paddingInline="150"
+      borderRadius="200"
+    >
+      <Text as="span" variant="bodySm" tone="critical" fontWeight="medium">
+        {label}
+      </Text>
+    </Box>
+  );
+}
+
+/** Compact one-line sale status + timing for the Simple view. */
+function saleShort(r: OfferRow): string {
+  if (r.saleState === "active") return `Live · ends ${fmtDate(r.endsAt)}`;
+  if (r.saleState === "upcoming")
+    return `Scheduled · starts ${fmtDate(r.startsAt)}`;
+  return `Ended ${fmtDate(r.endsAt)}`;
 }
 
 /** The one-line "what happens with this sale" summary under a sale bundle. */
@@ -127,7 +152,7 @@ function PriceBlock({
         </Text>
       </InlineStack>
       {kind !== "addon" && r.effectivePct > 0 && (
-        <Badge tone="success">{`${r.effectivePct}% off kit`}</Badge>
+        <DiscountChip label={`${r.effectivePct}% off kit`} />
       )}
     </BlockStack>
   );
@@ -162,7 +187,7 @@ function OfferRowSimple({
             <Thumbnail
               source={r.productImage || ImageIcon}
               alt={r.productTitle}
-              size="extraSmall"
+              size="small"
             />
             <BlockStack gap="0">
               <Text
@@ -176,9 +201,7 @@ function OfferRowSimple({
               <Text as="span" variant="bodyXs" tone="subdued">
                 {r.productTitle} · {r.accessoryCount}{" "}
                 {r.accessoryCount === 1 ? "item" : "items"}
-                {kind === "sale" && r.saleState
-                  ? ` · ${r.saleState === "active" ? "Live" : r.saleState === "upcoming" ? "Scheduled" : "Ended"}`
-                  : ""}
+                {kind === "sale" ? ` · ${saleShort(r)}` : ""}
               </Text>
             </BlockStack>
           </InlineStack>
@@ -232,7 +255,7 @@ function OfferRowCard({
                 <Thumbnail
                   source={r.productImage || ImageIcon}
                   alt={r.productTitle}
-                  size="extraSmall"
+                  size="small"
                 />
                 <Text as="span" variant="bodySm" tone="subdued">
                   {kind === "addon" ? "On " : "Main · "}
@@ -266,7 +289,7 @@ function OfferRowCard({
                       <Thumbnail
                         source={a.image || ImageIcon}
                         alt={a.title}
-                        size="extraSmall"
+                        size="small"
                       />
                       <Text as="span" variant="bodySm">
                         {a.title}
@@ -281,7 +304,7 @@ function OfferRowCard({
                       <Text as="span" variant="bodySm" fontWeight="medium">
                         {money(a.now, currency)}
                       </Text>
-                      {a.pct > 0 && <Badge tone="success">{`${a.pct}%`}</Badge>}
+                      {a.pct > 0 && <DiscountChip label={`${a.pct}%`} />}
                     </InlineStack>
                   </InlineStack>
                 ))}
@@ -301,23 +324,31 @@ function OfferRowCard({
   );
 }
 
-/** A section of rows rendered in the chosen view mode. */
+const PAGE_STEP = 25;
+
+/** A section of rows rendered in the chosen view mode, capped at `limit`. */
 function OfferSectionCard({
   section,
   mode,
   currency,
   onOpen,
+  limit,
+  onShowMore,
 }: {
   section: OfferSection;
   mode: ViewMode;
   currency: string;
   onOpen: (r: OfferRow) => void;
+  limit: number;
+  onShowMore: () => void;
 }) {
+  const shown = section.rows.slice(0, limit);
+  const remaining = section.rows.length - shown.length;
   return (
     <SectionCard title={section.title} count={section.rows.length}>
       <BlockStack>
-        {section.rows.map((r, i) => {
-          const last = i === section.rows.length - 1;
+        {shown.map((r, i) => {
+          const last = i === shown.length - 1 && remaining === 0;
           const props = {
             r,
             kind: section.kind,
@@ -332,6 +363,13 @@ function OfferSectionCard({
           );
         })}
       </BlockStack>
+      {remaining > 0 && (
+        <Box padding="300">
+          <Button fullWidth variant="tertiary" onClick={onShowMore}>
+            {`Show ${Math.min(PAGE_STEP, remaining)} more — ${remaining} hidden`}
+          </Button>
+        </Box>
+      )}
     </SectionCard>
   );
 }
@@ -354,6 +392,7 @@ export function OfferBrowser({
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<ViewMode>("simple");
   const [type, setType] = useState<string>("all");
+  const [limit, setLimit] = useState(PAGE_STEP);
 
   const q = query.trim().toLowerCase();
   const match = (r: OfferRow) =>
@@ -379,7 +418,10 @@ export function OfferBrowser({
               label="Search"
               labelHidden
               value={query}
-              onChange={setQuery}
+              onChange={(v) => {
+                setQuery(v);
+                setLimit(PAGE_STEP);
+              }}
               autoComplete="off"
               placeholder="Search by code, name or product"
               prefix={<Icon source={SearchIcon} />}
@@ -443,6 +485,8 @@ export function OfferBrowser({
                 mode={mode}
                 currency={currency}
                 onOpen={onOpen}
+                limit={limit}
+                onShowMore={() => setLimit((l) => l + PAGE_STEP)}
               />
             ),
         )

@@ -325,13 +325,12 @@ export default function GiftCampaigns() {
                             {meta}
                           </Text>
                         </BlockStack>
-                        <InlineStack gap="200">
+                        <ButtonGroup>
                           <Button onClick={() => navigate(`/app/gifts/${c.id}`)}>
                             Edit
                           </Button>
                           <Button
                             tone="critical"
-                            variant="tertiary"
                             loading={busy}
                             onClick={() =>
                               fetcher.submit(
@@ -342,7 +341,7 @@ export default function GiftCampaigns() {
                           >
                             Delete
                           </Button>
-                        </InlineStack>
+                        </ButtonGroup>
                       </InlineStack>
 
                       {/* triggers → gifts (one/many-to-many) — detailed only */}

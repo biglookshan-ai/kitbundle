@@ -256,23 +256,6 @@ export async function fetchProductPrices(
   const unique = Array.from(new Set(ids)).filter(Boolean);
   if (unique.length === 0)
     return { prices: {}, compareAt: {}, variants: {}, info: {}, currency: "USD" };
-  const resp = await admin.graphql(
-    `#graphql
-      query Prices($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on Product {
-            id
-            title
-            handle
-            featuredImage { url }
-            priceRangeV2 { minVariantPrice { amount currencyCode } }
-            variants(first: 100) { nodes { id title price compareAtPrice } }
-          }
-        }
-      }`,
-    { variables: { ids: unique } },
-  );
-  const json = await resp.json();
   const prices: Record<string, number> = {};
   // True original (compare-at) of the representative variant, so a product that
   // is ALREADY on sale shows its real MSRP — not the already-discounted price.
@@ -280,7 +263,33 @@ export async function fetchProductPrices(
   const variants: Record<string, VariantOption[]> = {};
   const info: Record<string, ProductMeta> = {};
   let currency = "USD";
-  for (const n of json?.data?.nodes ?? []) {
+
+  // Shopify's `nodes` query is capped at 250 ids, so batch (a store with 200+
+  // bundles easily references more products than that).
+  const nodes: any[] = [];
+  for (let i = 0; i < unique.length; i += 250) {
+    const chunk = unique.slice(i, i + 250);
+    const resp = await admin.graphql(
+      `#graphql
+        query Prices($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on Product {
+              id
+              title
+              handle
+              featuredImage { url }
+              priceRangeV2 { minVariantPrice { amount currencyCode } }
+              variants(first: 100) { nodes { id title price compareAtPrice } }
+            }
+          }
+        }`,
+      { variables: { ids: chunk } },
+    );
+    const json = await resp.json();
+    for (const n of json?.data?.nodes ?? []) nodes.push(n);
+  }
+
+  for (const n of nodes) {
     if (!n?.id) continue;
     info[n.id] = {
       title: n.title ?? "",
