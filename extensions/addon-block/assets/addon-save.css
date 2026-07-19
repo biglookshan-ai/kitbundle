@@ -568,12 +568,25 @@ label.cgp-free__row {
   color: #6b7280;
 }
 .cgp-free__thumb {
+  display: block;
   width: 52px;
   height: 52px;
   flex: 0 0 52px;
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
+}
+a.cgp-free__name {
+  color: inherit;
+  text-decoration: none;
+}
+a.cgp-free__name:hover {
+  text-decoration: underline;
+}
+.cgp-free__price {
+  font-size: 0.82rem;
+  color: #9ca3af;
+  text-decoration: line-through;
 }
 .cgp-free__thumb img {
   width: 100%;
@@ -776,6 +789,24 @@ label.cgp-free__row {
   border: 1px solid #e5e7eb;
   padding: 1px 7px;
   border-radius: 5px;
+}
+.cgp-bundle__stock {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #1a7f37;
+  background: #e7f6ec;
+  padding: 1px 8px;
+  border-radius: 5px;
+}
+.cgp-bundle__stock--low {
+  color: #8a6d00;
+  background: #fff3cd;
+}
+.cgp-bundle__stock--out {
+  color: #b42318;
+  background: #fee4e2;
 }
 .cgp-bundle__timerbadge {
   display: inline-flex;

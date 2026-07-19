@@ -347,6 +347,12 @@ export default function GiftCampaignEditor() {
               placeholder="Choose your free gift:"
               helpText="Shown above the gift options on the product page. Customers can also pick “No thanks” to skip the gift."
             />
+            <Checkbox
+              label="Hide when sold out"
+              helpText="Off by default. When on, a sold-out gift is hidden from the picker; if every gift is sold out the whole group hides."
+              checked={c.hideWhenSoldOut}
+              onChange={(v) => patch({ hideWhenSoldOut: v })}
+            />
           </BlockStack>
         </Card>
 

@@ -75,7 +75,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     product.id,
     ...config.groups.flatMap((g) => g.accessories.map((a) => a.productId)),
   ];
-  const { prices, compareAt, variants, info, currency } =
+  const { prices, compareAt, variants, info, inventory, currency } =
     await fetchProductPrices(admin, ids);
 
   // Self-heal: a limited offer's time-gated discount node can go missing (e.g. it
@@ -101,6 +101,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     compareAt,
     variants,
     info,
+    inventory,
     currency,
     offerStatus,
     offerHealError,
@@ -296,6 +297,7 @@ export default function ProductConfig() {
     compareAt,
     variants,
     info,
+    inventory,
     currency,
     offerStatus,
     offerHealError,
@@ -598,6 +600,10 @@ export default function ProductConfig() {
                       compareAt={compareMap}
                       variants={variantMap}
                       info={infoMap}
+                      inventory={inventory}
+                      mainTitle={infoMap[product.id]?.title || product.title}
+                      mainImage={infoMap[product.id]?.image ?? product.image ?? null}
+                      mainInventory={inventory[product.id] ?? null}
                       mainVariants={variantMap[product.id] || []}
                       mainPrice={mainPrice}
                       mainCompareAt={compareMap[product.id] ?? mainPrice}
@@ -764,6 +770,14 @@ function GiftInfoCard({ gifts }: { gifts: ProductGiftInfo[] }) {
   );
 }
 
+/** Inventory badge: green in-stock, amber low, red sold-out; nothing if untracked. */
+function StockBadge({ qty }: { qty: number | null | undefined }) {
+  if (qty == null) return null; // not tracked / unknown
+  if (qty <= 0) return <Badge tone="critical">Sold out</Badge>;
+  if (qty <= 5) return <Badge tone="warning">{`${qty} left`}</Badge>;
+  return <Badge tone="success">{`${qty} in stock`}</Badge>;
+}
+
 /** A small "?" that reveals a short explanation on click — keeps cards uncluttered. */
 function InfoTip({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -820,6 +834,10 @@ function GroupCard({
   compareAt,
   variants,
   info,
+  inventory,
+  mainTitle,
+  mainImage,
+  mainInventory,
   mainVariants,
   mainPrice,
   mainCompareAt,
@@ -839,6 +857,10 @@ function GroupCard({
   compareAt: Record<string, number>;
   variants: Record<string, { id: string; title: string; price?: number; compareAt?: number }[]>;
   info: Record<string, { title: string; handle: string; image: string | null }>;
+  inventory: Record<string, number | null>;
+  mainTitle: string;
+  mainImage: string | null;
+  mainInventory: number | null;
   mainVariants: { id: string; title: string; price?: number; compareAt?: number }[];
   mainPrice: number | null;
   mainCompareAt: number | null;
@@ -1042,6 +1064,39 @@ function GroupCard({
           </BlockStack>
         )}
 
+        {/* Main product — its own module so the kit's anchor is always visible. */}
+        {!isFree && (
+          <Box
+            background="bg-surface-secondary"
+            padding="300"
+            borderRadius="200"
+          >
+            <InlineStack align="space-between" blockAlign="center" wrap={false}>
+              <InlineStack gap="200" blockAlign="center" wrap={false}>
+                <Thumbnail
+                  source={mainImage || ImageIcon}
+                  alt={mainTitle}
+                  size="small"
+                />
+                <BlockStack gap="050">
+                  <InlineStack gap="150" blockAlign="center">
+                    <Text as="span" variant="bodyMd" fontWeight="medium">
+                      {mainTitle}
+                    </Text>
+                    <Badge tone="info">Main product</Badge>
+                  </InlineStack>
+                  {mainPrice != null && (
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      {fmtMoney(mainPrice, currency)}
+                    </Text>
+                  )}
+                </BlockStack>
+              </InlineStack>
+              <StockBadge qty={mainInventory} />
+            </InlineStack>
+          </Box>
+        )}
+
         {!isFree && mainVariants.length > 1 && (
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
             <BlockStack gap="150">
@@ -1089,11 +1144,15 @@ function GroupCard({
           </Box>
         )}
 
-        {!isBundle && (
+        {!isFree && (
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
             <Checkbox
-              label="Hide items when sold out"
-              helpText="Once an item has no available stock it disappears from the storefront; when every item is sold out the whole group hides."
+              label="Hide when sold out"
+              helpText={
+                isBundle
+                  ? "Off by default. When on, the whole bundle disappears from the storefront if any item in it is out of stock (the kit can't be completed)."
+                  : "Off by default. When on, an item with no stock disappears from the storefront; when every item is sold out the whole group hides."
+              }
               checked={!!group.hideWhenSoldOut}
               onChange={(v) => onChange({ hideWhenSoldOut: v })}
             />
@@ -1176,9 +1235,12 @@ function GroupCard({
                           size="small"
                         />
                       <BlockStack gap="050">
-                        <Text as="span" variant="bodyMd">
-                          {info[a.productId]?.title || a.title || a.handle}
-                        </Text>
+                        <InlineStack gap="150" blockAlign="center" wrap>
+                          <Text as="span" variant="bodyMd">
+                            {info[a.productId]?.title || a.title || a.handle}
+                          </Text>
+                          <StockBadge qty={inventory[a.productId]} />
+                        </InlineStack>
                         {price != null && (
                           <Text as="span" variant="bodySm" tone="subdued">
                             {fmtMoney(price, currency)}

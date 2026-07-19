@@ -72,6 +72,7 @@ model GiftCampaign {
   rewardMode    String    @default("fixed") // "fixed" (auto-add) | "choice" (picker)
   badgeText     String    @default("")
   subtitle      String    @default("") // storefront prompt above the gift picker
+  hideWhenSoldOut Boolean @default(false) // hide sold-out gifts / the group
   // JSON arrays of refs { id, title, handle, image }.
   triggerProductsJson    String @default("[]")
   triggerCollectionsJson String @default("[]")

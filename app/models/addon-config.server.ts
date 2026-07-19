@@ -251,17 +251,27 @@ export async function fetchProductPrices(
   compareAt: Record<string, number>;
   variants: Record<string, VariantOption[]>;
   info: Record<string, ProductMeta>;
+  /** Total stock across variants (null = not tracked / unknown). read_products. */
+  inventory: Record<string, number | null>;
   currency: string;
 }> {
   const unique = Array.from(new Set(ids)).filter(Boolean);
   if (unique.length === 0)
-    return { prices: {}, compareAt: {}, variants: {}, info: {}, currency: "USD" };
+    return {
+      prices: {},
+      compareAt: {},
+      variants: {},
+      info: {},
+      inventory: {},
+      currency: "USD",
+    };
   const prices: Record<string, number> = {};
   // True original (compare-at) of the representative variant, so a product that
   // is ALREADY on sale shows its real MSRP — not the already-discounted price.
   const compareAt: Record<string, number> = {};
   const variants: Record<string, VariantOption[]> = {};
   const info: Record<string, ProductMeta> = {};
+  const inventory: Record<string, number | null> = {};
   let currency = "USD";
 
   // Shopify's `nodes` query is capped at 250 ids, so batch (a store with 200+
@@ -277,6 +287,7 @@ export async function fetchProductPrices(
               id
               title
               handle
+              totalInventory
               featuredImage { url }
               priceRangeV2 { minVariantPrice { amount currencyCode } }
               variants(first: 100) { nodes { id title price compareAtPrice } }
@@ -296,6 +307,8 @@ export async function fetchProductPrices(
       handle: n.handle ?? "",
       image: n.featuredImage?.url ?? null,
     };
+    inventory[n.id] =
+      typeof n.totalInventory === "number" ? n.totalInventory : null;
     const mp = n?.priceRangeV2?.minVariantPrice;
     if (mp) {
       prices[n.id] = Number(mp.amount) || 0;
@@ -322,7 +335,7 @@ export async function fetchProductPrices(
     });
     if (vs.length) variants[n.id] = vs;
   }
-  return { prices, compareAt, variants, info, currency };
+  return { prices, compareAt, variants, info, inventory, currency };
 }
 
 /** List all configured products for the dashboard, newest first. */

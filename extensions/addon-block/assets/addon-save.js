@@ -1093,6 +1093,41 @@
         });
       }
 
+      // Available quantity across a component's offered variants. Infinity when a
+      // variant is available but not inventory-tracked (continue selling); 0 when
+      // none are available.
+      function componentStock(vars) {
+        var total = 0,
+          unlimited = false,
+          anyAvail = false;
+        (vars || []).forEach(function (v) {
+          if (!v || !v.available) return;
+          anyAvail = true;
+          if (v.inventory_management && typeof v.inventory_quantity === "number") {
+            total += Math.max(0, v.inventory_quantity);
+          } else {
+            unlimited = true; // available but untracked
+          }
+        });
+        if (!anyAvail) return 0;
+        return unlimited ? Infinity : total;
+      }
+
+      // The bundle's stock = the FEWEST complete kits its parts allow (a kit needs
+      // one of each). Infinity = effectively unlimited; 0 = can't be built.
+      function bundleStock() {
+        var comps = [offeredMainVar()].concat(
+          products.map(function (p) {
+            return offeredFor(p);
+          }),
+        );
+        var m = Infinity;
+        comps.forEach(function (vs) {
+          m = Math.min(m, componentStock(vs));
+        });
+        return m;
+      }
+
       // Re-sync the chosen main variant when the page variant changes (one-way:
       // page -> bundle). Registered globally; fired on a product-form change.
       function syncMain() {
@@ -1207,6 +1242,16 @@
           card.remove();
           return;
         }
+        // Whole-bundle stock = fewest complete kits its parts allow. Optionally
+        // hide the bundle when it can't be built at all.
+        var stock = bundleStock();
+        if (group.hideWhenSoldOut && stock <= 0) {
+          if (selected) setSelected(false);
+          card.style.display = "none";
+          return;
+        }
+        card.style.display = "";
+
         var live = hasLimited && (state === "active" || state === "upcoming");
         card.classList.toggle("cgp-limited", live);
         card.innerHTML = "";
@@ -1275,6 +1320,22 @@
         // matches what search + the deep-link use.
         if (group.code) {
           nameLine.appendChild(el("span", "cgp-bundle__code", group.code));
+        }
+        // Whole-kit stock badge (min of the parts). Skip when unlimited.
+        if (stock !== Infinity) {
+          var stockCls =
+            stock <= 0
+              ? "cgp-bundle__stock cgp-bundle__stock--out"
+              : stock <= 5
+                ? "cgp-bundle__stock cgp-bundle__stock--low"
+                : "cgp-bundle__stock";
+          var stockTxt =
+            stock <= 0
+              ? "Sold out"
+              : stock <= 5
+                ? "Only " + stock + " left"
+                : stock + " in stock";
+          nameLine.appendChild(el("span", stockCls, stockTxt));
         }
         mainCol.appendChild(nameLine);
         if (cdSpan) timer = startCountdown(cdSpan, Date.parse(cdTarget), paint);
@@ -2167,9 +2228,9 @@
     var handles = c.giftHandles || [];
     var sel = giftChoice[c.id];
     if (sel === GIFT_DECLINE) return null; // customer declined the gift
-    if (c.rewardMode === "choice" && sel && handles.indexOf(sel) >= 0) {
-      return sel;
-    }
+    // Honor a valid selection in either mode (fixed defaults to the first shown,
+    // which may differ from handles[0] when a sold-out gift was hidden).
+    if (sel && handles.indexOf(sel) >= 0) return sel;
     return handles[0];
   }
 
@@ -2178,93 +2239,149 @@
   function renderGiftPromo(root) {
     var host = root.querySelector("[data-cgp-giftpromo]");
     if (!host || !giftCampaigns || !giftCampaigns.length) return;
-    host.innerHTML = "";
-    var any = false;
-    giftCampaigns.forEach(function (c) {
-      if (!giftActive(c)) return;
-      var handles = c.giftHandles || [];
-      if (!handles.length) return;
-      any = true;
-      // Reuse the .cgp-free styling so all free gifts look the same (images,
-      // FREE badge, single-select radios) whether they come from a campaign or
-      // a product free group.
-      var section = el("div", "cgp-free");
-      section.appendChild(
-        el("div", "cgp-free__heading", c.badge || "🎁 Free gift"),
-      );
-      // Custom prompt (per campaign), falls back to a sensible default.
-      section.appendChild(
-        el("div", "cgp-free__sub", c.subtitle || "Choose your free gift:"),
-      );
-      // "choice" shows every gift to pick from; "fixed" shows just the first.
-      // Either way the customer can opt out with a "No thanks" row, and the
-      // first gift is pre-selected by default.
-      var opts = c.rewardMode === "choice" ? handles : handles.slice(0, 1);
-      if (giftChoice[c.id] === undefined) giftChoice[c.id] = opts[0];
-      var groupName = "cgp-gift-" + c.id;
-      var list = el("div", "cgp-free__list");
-      section.appendChild(list);
+    var currency = root.getAttribute("data-currency") || "USD";
+    var active = giftCampaigns.filter(function (c) {
+      return giftActive(c) && (c.giftHandles || []).length;
+    });
+    if (!active.length) {
+      host.hidden = true;
+      return;
+    }
+    // Prefetch each active campaign's gift products so availability + price/title
+    // are known up front (needed for "hide when sold out" and the struck price).
+    Promise.all(
+      active.map(function (c) {
+        return Promise.all((c.giftHandles || []).map(fetchProduct));
+      }),
+    ).then(function (allData) {
+      host.innerHTML = "";
+      var any = false;
+      active.forEach(function (c, ci) {
+        var handles = c.giftHandles || [];
+        var datas = allData[ci];
+        var isAvail = function (i) {
+          var d = datas[i];
+          return d
+            ? d.variants.some(function (v) {
+                return v.available;
+              })
+            : true;
+        };
+        // "choice" shows every gift; "fixed" shows just the first. Drop sold-out
+        // gifts when the campaign hides them; skip the whole group if none remain.
+        var idx =
+          c.rewardMode === "choice"
+            ? handles.map(function (_h, i) {
+                return i;
+              })
+            : [0];
+        if (c.hideWhenSoldOut) idx = idx.filter(isAvail);
+        if (!idx.length) return;
+        any = true;
 
-      opts.forEach(function (h) {
-        var row = el("label", "cgp-free__row");
-        list.appendChild(row);
+        var section = el("div", "cgp-free");
+        section.appendChild(
+          el("div", "cgp-free__heading", c.badge || "🎁 Free gift"),
+        );
+        section.appendChild(
+          el("div", "cgp-free__sub", c.subtitle || "Choose your free gift:"),
+        );
+        var groupName = "cgp-gift-" + c.id;
+        var list = el("div", "cgp-free__list");
+        section.appendChild(list);
 
-        var selector = el("input", "cgp-free__radio");
-        selector.type = "radio";
-        selector.name = groupName;
-        selector.checked = giftChoice[c.id] === h;
-        selector.addEventListener("change", function () {
-          // Preference only — the chosen gift is added on the NEXT Add to cart.
-          if (selector.checked) giftChoice[c.id] = h;
+        // Default = first shown gift. If the prior choice is now hidden, reset.
+        var shownHandles = idx.map(function (i) {
+          return handles[i];
         });
-        row.appendChild(selector);
+        if (giftChoice[c.id] === undefined) giftChoice[c.id] = shownHandles[0];
+        if (
+          giftChoice[c.id] !== GIFT_DECLINE &&
+          shownHandles.indexOf(giftChoice[c.id]) < 0
+        ) {
+          giftChoice[c.id] = shownHandles[0];
+        }
 
-        var thumb = el("div", "cgp-free__thumb");
-        row.appendChild(thumb);
+        idx.forEach(function (i) {
+          var h = handles[i];
+          var data = datas[i];
+          var row = el("label", "cgp-free__row");
+          list.appendChild(row);
 
-        var info = el("div", "cgp-free__info");
-        var nameRow = el("div", "cgp-free__name-row");
-        var nameEl = el("span", "cgp-free__name", h);
-        nameRow.appendChild(nameEl);
-        nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
-        info.appendChild(nameRow);
-        row.appendChild(info);
+          var selector = el("input", "cgp-free__radio");
+          selector.type = "radio";
+          selector.name = groupName;
+          selector.checked = giftChoice[c.id] === h;
+          selector.addEventListener("change", function () {
+            if (selector.checked) giftChoice[c.id] = h;
+          });
+          row.appendChild(selector);
 
-        fetchProduct(h).then(function (data) {
-          if (!data) return;
-          nameEl.textContent = data.title || h;
-          var img = data.featured_image || (data.images && data.images[0]);
+          // Image + title link to the product page (new tab). stopPropagation
+          // keeps the click from toggling the radio.
+          var href = (data && data.url) || "/products/" + h;
+          var stop = function (e) {
+            e.stopPropagation();
+          };
+          var thumb = el("a", "cgp-free__thumb");
+          thumb.href = href;
+          thumb.target = "_blank";
+          thumb.rel = "noopener";
+          thumb.addEventListener("click", stop);
+          var img =
+            data && (data.featured_image || (data.images && data.images[0]));
           if (img) {
             var im = el("img");
             im.src = img;
-            im.alt = data.title;
+            im.alt = (data && data.title) || h;
             im.loading = "lazy";
             thumb.appendChild(im);
           }
-        });
-      });
+          row.appendChild(thumb);
 
-      // Opt-out row — the customer can decline the free gift entirely.
-      var declineRow = el("label", "cgp-free__row cgp-free__row--decline");
-      list.appendChild(declineRow);
-      var declineRadio = el("input", "cgp-free__radio");
-      declineRadio.type = "radio";
-      declineRadio.name = groupName;
-      declineRadio.checked = giftChoice[c.id] === GIFT_DECLINE;
-      declineRadio.addEventListener("change", function () {
-        if (declineRadio.checked) giftChoice[c.id] = GIFT_DECLINE;
+          var info = el("div", "cgp-free__info");
+          var nameRow = el("div", "cgp-free__name-row");
+          var nameEl = el("a", "cgp-free__name");
+          nameEl.textContent = (data && data.title) || h;
+          nameEl.href = href;
+          nameEl.target = "_blank";
+          nameEl.rel = "noopener";
+          nameEl.addEventListener("click", stop);
+          nameRow.appendChild(nameEl);
+          // Struck original price so the customer sees the gift's value.
+          var val = data && (data.compare_at_price || data.price);
+          if (val)
+            nameRow.appendChild(
+              el("span", "cgp-free__price", money(val, currency)),
+            );
+          nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
+          info.appendChild(nameRow);
+          row.appendChild(info);
+        });
+
+        // Opt-out row — the customer can decline the free gift entirely.
+        var declineRow = el("label", "cgp-free__row cgp-free__row--decline");
+        list.appendChild(declineRow);
+        var declineRadio = el("input", "cgp-free__radio");
+        declineRadio.type = "radio";
+        declineRadio.name = groupName;
+        declineRadio.checked = giftChoice[c.id] === GIFT_DECLINE;
+        declineRadio.addEventListener("change", function () {
+          if (declineRadio.checked) giftChoice[c.id] = GIFT_DECLINE;
+        });
+        declineRow.appendChild(declineRadio);
+        declineRow.appendChild(
+          el(
+            "span",
+            "cgp-free__decline",
+            "No thanks — I don't want the free gift",
+          ),
+        );
+
+        host.appendChild(section);
       });
-      declineRow.appendChild(declineRadio);
-      declineRow.appendChild(
-        el(
-          "span",
-          "cgp-free__decline",
-          "No thanks — I don't want the free gift",
-        ),
-      );
-      host.appendChild(section);
+      host.hidden = !any;
     });
-    host.hidden = !any;
   }
 
   function bootGifts(root) {
@@ -2290,6 +2407,7 @@
         endsAt: e.endsAt || "",
         badge: e.badge || "🎁 Free gift",
         subtitle: e.subtitle || "",
+        hideWhenSoldOut: !!e.hideWhenSoldOut,
         triggerProductIds: e.triggers || e.triggerProductIds || [],
         giftHandles: e.gifts || e.giftHandles || [],
       };

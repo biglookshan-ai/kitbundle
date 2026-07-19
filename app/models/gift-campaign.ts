@@ -30,6 +30,8 @@ export type GiftCampaign = {
   badgeText: string;
   /** Storefront prompt shown above the gift picker (customizable per campaign). */
   subtitle: string;
+  /** Hide sold-out gifts (and the whole group when all are sold out). */
+  hideWhenSoldOut: boolean;
   triggerProducts: Ref[]; // manual product list
   triggerCollections: Ref[]; // Shopify collections (expanded at save time)
   giftProducts: Ref[]; // the gift set
@@ -60,6 +62,7 @@ export function emptyCampaign(): GiftCampaign {
     rewardMode: "fixed",
     badgeText: "🎁 Free gift",
     subtitle: "Choose your free gift:",
+    hideWhenSoldOut: false,
     triggerProducts: [],
     triggerCollections: [],
     giftProducts: [],
@@ -110,6 +113,7 @@ export function rowToCampaign(row: any): GiftCampaign {
     rewardMode: row.rewardMode === "choice" ? "choice" : "fixed",
     badgeText: row.badgeText ?? "",
     subtitle: row.subtitle ?? "",
+    hideWhenSoldOut: !!row.hideWhenSoldOut,
     triggerProducts: parseRefs(row.triggerProductsJson),
     triggerCollections: parseRefs(row.triggerCollectionsJson),
     giftProducts: parseRefs(row.giftProductsJson),
