@@ -43,7 +43,10 @@ import {
   saveConfig,
   fetchProductPrices,
 } from "../models/addon-config.server";
-import { reconcileLimitedOffers } from "../models/limited-offer.server";
+import {
+  reconcileLimitedOffers,
+  checkLimitedOfferNodes,
+} from "../models/limited-offer.server";
 import {
   newGroupId,
   newOfferId,
@@ -71,7 +74,31 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   ];
   const { prices, compareAt, variants, info, currency } =
     await fetchProductPrices(admin, ids);
-  return { product, config, prices, compareAt, variants, info, currency };
+
+  // Self-heal: a limited offer's time-gated discount node can go missing (e.g. it
+  // was created before the Function was deployed), which silently charges the base
+  // price. Check node status on load; if any is missing, re-run reconcile to
+  // recreate it and re-check. The healthy path stays read-only (no writes).
+  let offerHealError: string | null = null;
+  let offerStatus = await checkLimitedOfferNodes(admin, product, config);
+  const missing = Object.values(offerStatus).some((s) => !s.hasNode);
+  if (missing) {
+    const heal = await reconcileLimitedOffers(admin, product, config);
+    if (heal.userErrors.length > 0) offerHealError = heal.userErrors.join("; ");
+    offerStatus = await checkLimitedOfferNodes(admin, product, config);
+  }
+
+  return {
+    product,
+    config,
+    prices,
+    compareAt,
+    variants,
+    info,
+    currency,
+    offerStatus,
+    offerHealError,
+  };
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -263,6 +290,8 @@ export default function ProductConfig() {
     variants,
     info,
     currency,
+    offerStatus,
+    offerHealError,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -464,6 +493,20 @@ export default function ProductConfig() {
     return undefined;
   };
 
+  // A saved limited offer whose backing discount node is missing would silently
+  // charge the base price. The loader self-heals on open; if it still couldn't
+  // create the node (e.g. Function not deployed), surface a warning on the card.
+  const offerWarningFor = (g: AddonGroup): string | undefined => {
+    if (!(g.type === "bundle" && g.limited?.enabled && g.offerId)) return undefined;
+    const st = offerStatus[g.offerId];
+    if (st && !st.hasNode) {
+      return offerHealError
+        ? `This limited offer’s discount isn’t active: ${offerHealError}`
+        : "This limited offer’s discount isn’t active yet — click Save to activate it.";
+    }
+    return undefined;
+  };
+
   const TAB_LABELS = [
     `Bundle (${countOf("bundle")})`,
     `Add-on (${countOf("addon")})`,
@@ -542,6 +585,7 @@ export default function ProductConfig() {
                       group={group}
                       productHandle={product.handle}
                       codeError={codeErrorFor(group)}
+                      offerWarning={offerWarningFor(group)}
                       prices={priceMap}
                       compareAt={compareMap}
                       variants={variantMap}
@@ -633,6 +677,7 @@ function GroupCard({
   group,
   productHandle,
   codeError,
+  offerWarning,
   prices,
   compareAt,
   variants,
@@ -651,6 +696,7 @@ function GroupCard({
   group: AddonGroup;
   productHandle: string;
   codeError?: string;
+  offerWarning?: string;
   prices: Record<string, number>;
   compareAt: Record<string, number>;
   variants: Record<string, { id: string; title: string; price?: number; compareAt?: number }[]>;
@@ -754,6 +800,14 @@ function GroupCard({
           </Button>
         </InlineStack>
 
+        {offerWarning && (
+          <Banner tone="critical" title="Limited offer not active">
+            <Text as="p" variant="bodySm">
+              {offerWarning}
+            </Text>
+          </Banner>
+        )}
+
         <TextField
           label="Bundle code"
           autoComplete="off"
@@ -762,7 +816,7 @@ function GroupCard({
           onChange={(v) => onChange({ code: normalizeCode(v) })}
           error={codeError}
           placeholder="e.g. CREATOR-KIT"
-          helpText="Customer-facing code — searchable, shown on the cart, order & packing slip, and used in the deep-link. A–Z, 0–9 and dashes."
+          helpText="Customer-facing code — searchable, shown on the storefront card, and on the cart line & order via the discount. A–Z, 0–9 and dashes."
         />
 
         <InlineStack gap="400" wrap={false} blockAlign="start">

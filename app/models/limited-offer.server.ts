@@ -42,6 +42,65 @@ async function findFunctionId(admin: AdminGraphql): Promise<string | null> {
   return fn?.id ?? null;
 }
 
+/** offerId -> whether a backing discount node currently exists in Shopify. */
+export type OfferNodeStatus = Record<string, { hasNode: boolean; status: string }>;
+
+/**
+ * Look up, for each ENABLED limited offer in the config, whether its time-gated
+ * discount node actually exists in Shopify (and its status). Used by the editor
+ * to warn when an offer would silently charge the base price because its node
+ * was never created. Read-only. `{}` when there are no enabled limited offers.
+ */
+export async function checkLimitedOfferNodes(
+  admin: AdminGraphql,
+  product: ProductSummary,
+  config: AddonConfig,
+): Promise<OfferNodeStatus> {
+  const numericId = product.id.replace("gid://shopify/Product/", "");
+  const enabled = config.groups.filter(
+    (g) =>
+      g.type === "bundle" &&
+      !g.archived &&
+      g.limited?.enabled &&
+      typeof g.offerId === "string" &&
+      g.offerId,
+  );
+  if (enabled.length === 0) return {};
+
+  const resp = await admin.graphql(
+    `#graphql
+      query OfferNodeStatus {
+        discountNodes(first: 250) {
+          nodes {
+            discount {
+              __typename
+              ... on DiscountAutomaticApp { title status }
+            }
+          }
+        }
+      }`,
+  );
+  const json = await resp.json();
+  const prefix = `KitBundle offer ${numericId}:`;
+  const byOffer = new Map<string, string>(); // offerId -> status
+  for (const n of json?.data?.discountNodes?.nodes ?? []) {
+    const title = n?.discount?.title;
+    if (typeof title === "string" && title.startsWith(prefix)) {
+      byOffer.set(title.slice(prefix.length), n.discount.status ?? "UNKNOWN");
+    }
+  }
+
+  const out: OfferNodeStatus = {};
+  for (const g of enabled) {
+    const offerId = g.offerId as string;
+    out[offerId] = {
+      hasNode: byOffer.has(offerId),
+      status: byOffer.get(offerId) ?? "MISSING",
+    };
+  }
+  return out;
+}
+
 /**
  * Make the store's limited-offer nodes match this product's config: create new
  * offers, update changed windows, delete offers that were removed.
