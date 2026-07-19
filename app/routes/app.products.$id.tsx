@@ -555,6 +555,38 @@ export default function ProductConfig() {
         <Layout>
           <Layout.Section>
             <BlockStack gap="400">
+              {/* Main product shown ONCE — every bundle/add-on on this page
+                  attaches to it, so no need to repeat it per card. */}
+              <Card>
+                <InlineStack
+                  align="space-between"
+                  blockAlign="center"
+                  wrap={false}
+                >
+                  <InlineStack gap="300" blockAlign="center" wrap={false}>
+                    <Thumbnail
+                      source={infoMap[product.id]?.image ?? product.image ?? ImageIcon}
+                      alt={product.title}
+                      size="small"
+                    />
+                    <BlockStack gap="050">
+                      <InlineStack gap="150" blockAlign="center">
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">
+                          {product.title}
+                        </Text>
+                        <Badge tone="info">Main product</Badge>
+                      </InlineStack>
+                      {mainPrice != null && (
+                        <Text as="span" variant="bodySm" tone="subdued">
+                          {fmtMoney(mainPrice, currency)}
+                        </Text>
+                      )}
+                    </BlockStack>
+                  </InlineStack>
+                  <StockBadge qty={inventory[product.id] ?? null} />
+                </InlineStack>
+              </Card>
+
               <ButtonGroup variant="segmented">
                 {TAB_LABELS.map((label, i) => (
                   <Button key={i} pressed={tab === i} onClick={() => setTab(i)}>
@@ -601,9 +633,6 @@ export default function ProductConfig() {
                       variants={variantMap}
                       info={infoMap}
                       inventory={inventory}
-                      mainTitle={infoMap[product.id]?.title || product.title}
-                      mainImage={infoMap[product.id]?.image ?? product.image ?? null}
-                      mainInventory={inventory[product.id] ?? null}
                       mainVariants={variantMap[product.id] || []}
                       mainPrice={mainPrice}
                       mainCompareAt={compareMap[product.id] ?? mainPrice}
@@ -835,9 +864,6 @@ function GroupCard({
   variants,
   info,
   inventory,
-  mainTitle,
-  mainImage,
-  mainInventory,
   mainVariants,
   mainPrice,
   mainCompareAt,
@@ -858,9 +884,6 @@ function GroupCard({
   variants: Record<string, { id: string; title: string; price?: number; compareAt?: number }[]>;
   info: Record<string, { title: string; handle: string; image: string | null }>;
   inventory: Record<string, number | null>;
-  mainTitle: string;
-  mainImage: string | null;
-  mainInventory: number | null;
   mainVariants: { id: string; title: string; price?: number; compareAt?: number }[];
   mainPrice: number | null;
   mainCompareAt: number | null;
@@ -1064,39 +1087,6 @@ function GroupCard({
           </BlockStack>
         )}
 
-        {/* Main product — its own module so the kit's anchor is always visible. */}
-        {!isFree && (
-          <Box
-            background="bg-surface-secondary"
-            padding="300"
-            borderRadius="200"
-          >
-            <InlineStack align="space-between" blockAlign="center" wrap={false}>
-              <InlineStack gap="200" blockAlign="center" wrap={false}>
-                <Thumbnail
-                  source={mainImage || ImageIcon}
-                  alt={mainTitle}
-                  size="small"
-                />
-                <BlockStack gap="050">
-                  <InlineStack gap="150" blockAlign="center">
-                    <Text as="span" variant="bodyMd" fontWeight="medium">
-                      {mainTitle}
-                    </Text>
-                    <Badge tone="info">Main product</Badge>
-                  </InlineStack>
-                  {mainPrice != null && (
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      {fmtMoney(mainPrice, currency)}
-                    </Text>
-                  )}
-                </BlockStack>
-              </InlineStack>
-              <StockBadge qty={mainInventory} />
-            </InlineStack>
-          </Box>
-        )}
-
         {!isFree && mainVariants.length > 1 && (
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
             <BlockStack gap="150">
@@ -1145,18 +1135,20 @@ function GroupCard({
         )}
 
         {!isFree && (
-          <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+          <InlineStack gap="100" blockAlign="center">
             <Checkbox
               label="Hide when sold out"
-              helpText={
+              checked={!!group.hideWhenSoldOut}
+              onChange={(v) => onChange({ hideWhenSoldOut: v })}
+            />
+            <InfoTip
+              text={
                 isBundle
                   ? "Off by default. When on, the whole bundle disappears from the storefront if any item in it is out of stock (the kit can't be completed)."
                   : "Off by default. When on, an item with no stock disappears from the storefront; when every item is sold out the whole group hides."
               }
-              checked={!!group.hideWhenSoldOut}
-              onChange={(v) => onChange({ hideWhenSoldOut: v })}
             />
-          </Box>
+          </InlineStack>
         )}
 
         <Divider />
