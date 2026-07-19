@@ -126,6 +126,21 @@ export function newCode() {
   return out;
 }
 
+/**
+ * Sanitize a merchant-typed bundle code into a stable, URL/tag/search-safe token:
+ * uppercase, only A–Z 0–9 and dash, collapse repeats, trim edges, cap length.
+ * The result is what customers can search, what appears on the cart/order/packing
+ * slip, and the `?kb_bundle=` deep-link value — so it must round-trip cleanly.
+ */
+export function normalizeCode(raw: unknown): string {
+  return String(raw ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+}
+
 export function clampPercent(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -141,13 +156,6 @@ export function groupForm(group: AddonGroup): GroupForm {
   return group.limited?.enabled ? "limited" : "bundle";
 }
 
-const FORM_PREFIX: Record<GroupForm, string> = {
-  bundle: "BDL",
-  limited: "LTD",
-  addon: "ADO",
-  free: "FRE",
-};
-
 const FORM_LABEL: Record<GroupForm, string> = {
   bundle: "Bundle",
   limited: "Limited bundle",
@@ -155,9 +163,14 @@ const FORM_LABEL: Record<GroupForm, string> = {
   free: "Free add-on",
 };
 
-/** Display code with a form prefix, e.g. "LTD-A1B2C3". */
+/**
+ * The customer-facing bundle code, exactly as the merchant typed it. This is the
+ * value shown in the admin, on the storefront card, on the cart/order/packing
+ * slip, used as the `?kb_bundle=` deep-link, and written as a product tag so the
+ * bundle is searchable. No form prefix — the merchant owns the whole string.
+ */
 export function displayCode(group: AddonGroup): string {
-  return `${FORM_PREFIX[groupForm(group)]}-${group.code || ""}`;
+  return group.code || "";
 }
 
 export function formLabel(group: AddonGroup): string {

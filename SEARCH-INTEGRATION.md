@@ -1,10 +1,19 @@
 # KitBundle — Search Engine Integration (bundles as searchable results)
 
 Bundles are NOT Shopify variants, so they won't appear in native/variant search.
-But every bundle is fully described in a product metafield, and the storefront
-supports a deep-link that pre-selects a bundle. That's enough for a custom search
-engine to (1) index each bundle and (2) link a result straight to the selected
-bundle on the product page.
+KitBundle makes them findable in two complementary ways:
+
+1. **Native / third-party search works out of the box.** Every live bundle's
+   **code** is written to the owning product as a **product tag** on save. Native
+   Shopify search (and most search apps) index tags, so a shopper who searches the
+   code finds the product — no search-engine changes required.
+2. **A custom search engine can index bundles as first-class results** by reading
+   the `custom.addon_config` metafield (below) and linking with the deep-link.
+
+Bundle codes are **merchant-defined and required** (no more random codes) and are
+uppercase A–Z / 0–9 / dashes. The same code appears on the storefront card, the
+cart line, the customer's order, the packing slip, the product tag, and the
+`?kb_bundle=` deep-link — one identifier everywhere.
 
 ## 1. Where the bundle data lives
 
@@ -21,7 +30,7 @@ Shape (only the bundle-relevant fields shown):
   "groups": [
     {
       "id": "g_ab12cd",
-      "code": "BDL-7QK2",          // stable, human-facing bundle code
+      "code": "CREATOR-KIT",        // merchant-defined, required, also a product tag
       "title": "Creator Kit",       // bundle name (show in results)
       "type": "bundle",             // index only type === "bundle"
       "discountPercent": 20,        // standing % off the kit
@@ -70,7 +79,7 @@ to the bundle **code** (or its `id`):
 /products/<product-handle>?kb_bundle=<code>
 ```
 
-Example: `/products/cinema-camera-x1?kb_bundle=BDL-7QK2`
+Example: `/products/cinema-camera-x1?kb_bundle=CREATOR-KIT`
 
 When the product page loads, KitBundle's storefront script reads `kb_bundle`,
 **auto-selects that bundle**, scrolls to it and flashes it — so the shopper lands
@@ -80,7 +89,8 @@ The exact deep-link is also shown in the app: Product editor → a bundle card �
 “Search deep-link”.
 
 ## Notes
-- The `code` is stable across edits; prefer it over `id` in result URLs.
+- The `code` is merchant-defined and required; prefer it over `id` in result URLs.
+  It's also a product tag, so plain storefront search finds it with no extra work.
 - A sale bundle (`limited.enabled` + within window) is deeper than the standing
   `discountPercent`; show the deeper price while `startsAt ≤ now < endsAt`.
 - `limited.mode === "end"` means the bundle disappears after `endsAt` — you may

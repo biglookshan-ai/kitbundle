@@ -7,6 +7,7 @@ import {
   parseConfig,
   countAccessories,
   summarizeConfig,
+  parseSummaries,
   groupBucket,
   displayCode,
   offerStateOf,
@@ -85,12 +86,21 @@ export async function saveConfig(
     (g) => !g.archived && g.accessories.length > 0,
   );
 
+  // Codes that were searchable before this save (to prune ones now removed).
+  const prevRow = await prisma.bundleConfig.findUnique({
+    where: { shop_productId: { shop, productId: product.id } },
+  });
+  const oldCodes = parseSummaries(prevRow?.groupsJson)
+    .map((s) => s.code)
+    .filter(Boolean);
+
   if (!hasGroups) {
     await clearMetafield(admin, product.id);
     await prisma.bundleConfig.deleteMany({
       where: { shop, productId: product.id },
     });
     await syncOfferTag(admin, shop, product.id, false); // remove our tag
+    await syncCodeTags(admin, product.id, oldCodes, []); // remove code tags
     return { ok: true, userErrors: [] };
   }
 
@@ -149,8 +159,48 @@ export async function saveConfig(
   });
 
   await syncOfferTag(admin, shop, product.id, hasLiveOffer);
+  await syncCodeTags(admin, product.id, oldCodes, liveCodes(config));
 
   return { ok: true, userErrors: [] };
+}
+
+/**
+ * Reflect bundle codes as product tags so native (and most third-party) storefront
+ * search can find a product by its bundle code. Only touches tags we manage: adds
+ * the current codes, removes codes that were present on the previous save but are
+ * now gone. Never disturbs unrelated tags. Best-effort (never throws).
+ */
+async function syncCodeTags(
+  admin: AdminGraphql,
+  productId: string,
+  oldCodes: string[],
+  newCodes: string[],
+): Promise<void> {
+  const nextSet = new Set(newCodes.filter(Boolean));
+  const toAdd = [...nextSet];
+  const toRemove = oldCodes.filter((c) => c && !nextSet.has(c));
+
+  const run = (mutation: "tagsAdd" | "tagsRemove", tags: string[]) =>
+    tags.length === 0
+      ? Promise.resolve()
+      : admin
+          .graphql(
+            `#graphql
+              mutation CodeTag($id: ID!, $tags: [String!]!) {
+                ${mutation}(id: $id, tags: $tags) { userErrors { message } }
+              }`,
+            { variables: { id: productId, tags } },
+          )
+          .then(() => {})
+          .catch(() => {});
+
+  await run("tagsRemove", toRemove);
+  await run("tagsAdd", toAdd);
+}
+
+/** Non-archived group codes from a config (what should be searchable now). */
+function liveCodes(config: AddonConfig): string[] {
+  return config.groups.filter((g) => !g.archived && g.code).map((g) => g.code);
 }
 
 async function clearMetafield(admin: AdminGraphql, productId: string) {

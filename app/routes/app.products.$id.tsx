@@ -47,7 +47,7 @@ import { reconcileLimitedOffers } from "../models/limited-offer.server";
 import {
   newGroupId,
   newOfferId,
-  newCode,
+  normalizeCode,
   clampPercent,
   displayCode,
   formLabel,
@@ -96,7 +96,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   parsed.groups = (parsed.groups ?? []).map((g) => {
     const base: AddonGroup = {
       ...g,
-      code: g.code && g.code.length ? g.code : newCode(),
+      code: normalizeCode(g.code),
       discountPercent:
         g.type === "free" ? 100 : clampPercent(g.discountPercent),
     };
@@ -127,6 +127,26 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     }
     return base;
   });
+
+  // Bundle codes are customer-facing (search / deep-link / cart / order), so they
+  // must be present and unique within the product before we save.
+  const seenCodes = new Map<string, string>();
+  for (const g of parsed.groups) {
+    if (!g.code) {
+      return {
+        ok: false,
+        error: `“${g.title || "Untitled"}” needs a code. Enter a unique code for every bundle/add-on.`,
+      };
+    }
+    const prev = seenCodes.get(g.code);
+    if (prev) {
+      return {
+        ok: false,
+        error: `Code “${g.code}” is used by more than one group (“${prev}” and “${g.title}”). Codes must be unique.`,
+      };
+    }
+    seenCodes.set(g.code, g.title || "Untitled");
+  }
 
   // Keep each accessory's stored title/handle in sync with Shopify (renames,
   // handle changes) so the editor and the storefront (which fetches by handle)
@@ -217,7 +237,7 @@ function blankGroup(type: GroupType): AddonGroup {
   };
   return {
     id: newGroupId(),
-    code: newCode(),
+    code: "",
     title: titles[type],
     type,
     discountPercent: 10,
@@ -431,6 +451,19 @@ export default function ProductConfig() {
   const tabGroups = activeGroups.filter((g) => g.type === currentType);
   const mainPrice = priceMap[product.id] ?? null;
 
+  // Codes must be present and unique across the whole product (they drive search,
+  // deep-links and cart/order labels). Count across ALL groups so a collision is
+  // flagged even when the twin lives on the other tab.
+  const codeCounts = groups.reduce<Record<string, number>>((acc, g) => {
+    if (g.code) acc[g.code] = (acc[g.code] ?? 0) + 1;
+    return acc;
+  }, {});
+  const codeErrorFor = (g: AddonGroup): string | undefined => {
+    if (!g.code) return "Enter a code.";
+    if (codeCounts[g.code] > 1) return "Another group already uses this code.";
+    return undefined;
+  };
+
   const TAB_LABELS = [
     `Bundle (${countOf("bundle")})`,
     `Add-on (${countOf("addon")})`,
@@ -451,7 +484,12 @@ export default function ProductConfig() {
           target: "_blank",
         },
       ]}
-      primaryAction={{ content: "Save", loading: isSaving, onAction: save }}
+      primaryAction={{
+        content: "Save",
+        loading: isSaving,
+        disabled: groups.some((g) => Boolean(codeErrorFor(g))),
+        onAction: save,
+      }}
     >
       <TitleBar title={`Configure: ${product.title}`} />
       <BlockStack gap="500">
@@ -503,6 +541,7 @@ export default function ProductConfig() {
                     <GroupCard
                       group={group}
                       productHandle={product.handle}
+                      codeError={codeErrorFor(group)}
                       prices={priceMap}
                       compareAt={compareMap}
                       variants={variantMap}
@@ -593,6 +632,7 @@ export default function ProductConfig() {
 function GroupCard({
   group,
   productHandle,
+  codeError,
   prices,
   compareAt,
   variants,
@@ -610,6 +650,7 @@ function GroupCard({
 }: {
   group: AddonGroup;
   productHandle: string;
+  codeError?: string;
   prices: Record<string, number>;
   compareAt: Record<string, number>;
   variants: Record<string, { id: string; title: string; price?: number; compareAt?: number }[]>;
@@ -699,9 +740,6 @@ function GroupCard({
         <InlineStack align="space-between" blockAlign="center">
           <InlineStack gap="200" blockAlign="center">
             {dragHandle}
-            <Badge tone={limitedOn ? "attention" : "info"}>
-              {displayCode(group)}
-            </Badge>
             <Text as="span" variant="bodySm" tone="subdued">
               {formLabel(group)}
             </Text>
@@ -715,6 +753,17 @@ function GroupCard({
             Archive
           </Button>
         </InlineStack>
+
+        <TextField
+          label="Bundle code"
+          autoComplete="off"
+          requiredIndicator
+          value={group.code}
+          onChange={(v) => onChange({ code: normalizeCode(v) })}
+          error={codeError}
+          placeholder="e.g. CREATOR-KIT"
+          helpText="Customer-facing code — searchable, shown on the cart, order & packing slip, and used in the deep-link. A–Z, 0–9 and dashes."
+        />
 
         <InlineStack gap="400" wrap={false} blockAlign="start">
           <Box width={isBundle ? "100%" : "65%"}>

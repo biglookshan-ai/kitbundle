@@ -422,6 +422,7 @@
       if (e.kind === "bundle") {
         bundles.push({
           name: e.title || "Bundle",
+          code: e.code || "",
           percent: e.percent,
           offerId: e.offerId || null,
           bid: e.bid || null,
@@ -1144,6 +1145,7 @@
           offerId: offerId || null,
           bid: group.id || null, // which bundle group (for main-line discount)
           title: group.title || "Bundle",
+          code: group.code || "",
           mainVariantId: mv ? mv.id : null,
           mainPrice: (mv && mv.price) || 0,
           mainPercent: mainPercentOf(state), // whole-kit %, deep while offer runs
@@ -1268,6 +1270,11 @@
           bd2.appendChild(cdSpan);
           nameLine.appendChild(bd2);
           cdTarget = group.limited.startsAt;
+        }
+        // Show the bundle code so customers/support can reference it and it
+        // matches what search + the deep-link use.
+        if (group.code) {
+          nameLine.appendChild(el("span", "cgp-bundle__code", group.code));
         }
         mainCol.appendChild(nameLine);
         if (cdSpan) timer = startCountdown(cdSpan, Date.parse(cdTarget), paint);
@@ -1837,6 +1844,10 @@
             var p = { _cgp_grp: grp };
             if (b.offerId) p._cgp_lo = b.offerId;
             if (b.bid) p._cgp_bid = b.bid; // which bundle group (main discount)
+            // ONE visible property (no underscore) so the kit name + code carry
+            // through to the cart, the customer's order and the packing slip.
+            if (b.code) p.Bundle = b.name ? b.name + " (" + b.code + ")" : b.code;
+            else if (b.name) p.Bundle = b.name;
             if (extra) for (var k in extra) p[k] = extra[k];
             return p;
           };
