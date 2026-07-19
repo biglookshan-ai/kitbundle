@@ -11,9 +11,19 @@ KitBundle makes them findable in two complementary ways:
    the `custom.addon_config` metafield (below) and linking with the deep-link.
 
 Bundle codes are **merchant-defined and required** (no more random codes) and are
-uppercase A–Z / 0–9 / dashes. The same code appears on the storefront card, the
-cart line, the customer's order, the packing slip, the product tag, and the
-`?kb_bundle=` deep-link — one identifier everywhere.
+uppercase A–Z / 0–9 / dashes. The same code appears:
+
+- on the storefront bundle card (a small chip);
+- as a **product tag** (so search finds it);
+- in the **discount message** on the cart line and the order, e.g.
+  `Bundle1 · KUEAJC · limited 45% off` — this rides in the Function's discount, so
+  the name + code show only while the kit is complete and vanish the instant a
+  bundle item is removed (no stale label on a broken kit);
+- as the `?kb_bundle=` deep-link value.
+
+(There is deliberately **no** static line-item property for the code: a fixed
+property would linger after the kit breaks. Everything customer-facing is tied to
+the live discount instead.)
 
 ## 1. Where the bundle data lives
 

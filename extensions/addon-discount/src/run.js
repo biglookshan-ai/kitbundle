@@ -69,6 +69,17 @@ function findBundleById(config, bid) {
   return null;
 }
 
+/**
+ * Cart/order-facing bundle label: "Name · CODE". Carried in the discount MESSAGE
+ * (not a static line property) so the name + code appear only while the kit is
+ * complete and vanish the instant the discount stops applying (broken kit).
+ */
+function bundleLabel(group) {
+  const name = (group && group.title) || "Bundle";
+  const code = group && group.code;
+  return code ? `${name} · ${code}` : name;
+}
+
 /** Find the bundle group with this offerId inside a main's config. */
 function findBundleByOffer(config, offerId) {
   const groups = Array.isArray(config?.groups) ? config.groups : [];
@@ -314,7 +325,7 @@ export function run(input) {
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       limited.push({
-        message: `${group.title || "Bundle"} · limited ${deep}% off`,
+        message: `${bundleLabel(group)} · limited ${deep}% off`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: deep.toFixed(1) } },
       });
@@ -511,7 +522,7 @@ export function run(input) {
           const qty = Math.min(lineQty, cap);
           if (pct > 0 && qty > 0) {
             discounts.push({
-              message: `${group.title || "Bundle"} · ${pct}% off`,
+              message: `${bundleLabel(group)} · ${pct}% off`,
               targets: [{ cartLine: { id: line.id, quantity: qty } }],
               value: { percentage: { value: pct.toFixed(1) } },
             });
@@ -572,7 +583,7 @@ export function run(input) {
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       discounts.push({
-        message: `${(bestGroup && bestGroup.title) || "Bundle"} · ${best}% off`,
+        message: `${bundleLabel(bestGroup)} · ${best}% off`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: best.toFixed(1) } },
       });
