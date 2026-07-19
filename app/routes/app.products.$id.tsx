@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useRef,
-  Fragment,
   type ReactNode,
 } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
@@ -27,6 +26,7 @@ import {
   Divider,
   Checkbox,
   Icon,
+  Popover,
 } from "@shopify/polaris";
 import {
   DeleteIcon,
@@ -34,6 +34,7 @@ import {
   ImageIcon,
   ArchiveIcon,
   DragHandleIcon,
+  QuestionCircleIcon,
 } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -659,8 +660,8 @@ export default function ProductConfig() {
                   How it works
                 </Text>
                 <Text as="p" variant="bodyMd" tone="subdued">
-                  <b>Bundle</b> — a curated set sold together. The main product
-                  stays full price; accessories get the discount. Toggle{" "}
+                  <b>Bundle</b> — a curated set sold together. One discount
+                  applies to the whole kit (main + accessories). Toggle{" "}
                   <b>Limited-time offer</b> for a countdown + deeper price.
                 </Text>
                 <Text as="p" variant="bodyMd" tone="subdued">
@@ -760,6 +761,53 @@ function GiftInfoCard({ gifts }: { gifts: ProductGiftInfo[] }) {
         )}
       </BlockStack>
     </Card>
+  );
+}
+
+/** A small "?" that reveals a short explanation on click — keeps cards uncluttered. */
+function InfoTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover
+      active={open}
+      onClose={() => setOpen(false)}
+      preferredAlignment="left"
+      activator={
+        <Button
+          variant="plain"
+          icon={QuestionCircleIcon}
+          onClick={() => setOpen((o) => !o)}
+          accessibilityLabel="What's this?"
+        />
+      }
+    >
+      <Box padding="300" maxWidth="260px">
+        <Text as="p" variant="bodySm">
+          {text}
+        </Text>
+      </Box>
+    </Popover>
+  );
+}
+
+/** A field label with an inline "?" info popover, used with labelHidden fields. */
+function FieldLabel({
+  text,
+  tip,
+  required,
+}: {
+  text: string;
+  tip: string;
+  required?: boolean;
+}) {
+  return (
+    <InlineStack gap="100" blockAlign="center">
+      <Text as="span" variant="bodySm" fontWeight="medium">
+        {text}
+        {required ? " *" : ""}
+      </Text>
+      <InfoTip text={tip} />
+    </InlineStack>
   );
 }
 
@@ -908,85 +956,90 @@ function GroupCard({
           </Banner>
         )}
 
-        <TextField
-          label="Bundle code"
-          autoComplete="off"
-          requiredIndicator
-          value={group.code}
-          onChange={(v) => onChange({ code: normalizeCode(v) })}
-          error={codeError}
-          placeholder="e.g. CREATOR-KIT"
-          helpText="Customer-facing code — searchable, shown on the storefront card, and on the cart line & order via the discount. A–Z, 0–9 and dashes."
-        />
-
-        <InlineStack gap="400" wrap={false} blockAlign="start">
-          <Box width={isBundle ? "100%" : "65%"}>
-            <TextField
-              label={isFree ? "Section title" : "Card / tab title"}
-              autoComplete="off"
-              value={group.title}
-              onChange={(v) => onChange({ title: v })}
-              helpText={
-                isFree
-                  ? "Heading for the gift section, e.g. “🎁 Free gift”."
-                  : isBundle
-                    ? "Shown as the bundle card name, e.g. “Advanced Kit”."
-                    : "Shown as the tab label, e.g. “T-Series Lenses”."
-              }
-            />
-          </Box>
-          {!isBundle && (
-            <Box width="35%">
+        {/* Code + title (+ discount for add-ons) on one tidy row. */}
+        <InlineStack gap="300" wrap={false} blockAlign="start">
+          <Box width={isBundle ? "38%" : "30%"}>
+            <BlockStack gap="100">
+              <FieldLabel
+                text="Code"
+                required
+                tip="Customer-facing code — searchable, shown on the storefront card, and on the cart line & order via the discount. A–Z, 0–9 and dashes."
+              />
               <TextField
-                label="Group discount %"
-                type="number"
-                min={0}
-                max={100}
+                label="Code"
+                labelHidden
                 autoComplete="off"
-                suffix="%"
-                disabled={isFree}
-                value={String(isFree ? 100 : group.discountPercent)}
-                onChange={(v) => onChange({ discountPercent: clampPercent(v) })}
-                helpText={
+                value={group.code}
+                onChange={(v) => onChange({ code: normalizeCode(v) })}
+                error={codeError}
+                placeholder="e.g. CREATOR-KIT"
+              />
+            </BlockStack>
+          </Box>
+          <Box width={isBundle ? "62%" : "42%"}>
+            <BlockStack gap="100">
+              <FieldLabel
+                text={isFree ? "Section title" : "Card / tab title"}
+                tip={
                   isFree
-                    ? "Free gifts are 100% off."
-                    : "Default for accessories without their own %."
+                    ? "Heading for the gift section, e.g. “🎁 Free gift”."
+                    : isBundle
+                      ? "Shown as the bundle card name, e.g. “Advanced Kit”."
+                      : "Shown as the tab label, e.g. “T-Series Lenses”."
                 }
               />
+              <TextField
+                label="Title"
+                labelHidden
+                autoComplete="off"
+                value={group.title}
+                onChange={(v) => onChange({ title: v })}
+              />
+            </BlockStack>
+          </Box>
+          {!isBundle && (
+            <Box width="28%">
+              <BlockStack gap="100">
+                <FieldLabel
+                  text="Discount %"
+                  tip={
+                    isFree
+                      ? "Free add-ons are always 100% off."
+                      : "Default % for accessories that don't set their own."
+                  }
+                />
+                <TextField
+                  label="Discount %"
+                  labelHidden
+                  type="number"
+                  min={0}
+                  max={100}
+                  autoComplete="off"
+                  suffix="%"
+                  disabled={isFree}
+                  value={String(isFree ? 100 : group.discountPercent)}
+                  onChange={(v) => onChange({ discountPercent: clampPercent(v) })}
+                />
+              </BlockStack>
             </Box>
           )}
         </InlineStack>
 
+        {/* Deep-link (bundle only): just the link + a "?" for how to use it. */}
         {isBundle && (
-          <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-            <BlockStack gap="100">
-              <Text as="span" variant="bodySm" fontWeight="medium">
-                Search deep-link
-              </Text>
-              <Text as="span" variant="bodySm" tone="subdued">
-                Code <b>{group.code}</b> — link customers straight to this bundle
-                (auto-selected) with:
-              </Text>
-              <Box
-                background="bg-surface"
-                padding="150"
-                borderRadius="100"
-                borderWidth="025"
-                borderColor="border"
-              >
-                <Text as="span" variant="bodySm" tone="subdued">
-                  <code>
-                    /products/{productHandle}?kb_bundle={group.code}
-                  </code>
-                </Text>
-              </Box>
-              <Text as="span" variant="bodySm" tone="subdued">
-                Your search engine can read every bundle from this product’s{" "}
-                <code>custom.addon_config</code> metafield and link to it with
-                that code.
-              </Text>
-            </BlockStack>
-          </Box>
+          <BlockStack gap="100">
+            <FieldLabel
+              text="Search deep-link"
+              tip="Link customers straight to this bundle (auto-selected). Your search engine can read every bundle from this product's custom.addon_config metafield and link to it with this code."
+            />
+            <TextField
+              label="Deep-link"
+              labelHidden
+              readOnly
+              autoComplete="off"
+              value={`/products/${productHandle}?kb_bundle=${group.code}`}
+            />
+          </BlockStack>
         )}
 
         {!isFree && mainVariants.length > 1 && (
@@ -1511,97 +1564,80 @@ function BundleTotals({
 }) {
   const totalOrig = lines.reduce((s, l) => s + l.orig, 0); // Σ MSRP
   const totalNow = lines.reduce((s, l) => s + l.now, 0); // Σ current selling
-  const preOffPct = totalOrig > 0 ? ((totalOrig - totalNow) / totalOrig) * 100 : 0;
   const pct = clampPercent(group.discountPercent); // our bundle discount
   const bundlePrice = totalNow * (1 - pct / 100);
-  const bundleSave = totalNow - bundlePrice;
-  const cell = (text: string, strong?: boolean) => (
-    <Text as="span" variant={strong ? "bodyMd" : "bodySm"} tone={strong ? undefined : "subdued"}>
-      {text}
-    </Text>
-  );
-  const totalRow = (label: string, value: string, strong?: boolean) => (
-    <InlineStack align="space-between" blockAlign="center">
-      {cell(label, strong)}
-      {cell(value, strong)}
+  const totalSave = totalOrig - bundlePrice; // vs original
+  const savePct = totalOrig > 0 ? (totalSave / totalOrig) * 100 : 0;
+  const priceCell = (orig: number, now: number, strong?: boolean) => (
+    <InlineStack gap="150" blockAlign="center" wrap={false}>
+      {orig > now + 0.005 && (
+        <Text as="span" variant="bodySm" tone="subdued">
+          <s>{fmtMoney(orig, currency)}</s>
+        </Text>
+      )}
+      <Text
+        as="span"
+        variant={strong ? "bodyMd" : "bodySm"}
+        fontWeight={strong ? "semibold" : undefined}
+      >
+        {fmtMoney(now, currency)}
+      </Text>
     </InlineStack>
   );
   return (
     <Box background="bg-surface-secondary" padding="300" borderRadius="200">
       <BlockStack gap="200">
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto auto auto",
-            columnGap: "20px",
-            rowGap: "6px",
-            alignItems: "baseline",
-          }}
-        >
+        {lines.map((l, i) => (
+          <InlineStack key={i} align="space-between" blockAlign="center" wrap={false}>
+            <Text as="span" variant="bodySm">
+              {l.label}
+            </Text>
+            {priceCell(l.orig, l.now)}
+          </InlineStack>
+        ))}
+
+        <Divider />
+
+        <InlineStack align="space-between" blockAlign="center">
           <Text as="span" variant="bodySm" tone="subdued">
-            Product
+            Items total
           </Text>
-          <Text as="span" variant="bodySm" tone="subdued" alignment="end">
-            Original
-          </Text>
-          <Text as="span" variant="bodySm" tone="subdued" alignment="end">
-            Now
-          </Text>
-          <Text as="span" variant="bodySm" tone="subdued" alignment="end">
-            Already off
-          </Text>
-          {lines.map((l, i) => {
-            const off = l.orig > l.now ? ((l.orig - l.now) / l.orig) * 100 : 0;
-            return (
-              <Fragment key={i}>
-                <Text as="span" variant="bodySm">
-                  {l.label}
-                </Text>
-                <Text as="span" variant="bodySm" tone="subdued" alignment="end">
-                  {fmtMoney(l.orig, currency)}
-                </Text>
-                <Text as="span" variant="bodySm" alignment="end">
-                  {fmtMoney(l.now, currency)}
-                </Text>
-                <Text as="span" variant="bodySm" tone="subdued" alignment="end">
-                  {off > 0 ? `${pctStr(off)}%` : "—"}
-                </Text>
-              </Fragment>
-            );
-          })}
-        </div>
+          {priceCell(totalOrig, totalNow, true)}
+        </InlineStack>
 
         <Divider />
 
-        {totalRow("Original total (MSRP)", fmtMoney(totalOrig, currency))}
-        {totalRow(
-          preOffPct > 0.05
-            ? `Current total (already ${pctStr(preOffPct)}% off)`
-            : "Current total",
-          fmtMoney(totalNow, currency),
-          true,
-        )}
-
-        <Divider />
-
-        <BlockStack gap="100">
+        <InlineStack gap="100" blockAlign="center">
           <Text as="span" variant="headingSm">
-            Buy together — one bundle discount
+            Buy together — bundle discount
           </Text>
-          <DiscountCalc
-            price={totalNow}
-            percent={pct}
-            onChangePercent={(p) => onChange({ discountPercent: clampPercent(p) })}
-          />
-        </BlockStack>
+          <InfoTip text="One discount on the whole kit — applied on top of current prices, to the main and every accessory." />
+        </InlineStack>
+        <DiscountCalc
+          price={totalNow}
+          percent={pct}
+          onChangePercent={(p) => onChange({ discountPercent: clampPercent(p) })}
+        />
 
-        {totalRow("Bundle price", fmtMoney(bundlePrice, currency), true)}
-        {totalRow("Bundle discount", `${pctStr(pct)}%`)}
-        {totalRow("You save", fmtMoney(bundleSave, currency))}
-        <Text as="span" variant="bodySm" tone="subdued">
-          The bundle discount applies on top of current prices — to the main and
-          every accessory.
-        </Text>
+        <Divider />
+
+        <InlineStack align="space-between" blockAlign="center">
+          <Text as="span" variant="bodyMd" fontWeight="semibold">
+            Bundle price
+          </Text>
+          <Text as="span" variant="bodyMd" fontWeight="semibold">
+            {fmtMoney(bundlePrice, currency)}
+          </Text>
+        </InlineStack>
+        <InlineStack align="space-between" blockAlign="center">
+          <Text as="span" variant="bodySm" tone="subdued">
+            You save
+          </Text>
+          <Text as="span" variant="bodySm" tone="success">
+            {fmtMoney(totalSave, currency)}
+            {savePct > 0.05 ? ` · ${pctStr(savePct)}% off` : ""}
+          </Text>
+        </InlineStack>
       </BlockStack>
     </Box>
   );
