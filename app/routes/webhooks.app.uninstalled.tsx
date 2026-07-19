@@ -3,7 +3,15 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, session, topic } = await authenticate.webhook(request);
+  // HMAC/auth failures MUST return 401 (App Store requirement), never a 500.
+  let auth;
+  try {
+    auth = await authenticate.webhook(request);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    return new Response("Unauthorized", { status: 401 });
+  }
+  const { shop, session, topic } = auth;
 
   console.log(`Received ${topic} webhook for ${shop}`);
 

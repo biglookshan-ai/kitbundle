@@ -13,7 +13,16 @@ import db from "../db.server";
  *  - shop/redact            → purge every record we hold for that shop.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, topic } = await authenticate.webhook(request);
+  // HMAC/auth failures MUST return 401 (App Store requirement). authenticate.webhook
+  // throws on an invalid digest; surface that as 401, never a 500.
+  let auth;
+  try {
+    auth = await authenticate.webhook(request);
+  } catch (e) {
+    if (e instanceof Response) return e; // library's own 401
+    return new Response("Unauthorized", { status: 401 });
+  }
+  const { shop, topic } = auth;
 
   console.log(`Received compliance webhook ${topic} for ${shop}`);
 
