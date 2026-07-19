@@ -22,10 +22,12 @@ import {
   BILLING_ENABLED,
 } from "../shopify.server";
 import { FREE_PRODUCT_LIMIT, FREE_CAMPAIGN_LIMIT } from "../models/plan";
+import { isFreeShop } from "../models/plan.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { billing } = await authenticate.admin(request);
+  const { billing, session } = await authenticate.admin(request);
   if (!BILLING_ENABLED) throw redirect("/app"); // free launch → no plan page
+  const comped = isFreeShop(session.shop);
   const { hasActivePayment, appSubscriptions } = await billing.check({
     plans: [PRO_PLAN],
     isTest: BILLING_TEST,
@@ -33,6 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const sub = appSubscriptions?.[0] ?? null;
   return {
     pro: hasActivePayment,
+    comped,
     subName: sub?.name ?? null,
     test: BILLING_TEST,
   };
@@ -69,7 +72,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Plan() {
-  const { pro, test } = useLoaderData<typeof loader>();
+  const { pro, comped, test } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
 
@@ -78,6 +81,14 @@ export default function Plan() {
       <TitleBar title="Plan" />
       <Layout>
         <Layout.Section>
+          {comped && (
+            <Box paddingBlockEnd="400">
+              <Banner tone="success" title="Complimentary access">
+                This store has full access to all features at no charge. No
+                subscription needed.
+              </Banner>
+            </Box>
+          )}
           {test && (
             <Box paddingBlockEnd="400">
               <Banner tone="info">

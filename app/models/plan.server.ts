@@ -15,6 +15,31 @@ type Billing = {
   check: (opts?: any) => Promise<{ hasActivePayment: boolean }>;
 };
 
+/**
+ * Shops that get full access for free (your own store, partners, comps). Set
+ * FREE_SHOPS in the environment as a comma-separated list of *.myshopify.com
+ * domains (the ".myshopify.com" suffix is optional). Matched case-insensitively.
+ */
+const FREE_SHOPS = new Set(
+  (process.env.FREE_SHOPS ?? "")
+    .split(",")
+    .map((s) =>
+      s
+        .trim()
+        .toLowerCase()
+        .replace(/\.myshopify\.com$/, ""),
+    )
+    .filter(Boolean),
+);
+
+export function isFreeShop(shop: string): boolean {
+  const key = String(shop || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.myshopify\.com$/, "");
+  return FREE_SHOPS.has(key);
+}
+
 export async function hasPro(billing: Billing): Promise<boolean> {
   try {
     const { hasActivePayment } = await billing.check({
@@ -41,6 +66,7 @@ export async function canConfigureProduct(
   productId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!BILLING_ENABLED) return { ok: true }; // free launch → no limits
+  if (isFreeShop(shop)) return { ok: true }; // comped store (e.g. your own)
   if (await hasPro(billing)) return { ok: true };
   const existing = await prisma.bundleConfig.findMany({
     where: { shop },
@@ -57,6 +83,7 @@ export async function canCreateCampaign(
   shop: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!BILLING_ENABLED) return { ok: true }; // free launch → no limits
+  if (isFreeShop(shop)) return { ok: true }; // comped store (e.g. your own)
   if (await hasPro(billing)) return { ok: true };
   const count = await prisma.giftCampaign.count({ where: { shop } });
   if (count < FREE_CAMPAIGN_LIMIT) return { ok: true };
