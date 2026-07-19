@@ -312,7 +312,7 @@ export default function GiftCampaignEditor() {
                   onChange={(v) =>
                     patch({ perQualifying: Math.max(1, Number(v) || 1) })
                   }
-                  helpText="Buy 2 → 2 free."
+                  helpText={`Buy 1 → get ${c.perQualifying} free per qualifying item.`}
                 />
               </Box>
               <Box width="33%">
@@ -339,6 +339,14 @@ export default function GiftCampaignEditor() {
                 />
               </Box>
             </InlineStack>
+            <TextField
+              label="Picker prompt"
+              autoComplete="off"
+              value={c.subtitle}
+              onChange={(v) => patch({ subtitle: v })}
+              placeholder="Choose your free gift:"
+              helpText="Shown above the gift options on the product page. Customers can also pick “No thanks” to skip the gift."
+            />
           </BlockStack>
         </Card>
 

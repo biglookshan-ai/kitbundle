@@ -71,6 +71,7 @@ model GiftCampaign {
   perQualifying Int       @default(1) // free gifts per qualifying unit (buy 2 -> 2)
   rewardMode    String    @default("fixed") // "fixed" (auto-add) | "choice" (picker)
   badgeText     String    @default("")
+  subtitle      String    @default("") // storefront prompt above the gift picker
   // JSON arrays of refs { id, title, handle, image }.
   triggerProductsJson    String @default("[]")
   triggerCollectionsJson String @default("[]")

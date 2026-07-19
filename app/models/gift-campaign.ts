@@ -28,6 +28,8 @@ export type GiftCampaign = {
   /** "fixed" = auto-add the single gift; "choice" = customer picks from the set. */
   rewardMode: "fixed" | "choice";
   badgeText: string;
+  /** Storefront prompt shown above the gift picker (customizable per campaign). */
+  subtitle: string;
   triggerProducts: Ref[]; // manual product list
   triggerCollections: Ref[]; // Shopify collections (expanded at save time)
   giftProducts: Ref[]; // the gift set
@@ -57,6 +59,7 @@ export function emptyCampaign(): GiftCampaign {
     perQualifying: 1,
     rewardMode: "fixed",
     badgeText: "🎁 Free gift",
+    subtitle: "Choose your free gift:",
     triggerProducts: [],
     triggerCollections: [],
     giftProducts: [],
@@ -106,6 +109,7 @@ export function rowToCampaign(row: any): GiftCampaign {
     perQualifying: Math.max(1, Number(row.perQualifying) || 1),
     rewardMode: row.rewardMode === "choice" ? "choice" : "fixed",
     badgeText: row.badgeText ?? "",
+    subtitle: row.subtitle ?? "",
     triggerProducts: parseRefs(row.triggerProductsJson),
     triggerCollections: parseRefs(row.triggerCollectionsJson),
     giftProducts: parseRefs(row.giftProductsJson),

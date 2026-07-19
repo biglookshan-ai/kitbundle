@@ -2159,13 +2159,16 @@
     return true;
   }
 
-  // Which gift the customer chose per campaign (choice mode). Default = first.
+  // Which gift the customer chose per campaign. Default = first gift (selected);
+  // the sentinel "__none__" means the customer opted OUT (no gift added).
   var giftChoice = {};
+  var GIFT_DECLINE = "__none__";
   function chosenGift(c) {
     var handles = c.giftHandles || [];
-    if (c.rewardMode === "choice" && giftChoice[c.id] &&
-        handles.indexOf(giftChoice[c.id]) >= 0) {
-      return giftChoice[c.id];
+    var sel = giftChoice[c.id];
+    if (sel === GIFT_DECLINE) return null; // customer declined the gift
+    if (c.rewardMode === "choice" && sel && handles.indexOf(sel) >= 0) {
+      return sel;
     }
     return handles[0];
   }
@@ -2189,37 +2192,31 @@
       section.appendChild(
         el("div", "cgp-free__heading", c.badge || "🎁 Free gift"),
       );
-      var choice = c.rewardMode === "choice" && handles.length > 1;
-      if (choice) {
-        section.appendChild(
-          el("div", "cgp-free__sub", "Choose your free gift:"),
-        );
-        if (!giftChoice[c.id]) giftChoice[c.id] = handles[0];
-      }
+      // Custom prompt (per campaign), falls back to a sensible default.
+      section.appendChild(
+        el("div", "cgp-free__sub", c.subtitle || "Choose your free gift:"),
+      );
+      // "choice" shows every gift to pick from; "fixed" shows just the first.
+      // Either way the customer can opt out with a "No thanks" row, and the
+      // first gift is pre-selected by default.
+      var opts = c.rewardMode === "choice" ? handles : handles.slice(0, 1);
+      if (giftChoice[c.id] === undefined) giftChoice[c.id] = opts[0];
+      var groupName = "cgp-gift-" + c.id;
       var list = el("div", "cgp-free__list");
       section.appendChild(list);
 
-      handles.forEach(function (h) {
-        var row = el(choice ? "label" : "div", "cgp-free__row");
+      opts.forEach(function (h) {
+        var row = el("label", "cgp-free__row");
         list.appendChild(row);
 
-        var selector;
-        if (choice) {
-          selector = el("input", "cgp-free__radio");
-          selector.type = "radio";
-          selector.name = "cgp-gift-" + c.id;
-          selector.checked = giftChoice[c.id] === h;
-          selector.addEventListener("change", function () {
-            // Preference only — never mutates the cart. The chosen gift is added
-            // as its own pair on the NEXT Add to cart (or auto-filled by the
-            // reconcile when a new trigger main appears). Existing cart gifts are
-            // left alone, so picks across adds coexist and nothing pops open.
-            if (selector.checked) giftChoice[c.id] = h;
-          });
-        } else {
-          selector = el("span", "cgp-check is-on is-locked", "✓");
-          selector.setAttribute("aria-label", "Free gift (included)");
-        }
+        var selector = el("input", "cgp-free__radio");
+        selector.type = "radio";
+        selector.name = groupName;
+        selector.checked = giftChoice[c.id] === h;
+        selector.addEventListener("change", function () {
+          // Preference only — the chosen gift is added on the NEXT Add to cart.
+          if (selector.checked) giftChoice[c.id] = h;
+        });
         row.appendChild(selector);
 
         var thumb = el("div", "cgp-free__thumb");
@@ -2246,6 +2243,25 @@
           }
         });
       });
+
+      // Opt-out row — the customer can decline the free gift entirely.
+      var declineRow = el("label", "cgp-free__row cgp-free__row--decline");
+      list.appendChild(declineRow);
+      var declineRadio = el("input", "cgp-free__radio");
+      declineRadio.type = "radio";
+      declineRadio.name = groupName;
+      declineRadio.checked = giftChoice[c.id] === GIFT_DECLINE;
+      declineRadio.addEventListener("change", function () {
+        if (declineRadio.checked) giftChoice[c.id] = GIFT_DECLINE;
+      });
+      declineRow.appendChild(declineRadio);
+      declineRow.appendChild(
+        el(
+          "span",
+          "cgp-free__decline",
+          "No thanks — I don't want the free gift",
+        ),
+      );
       host.appendChild(section);
     });
     host.hidden = !any;
@@ -2273,6 +2289,7 @@
         startsAt: e.startsAt || "",
         endsAt: e.endsAt || "",
         badge: e.badge || "🎁 Free gift",
+        subtitle: e.subtitle || "",
         triggerProductIds: e.triggers || e.triggerProductIds || [],
         giftHandles: e.gifts || e.giftHandles || [],
       };

@@ -558,6 +558,15 @@ label.cgp-free__row {
   gap: 12px;
   padding: 8px 0;
 }
+.cgp-free__row--decline {
+  border-top: 1px dashed #e0e0e0;
+  margin-top: 4px;
+  padding-top: 12px;
+}
+.cgp-free__decline {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
 .cgp-free__thumb {
   width: 52px;
   height: 52px;
