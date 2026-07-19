@@ -20,9 +20,11 @@ type Billing = {
  * FREE_SHOPS in the environment as a comma-separated list of *.myshopify.com
  * domains (the ".myshopify.com" suffix is optional). Matched case-insensitively.
  */
+// Always-comped stores (the developer's own). Extend via the FREE_SHOPS env
+// (comma-separated) without a code change.
+const DEFAULT_FREE_SHOPS = ["cinegearpro"];
 const FREE_SHOPS = new Set(
-  (process.env.FREE_SHOPS ?? "")
-    .split(",")
+  DEFAULT_FREE_SHOPS.concat((process.env.FREE_SHOPS ?? "").split(","))
     .map((s) =>
       s
         .trim()
