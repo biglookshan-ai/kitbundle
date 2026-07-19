@@ -1,71 +1,139 @@
-# KitBundle — App Store Listing (draft copy)
+# KitBundle — App Store listing content
 
-Fill these into Dev Dashboard → KitBundle → App Store listing → Manage submission.
+Copy-paste into the Dev Dashboard → “Create your listing content (English)”.
+Character limits noted per field (Shopify’s current limits). Avoids superlatives
+(“best”, “#1”), competitor names, and starting with the app name — per Shopify
+content rules.
 
-## App name (30 chars max, no "Shopify")
-`KitBundle: Bundles & Add-ons`
+---
 
-## Tagline / subtitle (62 chars)
-`Product bundles, add-on upsells & free gifts — no code`
+## App name (max 30)
+```
+KitBundle
+```
 
-## Short description (~100 chars, appears in search)
-Boost AOV with fixed bundles, optional add-ons and automatic free gifts. Works on every plan.
+## App icon
+Use the yellow box icon (1200×1200 PNG, already made).
 
-## Long description
-KitBundle helps you sell more per order with three offer types, all powered by
-native Shopify Functions so discounts apply automatically at checkout — no
-discount codes, no theme code edits, and no Shopify Plus required.
+## App introduction (max 100 — one sentence, the core benefit)
+```
+Sell product bundles, add-ons and free gifts with automatic checkout discounts — no code.
+```
+(89 chars)
 
-**Fixed bundles** — Group a main product with accessories into a "buy together"
-kit at a set discount. Customers pick a kit and add the whole set in one click.
+## App details (main description — ~500–700 chars, benefit-first)
+```
+KitBundle turns any product page into a kit builder. Group products into a bundle sold together at one discount, offer optional add-ons that each carry their own price, and reward shoppers with a free gift when they buy.
 
-**Add-on upsells** — Offer optional accessories on the product page, each at its
-own discount or full price. Multi-select, per-variant control, subtitles.
+Discounts are applied automatically at checkout by Shopify Functions — no discount codes for customers to enter, and no theme coding for you. Add the KitBundle block to your product template and you’re live.
 
-**Free gifts** — Run "spend/buy X, get Y free" campaigns with scheduling and
-automatic add.
+Run limited-time bundles with a countdown that automatically revert to the normal price (or hide) when they end. Give every bundle a searchable code, show whole-kit stock, and hide offers when items sell out. Free gifts can be auto-added or picked by the shopper, who can also decline.
+```
 
-**Limited-time offers** — Add a countdown and a deeper price for a window; it
-reverts automatically when the timer ends.
+## Key features (3–5; each title ≤ 80 chars, no ending period)
+```
+1. Bundle products into a kit with one automatic discount on the whole set
+2. Product-page add-ons, each at its own discount — or free
+3. Free gift with purchase: auto-added or shopper’s choice, with an opt-out
+4. Limited-time bundles with a countdown that revert or hide when they end
+5. Searchable bundle codes and stock-aware hiding when items sell out
+```
 
-Every discount is applied by a Shopify Function inside checkout, so it's
-tamper-proof and works with your existing prices. Install and go — the discount
-activates itself, and you add the storefront block from the theme editor.
+## Pricing
+```
+Free
+```
+(Single free plan. No charges.)
 
-### Highlights
-- Works on Basic, Grow, Advanced and Plus
-- No discount codes, no manual work
-- Add-ons, bundles, free gifts and countdown sales in one app
-- Native theme app extension — clean install/uninstall, no leftover code
+## Primary category
+```
+Discounts
+```
+## Secondary category
+```
+Merchandising
+```
 
-## Pricing (LAUNCH: free)
-Launching 100% free — all features, unlimited. Billing is built and gated behind
-`BILLING_ENABLED` (off), so a paid Pro tier ($9.99/mo, 14-day trial) can be
-switched on later without code changes.
+## Search terms (up to 5, ≤ 20 chars each)
+```
+bundle
+product bundles
+add-ons
+free gift
+volume discount
+```
 
-## Required URLs
-- App URL: https://addon-discount-production-bb4d.up.railway.app
-- Privacy policy: https://addon-discount-production-bb4d.up.railway.app/privacy
-- Support email: biglookshan@gmail.com
+## Languages
+```
+English
+```
 
-## Assets to produce (before submit)
-- [ ] App icon 1200×1200 PNG (no rounded corners, no "Shopify")
-- [ ] Feature image 1600×900
-- [ ] 3+ screenshots 1600×900 (admin editor, storefront bundle card, cart with
-      discount, gift campaign)
-- [ ] Optional demo video
+## Privacy policy URL
+```
+https://addon-discount-production-bb4d.up.railway.app/privacy
+```
 
-## App review — testing instructions (paste into submission)
-1. Install on a development store (any plan). The discount "KitBundle discount"
-   is created automatically on install.
-2. In the app, open Home → Configure a product → pick a product with a few other
-   products available as accessories.
-3. Add a Bundle group, pick 2–3 accessories, set a discount %, Save.
-4. In the theme editor, add the "Bundle & Add-ons" app block to the product
-   template of that product.
-5. Visit the product on the storefront, select the bundle, Add to cart.
-6. Open the cart / checkout — each bundle item shows the discounted price.
+## Support email
+```
+biglookshan@gmail.com
+```
 
-## Test data / demo store
-- Demo store: kitbundle-dev.myshopify.com (products preloaded, sample bundle
-  configured). Provide storefront password if the store is password-protected.
+---
+
+## Demo store (for reviewers)
+- Store URL: `https://kitbundle-dev.myshopify.com`
+- Storefront password: `111`
+- A product is already configured (5-inch On-Camera Monitor) with bundles,
+  add-ons and a free-gift campaign, and the KitBundle block is added to the
+  product template.
+
+## Testing instructions for the reviewer (paste into the review notes)
+```
+KitBundle adds bundles, add-ons and free gifts to the product page, discounted
+automatically at checkout via Shopify Functions (no codes).
+
+Setup (already done on the demo store; steps for a fresh install):
+1. Install the app. It auto-creates its automatic discount (afterAuth).
+2. In the admin, open KitBundle → Products → configure a product:
+   - Bundle tab: add accessories, set a discount, give it a code.
+   - Add-on tab: add optional extras, each with its own discount.
+   - Free gifts: create a campaign (trigger product → gift product(s)).
+3. In the theme editor, add the “Bundle & Add-ons” app block to the product
+   template (Online Store → Themes → Customize → product template).
+
+To verify on the storefront (demo password: 111):
+1. Open the configured product (5-inch On-Camera Monitor).
+2. Select a bundle → Add to cart → the whole kit is discounted at checkout.
+3. Add-ons show under the bundle, each with its own price.
+4. The free-gift picker lets the shopper choose a gift or decline (“No thanks”).
+5. Cart line discounts read e.g. “Bundle1 · CODE · 45% off”.
+```
+
+---
+
+## Screenshots to capture (min 3, desktop 1600×900; a few mobile optional)
+Take these in the admin and on the demo storefront:
+
+1. **Storefront — Bundle & Save card** on the product page (kit price, “X% off”,
+   countdown if limited, stock badge). *Most important — lead image.*
+2. **Storefront — Free gift picker** (gift options with struck price + FREE, and
+   the “No thanks” opt-out).
+3. **Cart** with the bundle applied (line discounts “Bundle · CODE · % off”, free
+   gift at $0).
+4. **Admin — product editor** showing a configured bundle (code, accessories,
+   the bundle price calculator).
+5. **Admin — Dashboard or Bundles list** (offers grouped by type with codes).
+6. *(optional)* **Admin — Free gifts campaign** (Buy any of → Get free).
+
+Tip: use a product with a real image (the demo monitor works). Crop to 1600×900,
+no personal data visible.
+
+---
+
+## Notes
+- “Protected customer data”: NOT required — the app stores only shop-level offer
+  config + its own discount node ids (already declared “Doesn’t need access to
+  protected customer data” in the dashboard).
+- Mandatory compliance webhooks are implemented and return 401 on bad HMAC.
+- App is free; no billing enabled, so no pricing details/CTA beyond the single
+  Free plan.
