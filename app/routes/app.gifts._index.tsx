@@ -1,12 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
+import { useState } from "react";
 import {
   Page,
   Card,
   BlockStack,
   InlineStack,
   Text,
+  TextField,
   Button,
+  ButtonGroup,
   Badge,
   Box,
   Banner,
@@ -14,7 +17,12 @@ import {
   Icon,
   EmptyState,
 } from "@shopify/polaris";
-import { ImageIcon, CollectionIcon, ArrowRightIcon } from "@shopify/polaris-icons";
+import {
+  ImageIcon,
+  CollectionIcon,
+  ArrowRightIcon,
+  SearchIcon,
+} from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
@@ -136,11 +144,37 @@ function RefColumn({
   );
 }
 
+const STATUS_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "active", label: "Active" },
+  { key: "scheduled", label: "Scheduled" },
+  { key: "ended", label: "Ended" },
+];
+
 export default function GiftCampaigns() {
   const { campaigns } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const busy = fetcher.state !== "idle";
+
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
+  const [mode, setMode] = useState<"simple" | "detailed">("simple");
+
+  const q = query.trim().toLowerCase();
+  const visible = campaigns.filter((c) => {
+    if (status !== "all" && campaignState(c) !== status) return false;
+    if (!q) return true;
+    const hay = [
+      c.title,
+      ...c.triggerProducts.map((p) => p.title),
+      ...c.triggerCollections.map((p) => p.title),
+      ...c.giftProducts.map((p) => p.title),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  });
 
   return (
     <Page>
@@ -175,6 +209,51 @@ export default function GiftCampaigns() {
           </InlineStack>
         </InlineStack>
 
+        {campaigns.length > 0 && (
+          <InlineStack align="space-between" blockAlign="center" gap="300" wrap>
+            <Box minWidth="260px">
+              <TextField
+                label="Search"
+                labelHidden
+                value={query}
+                onChange={setQuery}
+                autoComplete="off"
+                placeholder="Search by campaign, trigger or gift"
+                prefix={<Icon source={SearchIcon} />}
+                clearButton
+                onClearButtonClick={() => setQuery("")}
+              />
+            </Box>
+            <InlineStack gap="200" blockAlign="center">
+              <ButtonGroup variant="segmented">
+                {STATUS_FILTERS.map((f) => (
+                  <Button
+                    key={f.key}
+                    pressed={status === f.key}
+                    onClick={() => setStatus(f.key)}
+                  >
+                    {f.label}
+                  </Button>
+                ))}
+              </ButtonGroup>
+              <ButtonGroup variant="segmented">
+                <Button
+                  pressed={mode === "simple"}
+                  onClick={() => setMode("simple")}
+                >
+                  Simple
+                </Button>
+                <Button
+                  pressed={mode === "detailed"}
+                  onClick={() => setMode("detailed")}
+                >
+                  Detailed
+                </Button>
+              </ButtonGroup>
+            </InlineStack>
+          </InlineStack>
+        )}
+
         {campaigns.length === 0 ? (
           <Card>
             <EmptyState
@@ -191,10 +270,18 @@ export default function GiftCampaigns() {
               </p>
             </EmptyState>
           </Card>
+        ) : visible.length === 0 ? (
+          <Card>
+            <Box padding="400">
+              <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
+                No campaigns match your search.
+              </Text>
+            </Box>
+          </Card>
         ) : (
           <Card padding="0">
             <BlockStack>
-              {campaigns.map((c, i) => {
+              {visible.map((c, i) => {
                 const state = campaignState(c);
                 const meta = [
                   `Buy 1 → get ${c.perQualifying} free`,
@@ -213,7 +300,7 @@ export default function GiftCampaigns() {
                     key={c.id}
                     padding="400"
                     borderBlockEndWidth={
-                      i < campaigns.length - 1 ? "025" : undefined
+                      i < visible.length - 1 ? "025" : undefined
                     }
                     borderColor="border"
                   >
@@ -258,39 +345,41 @@ export default function GiftCampaigns() {
                         </InlineStack>
                       </InlineStack>
 
-                      {/* triggers → gifts (one/many-to-many) */}
-                      <Box
-                        background="bg-surface-secondary"
-                        padding="300"
-                        borderRadius="200"
-                      >
-                        <InlineStack
-                          gap="300"
-                          blockAlign="start"
-                          wrap={false}
-                          align="start"
+                      {/* triggers → gifts (one/many-to-many) — detailed only */}
+                      {mode === "detailed" && (
+                        <Box
+                          background="bg-surface-secondary"
+                          padding="300"
+                          borderRadius="200"
                         >
-                          <Box width="45%">
-                            <RefColumn
-                              label="Buy any of"
-                              products={c.triggerProducts}
-                              collections={c.triggerCollections}
-                              emptyText="No trigger set"
-                            />
-                          </Box>
-                          <Box>
-                            <Icon source={ArrowRightIcon} tone="subdued" />
-                          </Box>
-                          <Box width="45%">
-                            <RefColumn
-                              label="Get free"
-                              products={c.giftProducts}
-                              tone="success"
-                              emptyText="No gift set"
-                            />
-                          </Box>
-                        </InlineStack>
-                      </Box>
+                          <InlineStack
+                            gap="300"
+                            blockAlign="start"
+                            wrap={false}
+                            align="start"
+                          >
+                            <Box width="45%">
+                              <RefColumn
+                                label="Buy any of"
+                                products={c.triggerProducts}
+                                collections={c.triggerCollections}
+                                emptyText="No trigger set"
+                              />
+                            </Box>
+                            <Box>
+                              <Icon source={ArrowRightIcon} tone="subdued" />
+                            </Box>
+                            <Box width="45%">
+                              <RefColumn
+                                label="Get free"
+                                products={c.giftProducts}
+                                tone="success"
+                                emptyText="No gift set"
+                              />
+                            </Box>
+                          </InlineStack>
+                        </Box>
+                      )}
                     </BlockStack>
                   </Box>
                 );

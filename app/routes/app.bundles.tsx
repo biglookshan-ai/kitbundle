@@ -1,14 +1,14 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { Page, BlockStack } from "@shopify/polaris";
+import { Page } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { buildOffersOverview } from "../models/addon-config.server";
 import {
-  OfferTable,
+  OfferBrowser,
   OfferEmpty,
-  SectionCard,
   useConfigureProduct,
+  type OfferSection,
 } from "../components/OfferList";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -21,6 +21,17 @@ export default function Bundles() {
   const { bundle, sale, currency } = useLoaderData<typeof loader>();
   const configure = useConfigureProduct();
   const empty = bundle.length === 0 && sale.length === 0;
+
+  const sections: OfferSection[] = [];
+  if (bundle.length > 0)
+    sections.push({ key: "bundle", title: "Bundles", kind: "bundle", rows: bundle });
+  if (sale.length > 0)
+    sections.push({
+      key: "sale",
+      title: "Limited-time sale bundles",
+      kind: "sale",
+      rows: sale,
+    });
 
   return (
     <Page>
@@ -36,18 +47,7 @@ export default function Bundles() {
           onConfigure={configure}
         />
       ) : (
-        <BlockStack gap="400">
-          {bundle.length > 0 && (
-            <SectionCard title="Bundles" count={bundle.length}>
-              <OfferTable rows={bundle} kind="bundle" currency={currency} />
-            </SectionCard>
-          )}
-          {sale.length > 0 && (
-            <SectionCard title="Limited-time sale bundles" count={sale.length}>
-              <OfferTable rows={sale} kind="sale" currency={currency} />
-            </SectionCard>
-          )}
-        </BlockStack>
+        <OfferBrowser sections={sections} currency={currency} showTypeFilter />
       )}
     </Page>
   );

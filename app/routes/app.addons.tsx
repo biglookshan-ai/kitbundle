@@ -1,14 +1,14 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { Page, BlockStack } from "@shopify/polaris";
+import { Page } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { buildOffersOverview } from "../models/addon-config.server";
 import {
-  OfferTable,
+  OfferBrowser,
   OfferEmpty,
-  SectionCard,
   useConfigureProduct,
+  type OfferSection,
 } from "../components/OfferList";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -21,6 +21,10 @@ export default function Addons() {
   const { addon, currency } = useLoaderData<typeof loader>();
   const configure = useConfigureProduct();
   const empty = addon.length === 0;
+
+  const sections: OfferSection[] = [
+    { key: "addon", title: "Add-ons", kind: "addon", rows: addon },
+  ];
 
   return (
     <Page>
@@ -36,11 +40,7 @@ export default function Addons() {
           onConfigure={configure}
         />
       ) : (
-        <BlockStack gap="400">
-          <SectionCard title="Add-ons" count={addon.length}>
-            <OfferTable rows={addon} kind="addon" currency={currency} />
-          </SectionCard>
-        </BlockStack>
+        <OfferBrowser sections={sections} currency={currency} />
       )}
     </Page>
   );

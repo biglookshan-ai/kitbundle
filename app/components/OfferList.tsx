@@ -1,17 +1,23 @@
+import { useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import {
   Card,
   InlineStack,
   BlockStack,
   Text,
+  TextField,
+  Button,
+  ButtonGroup,
   Thumbnail,
   Badge,
   Box,
+  Icon,
   EmptyState,
 } from "@shopify/polaris";
-import { ImageIcon } from "@shopify/polaris-icons";
+import { ImageIcon, SearchIcon } from "@shopify/polaris-icons";
 
 type Kind = "bundle" | "sale" | "addon" | "free";
+type ViewMode = "simple" | "detailed";
 
 type Accessory = {
   title: string;
@@ -42,6 +48,13 @@ export type OfferRow = {
   startsAt: string | null;
   endsAt: string | null;
   dim: boolean;
+};
+
+export type OfferSection = {
+  key: string;
+  title: string;
+  kind: Kind;
+  rows: OfferRow[];
 };
 
 function money(n: number, currency: string) {
@@ -85,45 +98,126 @@ function saleSummary(r: OfferRow): string {
     return `${r.salePct}% off · starts ${fmtDate(r.startsAt)} · ends ${fmtDate(
       r.endsAt,
     )}`;
-  // ended
   return r.saleMode === "end"
     ? `Ended ${fmtDate(r.endsAt)} · bundle hidden`
     : `Ended ${fmtDate(r.endsAt)} · now ${r.discountPercent}% off`;
 }
 
-/** A rich, single-row card for one offer (bundle / sale bundle / add-on). */
-function OfferRowCard({
+/** Right-aligned price block: was → now (+ % off badge for kits). */
+function PriceBlock({
+  r,
+  kind,
+  currency,
+}: {
+  r: OfferRow;
+  kind: Kind;
+  currency: string;
+}) {
+  const savings = r.origTotal > r.nowTotal;
+  return (
+    <BlockStack gap="100" inlineAlign="end">
+      <InlineStack gap="150" blockAlign="center" wrap={false}>
+        {savings && (
+          <Text as="span" variant="bodySm" tone="subdued">
+            <s>{money(r.origTotal, currency)}</s>
+          </Text>
+        )}
+        <Text as="span" variant="bodyMd" fontWeight="semibold">
+          {money(r.nowTotal, currency)}
+        </Text>
+      </InlineStack>
+      {kind !== "addon" && r.effectivePct > 0 && (
+        <Badge tone="success">{`${r.effectivePct}% off kit`}</Badge>
+      )}
+    </BlockStack>
+  );
+}
+
+/** Compact single-line row: code · name · main · N items · price. */
+function OfferRowSimple({
   r,
   kind,
   currency,
   last,
+  onOpen,
 }: {
   r: OfferRow;
   kind: Kind;
   currency: string;
   last: boolean;
+  onOpen: () => void;
 }) {
-  const navigate = useNavigate();
-  const showTotal = kind !== "addon"; // add-ons are individual, no kit total
-  const savings = r.origTotal > r.nowTotal;
+  return (
+    <Box
+      padding="300"
+      borderBlockEndWidth={last ? undefined : "025"}
+      borderColor="border"
+    >
+      <div onClick={onOpen} style={{ cursor: "pointer" }}>
+        <InlineStack align="space-between" blockAlign="center" wrap={false}>
+          <InlineStack gap="200" blockAlign="center" wrap={false}>
+            <Badge tone={r.dim ? undefined : "info"}>
+              {r.code || "—"}
+            </Badge>
+            <Thumbnail
+              source={r.productImage || ImageIcon}
+              alt={r.productTitle}
+              size="extraSmall"
+            />
+            <BlockStack gap="0">
+              <Text
+                as="span"
+                variant="bodyMd"
+                fontWeight="medium"
+                tone={r.dim ? "subdued" : undefined}
+              >
+                {r.title}
+              </Text>
+              <Text as="span" variant="bodyXs" tone="subdued">
+                {r.productTitle} · {r.accessoryCount}{" "}
+                {r.accessoryCount === 1 ? "item" : "items"}
+                {kind === "sale" && r.saleState
+                  ? ` · ${r.saleState === "active" ? "Live" : r.saleState === "upcoming" ? "Scheduled" : "Ended"}`
+                  : ""}
+              </Text>
+            </BlockStack>
+          </InlineStack>
+          <PriceBlock r={r} kind={kind} currency={currency} />
+        </InlineStack>
+      </div>
+    </Box>
+  );
+}
 
+/** A rich, expanded row for one offer (bundle / sale bundle / add-on). */
+function OfferRowCard({
+  r,
+  kind,
+  currency,
+  last,
+  onOpen,
+}: {
+  r: OfferRow;
+  kind: Kind;
+  currency: string;
+  last: boolean;
+  onOpen: () => void;
+}) {
   return (
     <Box
       padding="400"
       borderBlockEndWidth={last ? undefined : "025"}
       borderColor="border"
     >
-      <div
-        onClick={() =>
-          navigate(`/app/products/${r.numericId}#${r.groupId}`)
-        }
-        style={{ cursor: "pointer" }}
-      >
+      <div onClick={onOpen} style={{ cursor: "pointer" }}>
         <BlockStack gap="300">
-          {/* Header: name + code + status  |  kit price */}
+          {/* Header: code + name + status  |  kit price */}
           <InlineStack align="space-between" blockAlign="start" wrap={false}>
             <BlockStack gap="150">
               <InlineStack gap="200" blockAlign="center" wrap>
+                <Badge tone={r.dim ? undefined : "info"}>
+                  {r.code || "—"}
+                </Badge>
                 <Text
                   as="span"
                   variant="bodyMd"
@@ -132,7 +226,6 @@ function OfferRowCard({
                 >
                   {r.title}
                 </Text>
-                {r.code && <Badge>{r.code}</Badge>}
                 {kind === "sale" && <SaleStatusBadge state={r.saleState} />}
               </InlineStack>
               <InlineStack gap="150" blockAlign="center">
@@ -147,24 +240,7 @@ function OfferRowCard({
                 </Text>
               </InlineStack>
             </BlockStack>
-
-            {showTotal && (
-              <BlockStack gap="100" inlineAlign="end">
-                <InlineStack gap="150" blockAlign="center">
-                  {savings && (
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      <s>{money(r.origTotal, currency)}</s>
-                    </Text>
-                  )}
-                  <Text as="span" variant="bodyMd" fontWeight="semibold">
-                    {money(r.nowTotal, currency)}
-                  </Text>
-                </InlineStack>
-                {r.effectivePct > 0 && (
-                  <Badge tone="success">{`${r.effectivePct}% off kit`}</Badge>
-                )}
-              </BlockStack>
-            )}
+            <PriceBlock r={r} kind={kind} currency={currency} />
           </InlineStack>
 
           {/* Included / add-on products with per-item pricing */}
@@ -205,9 +281,7 @@ function OfferRowCard({
                       <Text as="span" variant="bodySm" fontWeight="medium">
                         {money(a.now, currency)}
                       </Text>
-                      {a.pct > 0 && (
-                        <Badge tone="success" size="small">{`${a.pct}%`}</Badge>
-                      )}
+                      {a.pct > 0 && <Badge tone="success">{`${a.pct}%`}</Badge>}
                     </InlineStack>
                   </InlineStack>
                 ))}
@@ -227,28 +301,152 @@ function OfferRowCard({
   );
 }
 
-/** A section of offer rows of one kind. */
-export function OfferTable({
-  rows,
-  kind,
+/** A section of rows rendered in the chosen view mode. */
+function OfferSectionCard({
+  section,
+  mode,
   currency,
+  onOpen,
 }: {
-  rows: OfferRow[];
-  kind: Kind;
+  section: OfferSection;
+  mode: ViewMode;
   currency: string;
+  onOpen: (r: OfferRow) => void;
 }) {
-  if (rows.length === 0) return null;
   return (
-    <BlockStack>
-      {rows.map((r, i) => (
-        <OfferRowCard
-          key={r.key}
-          r={r}
-          kind={kind}
-          currency={currency}
-          last={i === rows.length - 1}
-        />
-      ))}
+    <SectionCard title={section.title} count={section.rows.length}>
+      <BlockStack>
+        {section.rows.map((r, i) => {
+          const last = i === section.rows.length - 1;
+          const props = {
+            r,
+            kind: section.kind,
+            currency,
+            last,
+            onOpen: () => onOpen(r),
+          };
+          return mode === "simple" ? (
+            <OfferRowSimple key={r.key} {...props} />
+          ) : (
+            <OfferRowCard key={r.key} {...props} />
+          );
+        })}
+      </BlockStack>
+    </SectionCard>
+  );
+}
+
+/**
+ * The full offer list surface: a toolbar (search, type filter, Simple/Detailed
+ * toggle) over one or more sections. Filtering is client-side — instant even with
+ * hundreds of offers. Search matches code, name and main product.
+ */
+export function OfferBrowser({
+  sections,
+  currency,
+  showTypeFilter,
+}: {
+  sections: OfferSection[];
+  currency: string;
+  showTypeFilter?: boolean;
+}) {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<ViewMode>("simple");
+  const [type, setType] = useState<string>("all");
+
+  const q = query.trim().toLowerCase();
+  const match = (r: OfferRow) =>
+    !q ||
+    r.code.toLowerCase().includes(q) ||
+    r.title.toLowerCase().includes(q) ||
+    r.productTitle.toLowerCase().includes(q);
+
+  const filtered = sections
+    .filter((s) => type === "all" || s.key === type)
+    .map((s) => ({ ...s, rows: s.rows.filter(match) }));
+  const totalMatches = filtered.reduce((n, s) => n + s.rows.length, 0);
+
+  const onOpen = (r: OfferRow) =>
+    navigate(`/app/products/${r.numericId}#${r.groupId}`);
+
+  return (
+    <BlockStack gap="400">
+      <Box>
+        <InlineStack align="space-between" blockAlign="center" gap="300" wrap>
+          <Box minWidth="260px">
+            <TextField
+              label="Search"
+              labelHidden
+              value={query}
+              onChange={setQuery}
+              autoComplete="off"
+              placeholder="Search by code, name or product"
+              prefix={<Icon source={SearchIcon} />}
+              clearButton
+              onClearButtonClick={() => setQuery("")}
+            />
+          </Box>
+          <InlineStack gap="200" blockAlign="center">
+            {showTypeFilter && sections.length > 1 && (
+              <ButtonGroup variant="segmented">
+                <Button
+                  pressed={type === "all"}
+                  onClick={() => setType("all")}
+                >
+                  All
+                </Button>
+                {sections.map((s) => (
+                  <Button
+                    key={s.key}
+                    pressed={type === s.key}
+                    onClick={() => setType(s.key)}
+                  >
+                    {s.title.replace("Limited-time sale bundles", "Sale")}
+                  </Button>
+                ))}
+              </ButtonGroup>
+            )}
+            <ButtonGroup variant="segmented">
+              <Button
+                pressed={mode === "simple"}
+                onClick={() => setMode("simple")}
+              >
+                Simple
+              </Button>
+              <Button
+                pressed={mode === "detailed"}
+                onClick={() => setMode("detailed")}
+              >
+                Detailed
+              </Button>
+            </ButtonGroup>
+          </InlineStack>
+        </InlineStack>
+      </Box>
+
+      {totalMatches === 0 ? (
+        <Card>
+          <Box padding="400">
+            <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
+              No offers match “{query}”.
+            </Text>
+          </Box>
+        </Card>
+      ) : (
+        filtered.map(
+          (s) =>
+            s.rows.length > 0 && (
+              <OfferSectionCard
+                key={s.key}
+                section={s}
+                mode={mode}
+                currency={currency}
+                onOpen={onOpen}
+              />
+            ),
+        )
+      )}
     </BlockStack>
   );
 }
