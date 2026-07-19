@@ -5,7 +5,9 @@ import {
   GIFT_TRIGGER_NAMESPACE,
   GIFT_TRIGGER_KEY,
   rowToCampaign,
+  campaignState,
   type GiftCampaign,
+  type ProductGiftInfo,
 } from "./gift-campaign";
 
 type AdminGraphql = {
@@ -316,6 +318,67 @@ export async function writeShopCampaigns(
   return (json?.data?.metafieldsSet?.userErrors ?? []).map(
     (e: any) => e.message,
   );
+}
+
+/**
+ * Which enabled gift campaigns give a free gift when THIS product is bought. Reads
+ * the product's own `custom.gift_trigger` stamp (the exact source the storefront
+ * + Function use, so it's accurate) and joins it with the DB campaigns for titles,
+ * state and gift details. Read-only; for the product editor's info card.
+ */
+export async function getProductGiftInfo(
+  admin: AdminGraphql,
+  shop: string,
+  productId: string,
+): Promise<ProductGiftInfo[]> {
+  const resp = await admin.graphql(
+    `#graphql
+      query GiftTrigger($id: ID!, $ns: String!, $key: String!) {
+        product(id: $id) {
+          metafield(namespace: $ns, key: $key) { value }
+        }
+      }`,
+    {
+      variables: {
+        id: productId,
+        ns: GIFT_TRIGGER_NAMESPACE,
+        key: GIFT_TRIGGER_KEY,
+      },
+    },
+  );
+  const json = await resp.json();
+  let entries: any[] = [];
+  try {
+    entries = JSON.parse(json?.data?.product?.metafield?.value ?? "[]");
+  } catch {
+    entries = [];
+  }
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const campIds = new Set(
+    entries
+      .map((e) => (e && typeof e === "object" ? e.id : e))
+      .filter((x) => typeof x === "string"),
+  );
+  if (campIds.size === 0) return [];
+
+  const rows = await prisma.giftCampaign.findMany({ where: { shop } });
+  const out: ProductGiftInfo[] = [];
+  for (const row of rows) {
+    if (!campIds.has(row.id)) continue;
+    const c = rowToCampaign(row);
+    out.push({
+      id: c.id,
+      title: c.title || "Untitled gift",
+      state: campaignState(c),
+      badge: c.badgeText || "",
+      perQualifying: Math.max(1, c.perQualifying || 1),
+      gifts: c.giftProducts.map((g) => ({
+        title: g.title,
+        image: g.image ?? null,
+      })),
+    });
+  }
+  return out;
 }
 
 // ---- public API ----

@@ -202,8 +202,11 @@ export default function Dashboard() {
                               {p.title}
                             </Text>
                             <InlineStack gap="150" wrap>
-                              {p.counts.bundle + p.counts.sale > 0 && (
-                                <Badge tone="info">{`${p.counts.bundle + p.counts.sale} bundle`}</Badge>
+                              {p.counts.bundle > 0 && (
+                                <Badge tone="info">{`${p.counts.bundle} bundle`}</Badge>
+                              )}
+                              {p.counts.sale > 0 && (
+                                <Badge tone="attention">{`${p.counts.sale} sale`}</Badge>
                               )}
                               {p.counts.addon > 0 && <Badge>{`${p.counts.addon} add-on`}</Badge>}
                               {p.counts.free > 0 && <Badge tone="success">{`${p.counts.free} free`}</Badge>}

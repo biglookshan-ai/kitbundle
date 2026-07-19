@@ -47,6 +47,8 @@ import {
   reconcileLimitedOffers,
   checkLimitedOfferNodes,
 } from "../models/limited-offer.server";
+import { getProductGiftInfo } from "../models/gift-campaign.server";
+import type { ProductGiftInfo } from "../models/gift-campaign";
 import {
   newGroupId,
   newOfferId,
@@ -62,7 +64,7 @@ import {
 } from "../models/addon-config";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const productId = `gid://shopify/Product/${params.id}`;
   const { product, config } = await readConfig(admin, productId);
   if (!product) {
@@ -88,6 +90,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     offerStatus = await checkLimitedOfferNodes(admin, product, config);
   }
 
+  // ④ Which gift campaigns give a free gift when this product is bought.
+  const giftInfo = await getProductGiftInfo(admin, session.shop, product.id);
+
   return {
     product,
     config,
@@ -98,6 +103,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     currency,
     offerStatus,
     offerHealError,
+    giftInfo,
   };
 };
 
@@ -292,6 +298,7 @@ export default function ProductConfig() {
     currency,
     offerStatus,
     offerHealError,
+    giftInfo,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -644,7 +651,9 @@ export default function ProductConfig() {
           </Layout.Section>
 
           <Layout.Section variant="oneThird">
-            <Card>
+            <BlockStack gap="400">
+              <GiftInfoCard gifts={giftInfo} />
+              <Card>
               <BlockStack gap="300">
                 <Text as="h2" variant="headingMd">
                   How it works
@@ -661,15 +670,96 @@ export default function ProductConfig() {
                 <Divider />
                 <Text as="p" variant="bodyMd" tone="subdued">
                   Each accessory can override the group discount — leave its box
-                  blank to use the group %. Codes (e.g. <code>BDL-A1B2C3</code>)
-                  track each group across the dashboard.
+                  blank to use the group %. Give each bundle a unique{" "}
+                  <b>code</b> — it's searchable and shows on the cart & order.
                 </Text>
               </BlockStack>
-            </Card>
+              </Card>
+            </BlockStack>
           </Layout.Section>
         </Layout>
       </BlockStack>
     </Page>
+  );
+}
+
+const GIFT_STATE_BADGE: Record<
+  ProductGiftInfo["state"],
+  { label: string; tone: "success" | "attention" | "info" | undefined }
+> = {
+  active: { label: "Active", tone: "success" },
+  scheduled: { label: "Scheduled", tone: "attention" },
+  ended: { label: "Ended", tone: undefined },
+  disabled: { label: "Off", tone: undefined },
+};
+
+/** ④ Read-only card: which gift campaigns give a free gift with this product. */
+function GiftInfoCard({ gifts }: { gifts: ProductGiftInfo[] }) {
+  return (
+    <Card>
+      <BlockStack gap="300">
+        <InlineStack align="space-between" blockAlign="center">
+          <Text as="h2" variant="headingMd">
+            🎁 Free gifts
+          </Text>
+          <Button url="/app/gifts" variant="plain">
+            Manage
+          </Button>
+        </InlineStack>
+        {gifts.length === 0 ? (
+          <Text as="p" variant="bodySm" tone="subdued">
+            No gift campaign includes this product yet. Buyers get a free gift
+            when a campaign's trigger product is purchased — set one up under{" "}
+            <b>Free gifts</b>.
+          </Text>
+        ) : (
+          <BlockStack gap="300">
+            <Text as="p" variant="bodySm" tone="subdued">
+              Buying this product triggers these free-gift campaigns:
+            </Text>
+            {gifts.map((g) => {
+              const badge = GIFT_STATE_BADGE[g.state];
+              return (
+                <Box
+                  key={g.id}
+                  background="bg-surface-secondary"
+                  padding="300"
+                  borderRadius="200"
+                >
+                  <BlockStack gap="200">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text as="span" variant="bodySm" fontWeight="medium">
+                        {g.title}
+                      </Text>
+                      <Badge tone={badge.tone}>{badge.label}</Badge>
+                    </InlineStack>
+                    <InlineStack gap="200" blockAlign="center" wrap>
+                      {g.gifts.map((gp, i) => (
+                        <InlineStack key={i} gap="100" blockAlign="center">
+                          <Thumbnail
+                            source={gp.image || ImageIcon}
+                            alt={gp.title}
+                            size="extraSmall"
+                          />
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            {gp.title}
+                          </Text>
+                        </InlineStack>
+                      ))}
+                    </InlineStack>
+                    {g.perQualifying > 1 && (
+                      <Text as="span" variant="bodySm" tone="subdued">
+                        {g.perQualifying} free per qualifying item
+                      </Text>
+                    )}
+                  </BlockStack>
+                </Box>
+              );
+            })}
+          </BlockStack>
+        )}
+      </BlockStack>
+    </Card>
   );
 }
 
@@ -786,9 +876,19 @@ function GroupCard({
         <InlineStack align="space-between" blockAlign="center">
           <InlineStack gap="200" blockAlign="center">
             {dragHandle}
-            <Text as="span" variant="bodySm" tone="subdued">
+            <Badge
+              tone={
+                isFree
+                  ? "success"
+                  : limitedOn
+                    ? "attention"
+                    : isBundle
+                      ? "info"
+                      : undefined
+              }
+            >
               {formLabel(group)}
-            </Text>
+            </Badge>
           </InlineStack>
           <Button
             icon={ArchiveIcon}

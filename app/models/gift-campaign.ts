@@ -33,6 +33,16 @@ export type GiftCampaign = {
   giftProducts: Ref[]; // the gift set
 };
 
+/** Compact read-only view of a gift a product triggers, for the product editor. */
+export type ProductGiftInfo = {
+  id: string;
+  title: string;
+  state: "disabled" | "scheduled" | "active" | "ended";
+  badge: string;
+  perQualifying: number;
+  gifts: { title: string; image: string | null }[];
+};
+
 export function newCampaignId() {
   return `camp_${Math.random().toString(36).slice(2, 10)}`;
 }
