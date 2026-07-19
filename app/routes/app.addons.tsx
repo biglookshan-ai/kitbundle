@@ -13,12 +13,12 @@ import {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const { lists } = await buildOffersOverview(admin, session.shop);
-  return { addon: lists.addon };
+  const { lists, currency } = await buildOffersOverview(admin, session.shop);
+  return { addon: lists.addon, currency };
 };
 
 export default function Addons() {
-  const { addon } = useLoaderData<typeof loader>();
+  const { addon, currency } = useLoaderData<typeof loader>();
   const configure = useConfigureProduct();
   const empty = addon.length === 0;
 
@@ -38,7 +38,7 @@ export default function Addons() {
       ) : (
         <BlockStack gap="400">
           <SectionCard title="Add-ons" count={addon.length}>
-            <OfferTable rows={addon} kind="addon" />
+            <OfferTable rows={addon} kind="addon" currency={currency} />
           </SectionCard>
         </BlockStack>
       )}

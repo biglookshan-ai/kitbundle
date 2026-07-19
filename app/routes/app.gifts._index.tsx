@@ -10,8 +10,11 @@ import {
   Badge,
   Box,
   Banner,
+  Thumbnail,
+  Icon,
   EmptyState,
 } from "@shopify/polaris";
+import { ImageIcon, CollectionIcon, ArrowRightIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
@@ -19,7 +22,7 @@ import {
   deleteCampaign,
   resyncAll,
 } from "../models/gift-campaign.server";
-import { campaignState } from "../models/gift-campaign";
+import { campaignState, type Ref } from "../models/gift-campaign";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -54,6 +57,84 @@ const STATE_TONE: Record<string, "success" | "info" | "attention" | undefined> =
     ended: "attention",
     disabled: undefined,
   };
+
+function fmtDate(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** One labelled column of product/collection chips (with thumbnails). */
+function RefColumn({
+  label,
+  products,
+  collections = [],
+  tone,
+  emptyText,
+}: {
+  label: string;
+  products: Ref[];
+  collections?: Ref[];
+  tone?: "success";
+  emptyText?: string;
+}) {
+  const total = products.length + collections.length;
+  return (
+    <BlockStack gap="150">
+      <Text as="span" variant="bodyXs" tone="subdued">
+        {label} ({total})
+      </Text>
+      {total === 0 ? (
+        <Text as="span" variant="bodySm" tone="subdued">
+          {emptyText || "—"}
+        </Text>
+      ) : (
+        <InlineStack gap="150" wrap>
+          {collections.map((c) => (
+            <Box
+              key={c.id}
+              background="bg-surface-secondary"
+              padding="100"
+              borderRadius="200"
+            >
+              <InlineStack gap="100" blockAlign="center" wrap={false}>
+                <Icon source={CollectionIcon} tone="subdued" />
+                <Text as="span" variant="bodySm">
+                  {c.title || "Collection"}
+                </Text>
+              </InlineStack>
+            </Box>
+          ))}
+          {products.map((p) => (
+            <Box
+              key={p.id}
+              background={tone === "success" ? "bg-surface-success" : "bg-surface-secondary"}
+              padding="100"
+              borderRadius="200"
+            >
+              <InlineStack gap="100" blockAlign="center" wrap={false}>
+                <Thumbnail
+                  source={p.image || ImageIcon}
+                  alt={p.title}
+                  size="extraSmall"
+                />
+                <Text as="span" variant="bodySm">
+                  {p.title || p.handle}
+                </Text>
+              </InlineStack>
+            </Box>
+          ))}
+        </InlineStack>
+      )}
+    </BlockStack>
+  );
+}
 
 export default function GiftCampaigns() {
   const { campaigns } = useLoaderData<typeof loader>();
@@ -115,8 +196,18 @@ export default function GiftCampaigns() {
             <BlockStack>
               {campaigns.map((c, i) => {
                 const state = campaignState(c);
-                const triggers =
-                  c.triggerProducts.length + c.triggerCollections.length;
+                const meta = [
+                  `Buy 1 → get ${c.perQualifying} free`,
+                  c.rewardMode === "choice"
+                    ? "customer picks a gift"
+                    : "gift auto-added",
+                  c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
+                  c.startsAt && state === "scheduled"
+                    ? `starts ${fmtDate(c.startsAt)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
                 return (
                   <Box
                     key={c.id}
@@ -126,40 +217,81 @@ export default function GiftCampaigns() {
                     }
                     borderColor="border"
                   >
-                    <InlineStack align="space-between" blockAlign="center" wrap={false}>
-                      <BlockStack gap="100">
-                        <InlineStack gap="200" blockAlign="center">
-                          <Text as="span" variant="bodyMd" fontWeight="medium">
-                            {c.title || "Untitled campaign"}
+                    <BlockStack gap="300">
+                      <InlineStack
+                        align="space-between"
+                        blockAlign="center"
+                        wrap={false}
+                      >
+                        <BlockStack gap="100">
+                          <InlineStack gap="200" blockAlign="center">
+                            <Text
+                              as="span"
+                              variant="bodyMd"
+                              fontWeight="medium"
+                            >
+                              {c.title || "Untitled campaign"}
+                            </Text>
+                            <Badge tone={STATE_TONE[state]}>{state}</Badge>
+                          </InlineStack>
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            {meta}
                           </Text>
-                          <Badge tone={STATE_TONE[state]}>{state}</Badge>
+                        </BlockStack>
+                        <InlineStack gap="200">
+                          <Button onClick={() => navigate(`/app/gifts/${c.id}`)}>
+                            Edit
+                          </Button>
+                          <Button
+                            tone="critical"
+                            variant="tertiary"
+                            loading={busy}
+                            onClick={() =>
+                              fetcher.submit(
+                                { intent: "delete", id: c.id },
+                                { method: "POST" },
+                              )
+                            }
+                          >
+                            Delete
+                          </Button>
                         </InlineStack>
-                        <Text as="span" variant="bodySm" tone="subdued">
-                          {triggers} trigger
-                          {triggers === 1 ? "" : "s"} · {c.giftProducts.length}{" "}
-                          gift{c.giftProducts.length === 1 ? "" : "s"} · buy 1 get{" "}
-                          {c.perQualifying} · {c.rewardMode}
-                        </Text>
-                      </BlockStack>
-                      <InlineStack gap="200">
-                        <Button onClick={() => navigate(`/app/gifts/${c.id}`)}>
-                          Edit
-                        </Button>
-                        <Button
-                          tone="critical"
-                          variant="tertiary"
-                          loading={busy}
-                          onClick={() =>
-                            fetcher.submit(
-                              { intent: "delete", id: c.id },
-                              { method: "POST" },
-                            )
-                          }
-                        >
-                          Delete
-                        </Button>
                       </InlineStack>
-                    </InlineStack>
+
+                      {/* triggers → gifts (one/many-to-many) */}
+                      <Box
+                        background="bg-surface-secondary"
+                        padding="300"
+                        borderRadius="200"
+                      >
+                        <InlineStack
+                          gap="300"
+                          blockAlign="start"
+                          wrap={false}
+                          align="start"
+                        >
+                          <Box width="45%">
+                            <RefColumn
+                              label="Buy any of"
+                              products={c.triggerProducts}
+                              collections={c.triggerCollections}
+                              emptyText="No trigger set"
+                            />
+                          </Box>
+                          <Box>
+                            <Icon source={ArrowRightIcon} tone="subdued" />
+                          </Box>
+                          <Box width="45%">
+                            <RefColumn
+                              label="Get free"
+                              products={c.giftProducts}
+                              tone="success"
+                              emptyText="No gift set"
+                            />
+                          </Box>
+                        </InlineStack>
+                      </Box>
+                    </BlockStack>
                   </Box>
                 );
               })}

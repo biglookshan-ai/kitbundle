@@ -12,6 +12,8 @@ import {
   displayCode,
   offerStateOf,
   isEndedSale,
+  effectiveAccessoryPercent,
+  clampPercent,
   type Bucket,
   type AddonConfig,
   type ProductSummary,
@@ -393,6 +395,22 @@ export async function listConfigsDetailed(
 export async function buildOffersOverview(admin: AdminGraphql, shop: string) {
   const detailed = await listConfigsDetailed(admin, shop);
 
+  // Prices for every product referenced (mains + accessories), for the list
+  // pages' original/discounted totals. One batched query.
+  const allIds = new Set<string>();
+  for (const d of detailed) {
+    allIds.add(d.productId);
+    for (const g of d.config.groups)
+      for (const a of g.accessories) allIds.add(a.productId);
+  }
+  const {
+    prices,
+    info: priceInfo,
+    currency,
+  } = await fetchProductPrices(admin, [...allIds]);
+  const priceOf = (id: string) => Number(prices[id]) || 0;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   const products = detailed.map((d) => {
     const counts: Record<Bucket, number> = {
       bundle: 0,
@@ -427,6 +445,52 @@ export async function buildOffersOverview(admin: AdminGraphql, shop: string) {
     for (const g of d.config.groups) {
       if (g.archived) continue;
       const bucket = groupBucket(g);
+      const saleState = bucket === "sale" ? offerStateOf(g.limited) : null;
+
+      // The discount % currently in effect (drives the "now" price):
+      //  - normal bundle -> group %
+      //  - live sale -> deep %; upcoming -> normal until it starts;
+      //    ended+revert -> normal; ended+"end" -> full price (0)
+      const salePct = g.limited ? clampPercent(g.limited.discountPercent) : 0;
+      const groupPct = clampPercent(g.discountPercent);
+      let bundlePct = groupPct;
+      if (bucket === "sale") {
+        if (saleState === "active") bundlePct = salePct;
+        else if (saleState === "ended")
+          bundlePct = g.limited?.mode === "end" ? 0 : groupPct;
+        else bundlePct = groupPct; // upcoming: normal price until it starts
+      }
+
+      // Per-accessory rows. Bundles apply ONE % to the whole kit; add-ons use
+      // each accessory's own effective %.
+      const accessories = g.accessories.map((a) => {
+        const price = priceOf(a.productId);
+        const pct =
+          bucket === "addon" ? effectiveAccessoryPercent(g, a) : bundlePct;
+        return {
+          title: priceInfo[a.productId]?.title || a.title || a.handle,
+          image: priceInfo[a.productId]?.image ?? null,
+          price,
+          pct,
+          now: round2(price * (1 - pct / 100)),
+        };
+      });
+
+      const mainPrice = priceOf(d.productId);
+      // Bundle = main + accessories at the kit %. Add-on = accessories only
+      // (each at its own %); the main product is just where they appear.
+      const origTotal =
+        bucket === "addon"
+          ? round2(accessories.reduce((s, a) => s + a.price, 0))
+          : round2(mainPrice + accessories.reduce((s, a) => s + a.price, 0));
+      const nowTotal =
+        bucket === "addon"
+          ? round2(accessories.reduce((s, a) => s + a.now, 0))
+          : round2(
+              mainPrice * (1 - bundlePct / 100) +
+                accessories.reduce((s, a) => s + a.now, 0),
+            );
+
       lists[bucket].push({
         key: d.numericId + ":" + g.id,
         groupId: g.id,
@@ -436,8 +500,17 @@ export async function buildOffersOverview(admin: AdminGraphql, shop: string) {
         productImage: d.image,
         numericId: d.numericId,
         accessoryCount: g.accessories.length,
-        discountPercent: g.discountPercent,
-        saleState: bucket === "sale" ? offerStateOf(g.limited) : null,
+        discountPercent: groupPct,
+        mainPrice,
+        accessories,
+        origTotal,
+        nowTotal,
+        effectivePct: bundlePct,
+        salePct: bucket === "sale" ? salePct : null,
+        saleState,
+        saleMode: bucket === "sale" ? (g.limited?.mode ?? "revert") : null,
+        startsAt: bucket === "sale" ? (g.limited?.startsAt ?? "") : null,
+        endsAt: bucket === "sale" ? (g.limited?.endsAt ?? "") : null,
         dim: bucket === "sale" ? isEndedSale(g) : false,
       });
     }
@@ -445,6 +518,7 @@ export async function buildOffersOverview(admin: AdminGraphql, shop: string) {
 
   return {
     products,
+    currency,
     lists,
     stats: {
       products: products.length,

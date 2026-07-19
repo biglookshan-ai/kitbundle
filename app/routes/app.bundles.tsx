@@ -13,12 +13,12 @@ import {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const { lists } = await buildOffersOverview(admin, session.shop);
-  return { bundle: lists.bundle, sale: lists.sale };
+  const { lists, currency } = await buildOffersOverview(admin, session.shop);
+  return { bundle: lists.bundle, sale: lists.sale, currency };
 };
 
 export default function Bundles() {
-  const { bundle, sale } = useLoaderData<typeof loader>();
+  const { bundle, sale, currency } = useLoaderData<typeof loader>();
   const configure = useConfigureProduct();
   const empty = bundle.length === 0 && sale.length === 0;
 
@@ -39,12 +39,12 @@ export default function Bundles() {
         <BlockStack gap="400">
           {bundle.length > 0 && (
             <SectionCard title="Bundles" count={bundle.length}>
-              <OfferTable rows={bundle} kind="bundle" />
+              <OfferTable rows={bundle} kind="bundle" currency={currency} />
             </SectionCard>
           )}
           {sale.length > 0 && (
             <SectionCard title="Limited-time sale bundles" count={sale.length}>
-              <OfferTable rows={sale} kind="sale" />
+              <OfferTable rows={sale} kind="sale" currency={currency} />
             </SectionCard>
           )}
         </BlockStack>
