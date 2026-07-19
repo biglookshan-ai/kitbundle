@@ -33,6 +33,35 @@
         {{ addon_config.value | json }}
       </script>
 
+      {%- comment -%}
+        Inventory map (handle -> total available, or null when untracked). The AJAX
+        product JSON omits inventory_quantity, so we read it here via all_products
+        for the main + every bundle accessory. Used for whole-kit stock.
+      {%- endcomment -%}
+      <script type="application/json" data-cgp-inventory>
+        {
+        {%- assign main_qty = 0 -%}{%- assign main_tracked = false -%}
+        {%- for v in product.variants -%}
+          {%- if v.inventory_management -%}{%- assign main_tracked = true -%}{%- if v.inventory_quantity > 0 -%}{%- assign main_qty = main_qty | plus: v.inventory_quantity -%}{%- endif -%}{%- endif -%}
+        {%- endfor -%}
+        "{{ product.handle }}": {% if main_tracked %}{{ main_qty }}{% else %}null{% endif %}
+        {%- for group in addon_config.value.groups -%}
+          {%- if group.type == "bundle" -%}
+            {%- for a in group.accessories -%}
+              {%- assign ap = all_products[a.handle] -%}
+              {%- if ap != blank -%}
+                {%- assign aq = 0 -%}{%- assign atr = false -%}
+                {%- for v in ap.variants -%}
+                  {%- if v.inventory_management -%}{%- assign atr = true -%}{%- if v.inventory_quantity > 0 -%}{%- assign aq = aq | plus: v.inventory_quantity -%}{%- endif -%}{%- endif -%}
+                {%- endfor -%}
+                ,"{{ a.handle }}": {% if atr %}{{ aq }}{% else %}null{% endif %}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endif -%}
+        {%- endfor -%}
+        }
+      </script>
+
       <div class="cgp-addon__free" data-cgp-free hidden></div>
 
       <div class="cgp-addon__bundles" data-cgp-bundles hidden>

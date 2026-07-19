@@ -189,8 +189,21 @@
     }
     var groups = (config && config.groups) || [];
 
+    // Inventory map (handle -> total available, null = untracked). Emitted by
+    // Liquid because the AJAX product JSON omits inventory_quantity.
+    var inventory = {};
+    var invNode = root.querySelector("[data-cgp-inventory]");
+    if (invNode) {
+      try {
+        inventory = JSON.parse(invNode.textContent) || {};
+      } catch (e) {
+        inventory = {};
+      }
+    }
+
     var ctx = {
       root: root,
+      inventory: inventory,
       currency: root.getAttribute("data-currency") || "USD",
       mainHandle: root.getAttribute("data-product-handle") || "",
       mainProductId: (root.getAttribute("data-product-id") || "").split("/").pop(),
@@ -1093,37 +1106,25 @@
         });
       }
 
-      // Available quantity across a component's offered variants. Infinity when a
-      // variant is available but not inventory-tracked (continue selling); 0 when
-      // none are available.
-      function componentStock(vars) {
-        var total = 0,
-          unlimited = false,
-          anyAvail = false;
-        (vars || []).forEach(function (v) {
-          if (!v || !v.available) return;
-          anyAvail = true;
-          if (v.inventory_management && typeof v.inventory_quantity === "number") {
-            total += Math.max(0, v.inventory_quantity);
-          } else {
-            unlimited = true; // available but untracked
-          }
-        });
-        if (!anyAvail) return 0;
-        return unlimited ? Infinity : total;
+      // Stock for one component. Uses the Liquid inventory map (handle -> total,
+      // null = untracked). Untracked but available -> Infinity; nothing available
+      // -> 0; tracked -> the number.
+      function componentStock(handle, vars) {
+        var inv = ctx.inventory ? ctx.inventory[handle] : undefined;
+        if (typeof inv === "number") return Math.max(0, inv);
+        return (vars || []).some(function (v) {
+          return v && v.available;
+        })
+          ? Infinity
+          : 0;
       }
 
       // The bundle's stock = the FEWEST complete kits its parts allow (a kit needs
       // one of each). Infinity = effectively unlimited; 0 = can't be built.
       function bundleStock() {
-        var comps = [offeredMainVar()].concat(
-          products.map(function (p) {
-            return offeredFor(p);
-          }),
-        );
-        var m = Infinity;
-        comps.forEach(function (vs) {
-          m = Math.min(m, componentStock(vs));
+        var m = componentStock(ctx.mainHandle, offeredMainVar());
+        products.forEach(function (p) {
+          m = Math.min(m, componentStock(p.handle, offeredFor(p)));
         });
         return m;
       }
