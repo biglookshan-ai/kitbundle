@@ -134,7 +134,7 @@ export default function Plan() {
                   </InlineStack>
                   <InlineStack gap="100" blockAlign="end">
                     <Text as="p" variant="heading2xl">
-                      $9.99
+                      $29
                     </Text>
                     <Text as="p" variant="bodyMd" tone="subdued">
                       / month
@@ -165,7 +165,7 @@ export default function Plan() {
                         fetcher.submit({ intent: "upgrade" }, { method: "POST" })
                       }
                     >
-                      Start 14-day free trial
+                      Start 7-day free trial
                     </Button>
                   )}
                 </BlockStack>

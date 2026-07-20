@@ -98,23 +98,27 @@ biglookshan@gmail.com
 Online Store
 ```
 
-## Pricing plan details (single plan)
-- Plan name: `Free`
-- Price: `$0` / month
-- Free trial: `None` (it’s free)
-- Plan features (bullets):
+## Pricing plans (freemium — add BOTH public plans in the dashboard)
+Free plan
+- Name: `Free`  ·  Price: `$0`
+- Features:
 ```
-Unlimited bundles, add-ons and free-gift campaigns
+1 product with bundles & add-ons
+1 free-gift campaign
 Automatic discounts at checkout (no codes)
+```
+Pro plan
+- Name: `Pro`  ·  Price: `$29` / month  ·  Free trial: `7 days`
+- Features:
+```
+Unlimited products with bundles & add-ons
+Unlimited free-gift campaigns
 Limited-time offers with countdown
 Works on any Shopify plan
 ```
-
-## App billing control
-```
-This app does not charge merchants (no Shopify Billing API charges).
-Select the “free / no charges” option.
-```
+(The developer's own store, cinegearpro, is comped to full access for free via
+FREE_SHOPS — never charged. Billing goes through the Shopify Billing API only;
+do NOT check "approval to charge outside the Billing API".)
 
 ## Optional fields — SKIP these (not required)
 - Demo/screencast video → skip (screenshots are enough)

@@ -26,10 +26,10 @@ import { ensureFunctionDiscount } from "./models/function-discount.server";
 const shopify = shopifyApp({
   billing: {
     [PRO_PLAN]: {
-      trialDays: 14,
+      trialDays: 7,
       lineItems: [
         {
-          amount: 9.99,
+          amount: 29,
           currencyCode: "USD",
           interval: BillingInterval.Every30Days,
         },

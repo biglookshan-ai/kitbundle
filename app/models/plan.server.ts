@@ -55,7 +55,7 @@ export async function hasPro(billing: Billing): Promise<boolean> {
 }
 
 const UPGRADE_MSG =
-  "Free plan limit reached. Upgrade to Pro (14-day free trial) on the Plan page for unlimited products and campaigns.";
+  "Free plan limit reached. Upgrade to Pro (7-day free trial) on the Plan page for unlimited products and campaigns.";
 
 /**
  * May this shop save an offer config for `productId`? Always OK on Pro or when
