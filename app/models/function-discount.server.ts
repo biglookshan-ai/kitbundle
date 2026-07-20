@@ -38,13 +38,18 @@ export async function findDiscountFunctionId(
 export async function findExistingDiscount(
   admin: AdminGraphql,
 ): Promise<{ id: string; title: string; status: string } | null> {
+  // App/Function discounts are DiscountAutomaticApp and are returned by
+  // `discountNodes`, NOT `automaticDiscountNodes` (which only lists the built-in
+  // Basic/Bxgy/FreeShipping types). Using the wrong query made this always come
+  // back empty, so the UI wrongly showed "Not active" even though the discount
+  // exists and is applying at checkout.
   const resp = await admin.graphql(
     `#graphql
-      query ExistingAutoDiscounts {
-        automaticDiscountNodes(first: 50) {
+      query ExistingAppDiscounts {
+        discountNodes(first: 250) {
           nodes {
             id
-            automaticDiscount {
+            discount {
               __typename
               ... on DiscountAutomaticApp { title status }
             }
@@ -54,14 +59,14 @@ export async function findExistingDiscount(
   );
   const json = await resp.json();
   const titles = [DISCOUNT_TITLE, ...LEGACY_DISCOUNT_TITLES];
-  const node = (json?.data?.automaticDiscountNodes?.nodes ?? []).find(
-    (n: any) => titles.includes(n.automaticDiscount?.title),
+  const node = (json?.data?.discountNodes?.nodes ?? []).find((n: any) =>
+    titles.includes(n.discount?.title),
   );
   if (!node) return null;
   return {
     id: node.id,
-    title: node.automaticDiscount.title,
-    status: node.automaticDiscount.status ?? "UNKNOWN",
+    title: node.discount.title,
+    status: node.discount.status ?? "UNKNOWN",
   };
 }
 
