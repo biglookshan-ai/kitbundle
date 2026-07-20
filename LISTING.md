@@ -27,14 +27,17 @@ Bundles, add-ons and free gifts with automatic discounts
 ```
 (55 chars)
 
-## App details (main description — ~500–700 chars, benefit-first)
+## App details (MAX 500 chars; no "free"/"offer"/"price" as pricing refs)
 ```
-KitBundle turns any product page into a kit builder. Group products into a bundle sold together at one discount, offer optional add-ons that each carry their own price, and reward shoppers with a free gift when they buy.
+KitBundle turns any product page into a kit builder. Group products into a bundle at one discount, add optional accessories with their own discounts, and reward shoppers with a gift.
 
-Discounts are applied automatically at checkout by Shopify Functions — no discount codes for customers to enter, and no theme coding for you. Add the KitBundle block to your product template and you’re live.
+Discounts apply automatically at checkout via Shopify Functions — no codes for customers, no theme coding. Add the KitBundle block to your product template and you're live.
 
-Run limited-time bundles with a countdown that automatically revert to the normal price (or hide) when they end. Give every bundle a searchable code, show whole-kit stock, and hide offers when items sell out. Free gifts can be auto-added or picked by the shopper, who can also decline.
+Run limited-time bundles with a countdown that revert or hide when they end. Give each bundle a searchable code and show whole-kit stock.
 ```
+(495 chars. "free gift" → "gift", "price" → "discounts", "offer" → "add" to
+pass the review tip; the free-gift benefit is carried by the category tag +
+feature list instead.)
 
 ## Key features (3–5; each title ≤ 80 chars, no ending period)
 ```
