@@ -684,11 +684,17 @@ a.cgp-free__name:hover {
 
 /* ===== Layout refresh: consistent spacing + new bundle/add-on/free layouts ===== */
 
-/* Consistent spacing between the three sections */
+/* Consistent spacing between the sections (gift promo included, so it doesn't
+   butt up against the Bundle & Save heading). */
+.cgp-gift-promo,
 .cgp-addon__bundles,
 .cgp-addon__addons,
 .cgp-addon__free {
   margin: 0 0 32px;
+}
+/* Separate stacked gift-campaign groups within the promo, too. */
+.cgp-gift-promo .cgp-free + .cgp-free {
+  margin-top: 16px;
 }
 .cgp-addon__bundle-list { margin-bottom: 0; }
 
