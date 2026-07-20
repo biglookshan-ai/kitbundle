@@ -21,6 +21,12 @@ Sell product bundles, add-ons and free gifts with automatic checkout discounts �
 ```
 (89 chars)
 
+## App card subtitle (max 62 — shown under the name in search)
+```
+Bundles, add-ons and free gifts with automatic discounts
+```
+(55 chars)
+
 ## App details (main description — ~500–700 chars, benefit-first)
 ```
 KitBundle turns any product page into a kit builder. Group products into a bundle sold together at one discount, offer optional add-ons that each carry their own price, and reward shoppers with a free gift when they buy.
@@ -78,6 +84,42 @@ https://addon-discount-production-bb4d.up.railway.app/privacy
 biglookshan@gmail.com
 ```
 
+## Install requirements (what the merchant needs)
+```
+- An Online Store 2.0 theme (to add the app block to the product template).
+- No account or setup fees. No Shopify Plus required.
+```
+
+## Works with
+```
+Online Store
+```
+
+## Pricing plan details (single plan)
+- Plan name: `Free`
+- Price: `$0` / month
+- Free trial: `None` (it’s free)
+- Plan features (bullets):
+```
+Unlimited bundles, add-ons and free-gift campaigns
+Automatic discounts at checkout (no codes)
+Limited-time offers with countdown
+Works on any Shopify plan
+```
+
+## App billing control
+```
+This app does not charge merchants (no Shopify Billing API charges).
+Select the “free / no charges” option.
+```
+
+## Optional fields — SKIP these (not required)
+- Demo/screencast video → skip (screenshots are enough)
+- FAQ → skip
+- Tutorials / additional resources → skip
+- Tracking information (UTM / install analytics) → skip
+- Secondary languages → English only
+
 ---
 
 ## Demo store (for reviewers)
@@ -111,22 +153,20 @@ To verify on the storefront (demo password: 111):
 
 ---
 
-## Screenshots to capture (min 3, desktop 1600×900; a few mobile optional)
-Take these in the admin and on the demo storefront:
+## Screenshots (min 3; each must be 1600×900 landscape)
+Captured. Upload in this order (crop each to 1600×900 landscape — the full-page
+captures are too tall; frame the KitBundle content):
 
-1. **Storefront — Bundle & Save card** on the product page (kit price, “X% off”,
-   countdown if limited, stock badge). *Most important — lead image.*
-2. **Storefront — Free gift picker** (gift options with struck price + FREE, and
-   the “No thanks” opt-out).
-3. **Cart** with the bundle applied (line discounts “Bundle · CODE · % off”, free
-   gift at $0).
-4. **Admin — product editor** showing a configured bundle (code, accessories,
-   the bundle price calculator).
-5. **Admin — Dashboard or Bundles list** (offers grouped by type with codes).
-6. *(optional)* **Admin — Free gifts campaign** (Buy any of → Get free).
+1. Storefront — free-gift picker + Bundle card (struck prices, FREE, No thanks,
+   45% OFF, countdown, stock). *Lead image.*
+2. Storefront — Bundle expanded + Add-ons (component prices, add-on discounts).
+3. Admin — product editor / Bundle tab (code, accessories, price calculator,
+   limited-time 45%).
+4. Admin — Free gifts campaign (Buy any of → Get free, picker prompt).
+5. *(optional)* Admin — Add-on tab (per-item discounts, variants).
 
-Tip: use a product with a real image (the demo monitor works). Crop to 1600×900,
-no personal data visible.
+Cropping: each source shot is portrait/tall. Draw a 16:9 (1600×900) box over the
+most important area and export. No personal data visible (demo store is fine).
 
 ---
 
