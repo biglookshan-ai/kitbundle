@@ -18,6 +18,13 @@
     data-product-handle="{{ product.handle }}"
     data-currency="{{ cart.currency.iso_code | default: shop.currency }}"
     data-show-strikethrough="{{ block.settings.show_strikethrough }}"
+    style="
+      {%- if block.settings.accent_color != blank %}--cgp-accent: {{ block.settings.accent_color }};{% endif -%}
+      {%- if block.settings.cta_bg != blank %}--cgp-cta-bg: {{ block.settings.cta_bg }};{% endif -%}
+      {%- if block.settings.cta_text != blank %}--cgp-cta-text: {{ block.settings.cta_text }};{% endif -%}
+      --cgp-cta-radius: {{ block.settings.cta_radius | default: 12 }}px;
+      --cgp-cta-font: {{ block.settings.cta_font_size | default: 16 }}px;
+    "
   >
     {%- comment -%} Gift campaigns this product triggers (self-contained). {%- endcomment -%}
     {%- if has_gifts -%}
@@ -123,6 +130,56 @@
       "id": "show_strikethrough",
       "label": "Show original price struck through",
       "default": true
+    },
+    {
+      "type": "header",
+      "content": "Add to cart button"
+    },
+    {
+      "type": "paragraph",
+      "content": "Match the button to your theme — set its colour, text colour, corner radius and text size."
+    },
+    {
+      "type": "color",
+      "id": "cta_bg",
+      "label": "Button colour",
+      "default": "#2b44ff"
+    },
+    {
+      "type": "color",
+      "id": "cta_text",
+      "label": "Button text colour",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "cta_radius",
+      "label": "Corner radius",
+      "min": 0,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "cta_font_size",
+      "label": "Text size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Widget accent"
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Highlight colour (selected items, prices)",
+      "default": "#2b44ff"
     }
   ]
 }
