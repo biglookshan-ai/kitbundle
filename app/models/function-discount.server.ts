@@ -43,10 +43,13 @@ export async function findExistingDiscount(
   // Basic/Bxgy/FreeShipping types). Using the wrong query made this always come
   // back empty, so the UI wrongly showed "Not active" even though the discount
   // exists and is applying at checkout.
+  // Search by title so a busy store (hundreds of discounts) can't push our
+  // discount past a page limit — that made the lookup miss it and the UI wrongly
+  // show "Not active" while the discount was live and applying at checkout.
   const resp = await admin.graphql(
     `#graphql
-      query ExistingAppDiscounts {
-        discountNodes(first: 250) {
+      query ExistingAppDiscounts($q: String!) {
+        discountNodes(first: 20, query: $q) {
           nodes {
             id
             discount {
@@ -56,6 +59,7 @@ export async function findExistingDiscount(
           }
         }
       }`,
+    { variables: { q: "KitBundle" } },
   );
   const json = await resp.json();
   const titles = [DISCOUNT_TITLE, ...LEGACY_DISCOUNT_TITLES];
