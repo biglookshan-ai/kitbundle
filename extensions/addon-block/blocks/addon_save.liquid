@@ -18,6 +18,7 @@
     data-product-handle="{{ product.handle }}"
     data-currency="{{ cart.currency.iso_code | default: shop.currency }}"
     data-show-strikethrough="{{ block.settings.show_strikethrough }}"
+    data-show-bundle-stock="{{ block.settings.show_bundle_stock }}"
     style="
       {%- if block.settings.accent_color != blank %}--cgp-accent: {{ block.settings.accent_color }};{% endif -%}
       {%- if block.settings.cta_bg != blank %}--cgp-cta-bg: {{ block.settings.cta_bg }};{% endif -%}
@@ -130,6 +131,13 @@
       "id": "show_strikethrough",
       "label": "Show original price struck through",
       "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_bundle_stock",
+      "label": "Show stock badge on the bundle card",
+      "default": true,
+      "info": "Turn off if you show kit stock elsewhere (e.g. a stock-availability section)."
     },
     {
       "type": "header",

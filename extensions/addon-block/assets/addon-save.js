@@ -208,6 +208,7 @@
       mainHandle: root.getAttribute("data-product-handle") || "",
       mainProductId: (root.getAttribute("data-product-id") || "").split("/").pop(),
       showStrike: root.getAttribute("data-show-strikethrough") !== "false",
+      showBundleStock: root.getAttribute("data-show-bundle-stock") !== "false",
       modal: document.querySelector("[data-cgp-modal]"),
       cta: root.querySelector("[data-cgp-cta]"),
       summaryEl: root.querySelector("[data-cgp-summary]"),
@@ -1342,8 +1343,9 @@
         if (group.code) {
           nameLine.appendChild(el("span", "cgp-bundle__code", group.code));
         }
-        // Whole-kit stock badge (min of the parts). Skip when unlimited.
-        if (stock !== Infinity) {
+        // Whole-kit stock badge (min of the parts). Skip when unlimited, or when
+        // the merchant shows kit stock elsewhere (e.g. a stock-availability section).
+        if (ctx.showBundleStock && stock !== Infinity) {
           var stockCls =
             stock <= 0
               ? "cgp-bundle__stock cgp-bundle__stock--out"
