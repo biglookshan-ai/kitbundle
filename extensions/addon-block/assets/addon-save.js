@@ -1206,6 +1206,26 @@
         }
         if (on) storeSelection(state, offerId);
         else ctx.extras.delete(key);
+        // Public event so a theme (e.g. a stock-availability section) can react to
+        // the selected bundle — its component handles + whole-kit stock.
+        try {
+          var handles = [ctx.mainHandle].concat(
+            (group.accessories || []).map(function (a) {
+              return a.handle;
+            }),
+          );
+          document.dispatchEvent(
+            new CustomEvent(on ? "cgp:bundle-selected" : "cgp:bundle-cleared", {
+              detail: {
+                code: group.code || "",
+                id: group.id || "",
+                title: group.title || "",
+                handles: handles,
+                stock: bundleStock(),
+              },
+            }),
+          );
+        } catch (e) {}
         ctx.onChange();
       }
 
