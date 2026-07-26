@@ -802,24 +802,6 @@ a.cgp-free__name:hover {
   padding: 1px 7px;
   border-radius: 5px;
 }
-.cgp-bundle__stock {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #1a7f37;
-  background: #e7f6ec;
-  padding: 1px 8px;
-  border-radius: 5px;
-}
-.cgp-bundle__stock--low {
-  color: #8a6d00;
-  background: #fff3cd;
-}
-.cgp-bundle__stock--out {
-  color: #b42318;
-  background: #fee4e2;
-}
 .cgp-bundle__timerbadge {
   display: inline-flex;
   align-items: center;

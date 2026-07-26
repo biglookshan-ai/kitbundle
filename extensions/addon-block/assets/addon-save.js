@@ -208,7 +208,6 @@
       mainHandle: root.getAttribute("data-product-handle") || "",
       mainProductId: (root.getAttribute("data-product-id") || "").split("/").pop(),
       showStrike: root.getAttribute("data-show-strikethrough") !== "false",
-      showBundleStock: root.getAttribute("data-show-bundle-stock") !== "false",
       modal: document.querySelector("[data-cgp-modal]"),
       cta: root.querySelector("[data-cgp-cta]"),
       summaryEl: root.querySelector("[data-cgp-summary]"),
@@ -1130,6 +1129,42 @@
         return m;
       }
 
+      // Each component + the variant currently chosen inside this bundle. A theme
+      // section can look up that exact variant's per-location stock (no all_products
+      // 20-cap) and compute the true "how many complete kits" number itself.
+      function bundleComponents() {
+        var mv = curMainVar() || offeredMainVar()[0] || mainVariant(ctx);
+        var list = [{ handle: ctx.mainHandle, variantId: mv ? mv.id : null }];
+        products.forEach(function (p) {
+          var v = chosenVarFor(p) || firstAvailableIn(offeredFor(p));
+          list.push({ handle: p.handle, variantId: v ? v.id : null });
+        });
+        return list;
+      }
+      // Fire the public integration event. `on` selected -> carries the chosen
+      // variant of every component so a theme can compute real combinable stock.
+      function dispatchBundle(on) {
+        try {
+          var handles = [ctx.mainHandle].concat(
+            (group.accessories || []).map(function (a) {
+              return a.handle;
+            }),
+          );
+          document.dispatchEvent(
+            new CustomEvent(on ? "cgp:bundle-selected" : "cgp:bundle-cleared", {
+              detail: {
+                code: group.code || "",
+                id: group.id || "",
+                title: group.title || "",
+                handles: handles,
+                components: on ? bundleComponents() : [],
+                stock: bundleStock(),
+              },
+            }),
+          );
+        } catch (e) {}
+      }
+
       // Re-sync the chosen main variant when the page variant changes (one-way:
       // page -> bundle). Registered globally; fired on a product-form change.
       function syncMain() {
@@ -1195,6 +1230,9 @@
             };
           }),
         });
+        // Selected (and re-fired on every variant change) so a theme section can
+        // recompute real combinable stock from the chosen variants, live.
+        dispatchBundle(true);
       }
 
       function setSelected(on, state, offerId) {
@@ -1205,28 +1243,12 @@
           check.textContent = on ? "✓" : "";
           check.classList.toggle("is-on", on);
         }
-        if (on) storeSelection(state, offerId);
-        else ctx.extras.delete(key);
-        // Public event so a theme (e.g. a stock-availability section) can react to
-        // the selected bundle — its component handles + whole-kit stock.
-        try {
-          var handles = [ctx.mainHandle].concat(
-            (group.accessories || []).map(function (a) {
-              return a.handle;
-            }),
-          );
-          document.dispatchEvent(
-            new CustomEvent(on ? "cgp:bundle-selected" : "cgp:bundle-cleared", {
-              detail: {
-                code: group.code || "",
-                id: group.id || "",
-                title: group.title || "",
-                handles: handles,
-                stock: bundleStock(),
-              },
-            }),
-          );
-        } catch (e) {}
+        if (on) {
+          storeSelection(state, offerId); // fires cgp:bundle-selected
+        } else {
+          ctx.extras.delete(key);
+          dispatchBundle(false); // cgp:bundle-cleared
+        }
         ctx.onChange();
       }
 
@@ -1343,23 +1365,8 @@
         if (group.code) {
           nameLine.appendChild(el("span", "cgp-bundle__code", group.code));
         }
-        // Whole-kit stock badge (min of the parts). Skip when unlimited, or when
-        // the merchant shows kit stock elsewhere (e.g. a stock-availability section).
-        if (ctx.showBundleStock && stock !== Infinity) {
-          var stockCls =
-            stock <= 0
-              ? "cgp-bundle__stock cgp-bundle__stock--out"
-              : stock <= 5
-                ? "cgp-bundle__stock cgp-bundle__stock--low"
-                : "cgp-bundle__stock";
-          var stockTxt =
-            stock <= 0
-              ? "Sold out"
-              : stock <= 5
-                ? "Only " + stock + " left"
-                : stock + " in stock";
-          nameLine.appendChild(el("span", stockCls, stockTxt));
-        }
+        // Kit stock is shown by the theme's Stock Availability section (accurate
+        // per-location, per-chosen-variant), so the widget no longer paints its own.
         mainCol.appendChild(nameLine);
         if (cdSpan) timer = startCountdown(cdSpan, Date.parse(cdTarget), paint);
 

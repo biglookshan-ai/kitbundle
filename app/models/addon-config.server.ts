@@ -9,6 +9,7 @@ import {
   summarizeConfig,
   parseSummaries,
   groupBucket,
+  groupForm,
   displayCode,
   offerStateOf,
   isEndedSale,
@@ -17,6 +18,7 @@ import {
   type Bucket,
   type AddonConfig,
   type ProductSummary,
+  type GroupSummary,
 } from "./addon-config";
 /**
  * Server-only operations for add-on config. Config lives in two places kept in
@@ -88,21 +90,20 @@ export async function saveConfig(
     (g) => !g.archived && g.accessories.length > 0,
   );
 
-  // Codes that were searchable before this save (to prune ones now removed).
+  // Search tags that were present before this save (to prune ones now removed).
   const prevRow = await prisma.bundleConfig.findUnique({
     where: { shop_productId: { shop, productId: product.id } },
   });
-  const oldCodes = parseSummaries(prevRow?.groupsJson)
-    .map((s) => s.code)
-    .filter(Boolean);
+  const oldTags = searchTagsFromSummaries(parseSummaries(prevRow?.groupsJson));
 
   if (!hasGroups) {
     await clearMetafield(admin, product.id);
+    await deleteBundleCards(admin, product.id);
     await prisma.bundleConfig.deleteMany({
       where: { shop, productId: product.id },
     });
     await syncOfferTag(admin, shop, product.id, false); // remove our tag
-    await syncCodeTags(admin, product.id, oldCodes, []); // remove code tags
+    await syncCodeTags(admin, product.id, oldTags, []); // remove code + name tags
     return { ok: true, userErrors: [] };
   }
 
@@ -161,7 +162,8 @@ export async function saveConfig(
   });
 
   await syncOfferTag(admin, shop, product.id, hasLiveOffer);
-  await syncCodeTags(admin, product.id, oldCodes, liveCodes(config));
+  await syncCodeTags(admin, product.id, oldTags, searchTagsFromConfig(config));
+  await writeBundleCards(admin, product, config);
 
   return { ok: true, userErrors: [] };
 }
@@ -200,9 +202,133 @@ async function syncCodeTags(
   await run("tagsAdd", toAdd);
 }
 
-/** Non-archived group codes from a config (what should be searchable now). */
-function liveCodes(config: AddonConfig): string[] {
-  return config.groups.filter((g) => !g.archived && g.code).map((g) => g.code);
+/** A kit (bundle/limited) is the only form whose NAME we also make searchable. */
+function isKitForm(form: string): boolean {
+  return form === "bundle" || form === "limited";
+}
+const dedupe = (a: string[]): string[] => [...new Set(a.filter(Boolean))];
+
+/**
+ * Terms to expose as product tags so native search can find this product by its
+ * bundle. Every live group's CODE (as before), plus the NAME of kit groups so
+ * "Thunder 5 Kit" is searchable, not just "PK0002".
+ */
+function searchTagsFromConfig(config: AddonConfig): string[] {
+  const out: string[] = [];
+  for (const g of config.groups) {
+    if (g.archived) continue;
+    if (g.code) out.push(g.code);
+    if (isKitForm(groupForm(g)) && g.title) out.push(g.title);
+  }
+  return dedupe(out);
+}
+/** Same terms, reconstructed from the previous save's stored summaries. */
+function searchTagsFromSummaries(summaries: GroupSummary[]): string[] {
+  const out: string[] = [];
+  for (const s of summaries) {
+    if (s.code) out.push(s.code);
+    if (isKitForm(s.form) && s.title) out.push(s.title);
+  }
+  return dedupe(out);
+}
+
+/** Metafield holding pre-computed search cards for this product's bundles. */
+const CARDS_KEY = "kitbundle_cards"; // custom.kitbundle_cards (JSON)
+
+/**
+ * Write a self-contained card summary for each bundle so the search UI can render
+ * a composite bundle card in pure Liquid — no all_products lookups (which cap at
+ * 20/page). Only plain bundles (stable price); sale-kits are time-dependent and
+ * excluded for now. Best-effort; never blocks the save.
+ */
+async function writeBundleCards(
+  admin: AdminGraphql,
+  product: ProductSummary,
+  config: AddonConfig,
+): Promise<void> {
+  const kits = config.groups.filter(
+    (g) => !g.archived && groupBucket(g) === "bundle",
+  );
+  if (kits.length === 0) {
+    await deleteBundleCards(admin, product.id);
+    return;
+  }
+  const ids = new Set<string>([product.id]);
+  for (const g of kits) for (const a of g.accessories) ids.add(a.productId);
+
+  const { prices, info } = await fetchProductPrices(admin, [...ids]);
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const mainPrice = Number(prices[product.id]) || 0;
+
+  const cards = kits.map((g) => {
+    const pct = clampPercent(g.discountPercent);
+    const accTotal = g.accessories.reduce(
+      (s, a) => s + (Number(prices[a.productId]) || 0),
+      0,
+    );
+    const orig = round2(mainPrice + accTotal);
+    const now = round2(orig * (1 - pct / 100));
+    const images = g.accessories
+      .map((a) => info[a.productId]?.image)
+      .filter(Boolean);
+    return {
+      code: displayCode(g),
+      title: g.title,
+      items: g.accessories.length + 1, // main + accessories
+      price: now,
+      compareAt: orig,
+      images,
+    };
+  });
+
+  await admin
+    .graphql(
+      `#graphql
+        mutation SetBundleCards($metafields: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $metafields) { userErrors { message } }
+        }`,
+      {
+        variables: {
+          metafields: [
+            {
+              ownerId: product.id,
+              namespace: METAFIELD_NAMESPACE,
+              key: CARDS_KEY,
+              type: "json",
+              value: JSON.stringify(cards),
+            },
+          ],
+        },
+      },
+    )
+    .then(() => {})
+    .catch(() => {});
+}
+
+async function deleteBundleCards(admin: AdminGraphql, productId: string) {
+  await admin
+    .graphql(
+      `#graphql
+        mutation DelBundleCards($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) {
+            deletedMetafields { key }
+            userErrors { message }
+          }
+        }`,
+      {
+        variables: {
+          metafields: [
+            {
+              ownerId: productId,
+              namespace: METAFIELD_NAMESPACE,
+              key: CARDS_KEY,
+            },
+          ],
+        },
+      },
+    )
+    .then(() => {})
+    .catch(() => {});
 }
 
 async function clearMetafield(admin: AdminGraphql, productId: string) {
