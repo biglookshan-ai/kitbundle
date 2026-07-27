@@ -209,25 +209,38 @@ function isKitForm(form: string): boolean {
 const dedupe = (a: string[]): string[] => [...new Set(a.filter(Boolean))];
 
 /**
- * Terms to expose as product tags so native search can find this product by its
- * bundle. Every live group's CODE (as before), plus the NAME of kit groups so
- * "Thunder 5 Kit" is searchable, not just "PK0002".
+ * Prefix so KitBundle-managed tags are easy to spot in the admin (they cluster
+ * together) and a merchant can search "kb" to list every bundle. It's a SPACE,
+ * not a colon: Shopify's search tokenizer splits on whitespace but NOT on ":",
+ * so "kb PK0002" still matches a bare "PK0002" query, whereas "kb:PK0002" would
+ * not (verified against the live store).
+ */
+const TAG_PREFIX = "kb ";
+
+/**
+ * Terms to expose as product tags so search can find this product by its bundle.
+ * Every live group's CODE, plus the NAME of kit groups so "Thunder 5 Kit" is
+ * searchable, not just "PK0002" — each written with the `kb ` prefix.
  */
 function searchTagsFromConfig(config: AddonConfig): string[] {
   const out: string[] = [];
   for (const g of config.groups) {
     if (g.archived) continue;
-    if (g.code) out.push(g.code);
-    if (isKitForm(groupForm(g)) && g.title) out.push(g.title);
+    if (g.code) out.push(TAG_PREFIX + g.code);
+    if (isKitForm(groupForm(g)) && g.title) out.push(TAG_PREFIX + g.title);
   }
   return dedupe(out);
 }
-/** Same terms, reconstructed from the previous save's stored summaries. */
+/**
+ * Terms to REMOVE, from the previous save's summaries. Includes both the current
+ * `kb `-prefixed form and the legacy bare form, so any tags written before the
+ * prefix existed get cleaned up on the next save.
+ */
 function searchTagsFromSummaries(summaries: GroupSummary[]): string[] {
   const out: string[] = [];
   for (const s of summaries) {
-    if (s.code) out.push(s.code);
-    if (isKitForm(s.form) && s.title) out.push(s.title);
+    if (s.code) out.push(TAG_PREFIX + s.code, s.code);
+    if (isKitForm(s.form) && s.title) out.push(TAG_PREFIX + s.title, s.title);
   }
   return dedupe(out);
 }
