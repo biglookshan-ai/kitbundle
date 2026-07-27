@@ -270,7 +270,7 @@ async function writeBundleCards(
   for (const g of kits) for (const a of g.accessories) ids.add(a.productId);
 
   const { prices, info } = await fetchProductPrices(admin, [...ids]);
-  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const toCents = (n: number) => Math.round(n * 100);
   const mainPrice = Number(prices[product.id]) || 0;
 
   const cards = kits.map((g) => {
@@ -279,8 +279,8 @@ async function writeBundleCards(
       (s, a) => s + (Number(prices[a.productId]) || 0),
       0,
     );
-    const orig = round2(mainPrice + accTotal);
-    const now = round2(orig * (1 - pct / 100));
+    const compareAt = toCents(mainPrice + accTotal); // minor units (cents)
+    const price = Math.round(compareAt * (1 - pct / 100)); // minor units (cents)
     const images = g.accessories
       .map((a) => info[a.productId]?.image)
       .filter(Boolean);
@@ -288,9 +288,9 @@ async function writeBundleCards(
       code: displayCode(g),
       title: g.title,
       items: g.accessories.length + 1, // main + accessories
-      price: now,
-      compareAt: orig,
-      images,
+      price, // cents — theme renders with `| money`
+      compareAt, // cents
+      images, // accessory image URLs (main image comes from the product itself)
     };
   });
 
