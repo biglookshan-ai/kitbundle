@@ -634,6 +634,8 @@ export default function ProductConfig() {
                       info={infoMap}
                       inventory={inventory}
                       mainVariants={variantMap[product.id] || []}
+                      mainImage={infoMap[product.id]?.image ?? product.image ?? null}
+                      mainTitle={product.title}
                       mainPrice={mainPrice}
                       mainCompareAt={compareMap[product.id] ?? mainPrice}
                       currency={currency}
@@ -865,6 +867,8 @@ function GroupCard({
   info,
   inventory,
   mainVariants,
+  mainImage,
+  mainTitle,
   mainPrice,
   mainCompareAt,
   currency,
@@ -885,6 +889,8 @@ function GroupCard({
   info: Record<string, { title: string; handle: string; image: string | null }>;
   inventory: Record<string, number | null>;
   mainVariants: { id: string; title: string; price?: number; compareAt?: number }[];
+  mainImage?: string | null;
+  mainTitle?: string;
   mainPrice: number | null;
   mainCompareAt: number | null;
   currency: string;
@@ -911,6 +917,19 @@ function GroupCard({
   const isFree = group.type === "free";
   const isBundle = group.type === "bundle";
   const limitedOn = isBundle && Boolean(group.limited?.enabled);
+
+  // Quick-pick cover images = the bundle's own product images (main + accessories).
+  const coverChoices: { url: string; label: string }[] = isBundle
+    ? [
+        ...(mainImage ? [{ url: mainImage, label: mainTitle || "Main product" }] : []),
+        ...group.accessories
+          .map((a) => ({
+            url: info[a.productId]?.image || "",
+            label: info[a.productId]?.title || a.title || a.handle,
+          }))
+          .filter((c) => !!c.url),
+      ]
+    : [];
 
   // Bundle = ONE discount on the whole kit. Each line carries its TRUE original
   // (compare-at, `orig`) and its current Shopify selling price (`now`). The
@@ -1069,6 +1088,80 @@ function GroupCard({
             </Box>
           )}
         </InlineStack>
+
+        {/* Bundle cover image (bundle only): pick a product image or paste a URL. */}
+        {isBundle && (
+          <BlockStack gap="150">
+            <FieldLabel
+              text="Bundle cover image"
+              tip="Used as the bundle's image in search results and (collapsed) on the product page. Pick one of the bundle's product images below, or paste an image URL — upload a custom kit photo to Shopify Files (Content → Files) and paste its link. Leave empty to fall back to the main product image."
+            />
+            <InlineStack gap="300" blockAlign="center" wrap={false}>
+              <Thumbnail
+                source={group.coverImage || ImageIcon}
+                alt="Bundle cover"
+                size="large"
+              />
+              <BlockStack gap="150">
+                {coverChoices.length > 0 && (
+                  <InlineStack gap="150" blockAlign="center">
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      Pick:
+                    </Text>
+                    {coverChoices.map((c) => {
+                      const active = group.coverImage === c.url;
+                      return (
+                        <button
+                          key={c.url}
+                          type="button"
+                          title={c.label}
+                          onClick={() => onChange({ coverImage: c.url })}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            padding: 0,
+                            borderRadius: 8,
+                            overflow: "hidden",
+                            cursor: "pointer",
+                            background: "#fff",
+                            border: active
+                              ? "2px solid #008060"
+                              : "1px solid #c9cccf",
+                          }}
+                        >
+                          <img
+                            src={c.url}
+                            alt={c.label}
+                            width={42}
+                            height={42}
+                            style={{ objectFit: "cover", display: "block" }}
+                          />
+                        </button>
+                      );
+                    })}
+                  </InlineStack>
+                )}
+                {group.coverImage && (
+                  <Button
+                    variant="plain"
+                    tone="critical"
+                    onClick={() => onChange({ coverImage: undefined })}
+                  >
+                    Remove cover
+                  </Button>
+                )}
+              </BlockStack>
+            </InlineStack>
+            <TextField
+              label="Cover image URL"
+              labelHidden
+              autoComplete="off"
+              placeholder="https://cdn.shopify.com/…  (or pick above)"
+              value={group.coverImage || ""}
+              onChange={(v) => onChange({ coverImage: v.trim() || undefined })}
+            />
+          </BlockStack>
+        )}
 
         {/* Deep-link (bundle only): just the link + a "?" for how to use it. */}
         {isBundle && (
