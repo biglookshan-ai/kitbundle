@@ -71,6 +71,22 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   if (!product) {
     throw new Response("Product not found", { status: 404 });
   }
+
+  // The MAIN product's full image gallery — merchants usually upload the kit /
+  // installation "demo" shots here, so those are the natural bundle covers.
+  const imgResp = await admin.graphql(
+    `#graphql
+      query MainImages($id: ID!) {
+        product(id: $id) { images(first: 40) { nodes { url altText } } }
+      }`,
+    { variables: { id: productId } },
+  );
+  const imgJson = await imgResp.json();
+  const mainImages: { url: string; alt: string }[] = (
+    imgJson?.data?.product?.images?.nodes ?? []
+  )
+    .map((n: any) => ({ url: n?.url as string, alt: (n?.altText as string) || "" }))
+    .filter((n: { url: string }) => !!n.url);
   const ids = [
     product.id,
     ...config.groups.flatMap((g) => g.accessories.map((a) => a.productId)),
@@ -96,6 +112,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   return {
     product,
+    mainImages,
     config,
     prices,
     compareAt,
@@ -292,6 +309,7 @@ function priceOfPicked(p: any): number | null {
 export default function ProductConfig() {
   const {
     product,
+    mainImages,
     config: initial,
     prices,
     compareAt,
@@ -634,7 +652,7 @@ export default function ProductConfig() {
                       info={infoMap}
                       inventory={inventory}
                       mainVariants={variantMap[product.id] || []}
-                      mainImage={infoMap[product.id]?.image ?? product.image ?? null}
+                      mainImages={mainImages}
                       mainTitle={product.title}
                       mainPrice={mainPrice}
                       mainCompareAt={compareMap[product.id] ?? mainPrice}
@@ -867,7 +885,7 @@ function GroupCard({
   info,
   inventory,
   mainVariants,
-  mainImage,
+  mainImages,
   mainTitle,
   mainPrice,
   mainCompareAt,
@@ -889,7 +907,7 @@ function GroupCard({
   info: Record<string, { title: string; handle: string; image: string | null }>;
   inventory: Record<string, number | null>;
   mainVariants: { id: string; title: string; price?: number; compareAt?: number }[];
-  mainImage?: string | null;
+  mainImages?: { url: string; alt: string }[];
   mainTitle?: string;
   mainPrice: number | null;
   mainCompareAt: number | null;
@@ -918,17 +936,13 @@ function GroupCard({
   const isBundle = group.type === "bundle";
   const limitedOn = isBundle && Boolean(group.limited?.enabled);
 
-  // Quick-pick cover images = the bundle's own product images (main + accessories).
+  // Quick-pick cover images = the MAIN product's full gallery (demo / kit shots
+  // usually live there), newest-uploaded order as Shopify returns them.
   const coverChoices: { url: string; label: string }[] = isBundle
-    ? [
-        ...(mainImage ? [{ url: mainImage, label: mainTitle || "Main product" }] : []),
-        ...group.accessories
-          .map((a) => ({
-            url: info[a.productId]?.image || "",
-            label: info[a.productId]?.title || a.title || a.handle,
-          }))
-          .filter((c) => !!c.url),
-      ]
+    ? (mainImages || []).map((im, i) => ({
+        url: im.url,
+        label: im.alt || `${mainTitle || "Image"} ${i + 1}`,
+      }))
     : [];
 
   // Bundle = ONE discount on the whole kit. Each line carries its TRUE original
@@ -1089,25 +1103,22 @@ function GroupCard({
           )}
         </InlineStack>
 
-        {/* Bundle cover image (bundle only): pick a product image or paste a URL. */}
+        {/* Bundle cover image (bundle only): pick one of the MAIN product's images. */}
         {isBundle && (
           <BlockStack gap="150">
             <FieldLabel
               text="Bundle cover image"
-              tip="Used as the bundle's image in search results and (collapsed) on the product page. Pick one of the bundle's product images below, or paste an image URL — upload a custom kit photo to Shopify Files (Content → Files) and paste its link. Leave empty to fall back to the main product image."
+              tip="Shown as the bundle's image in search and (collapsed) on the product page. Pick one of the main product's images — the kit / installation “demo” shots you upload to the main product are ideal. Leave empty to fall back to the product's main image."
             />
-            <InlineStack gap="300" blockAlign="center" wrap={false}>
+            <InlineStack gap="300" blockAlign="start" wrap={false}>
               <Thumbnail
                 source={group.coverImage || ImageIcon}
                 alt="Bundle cover"
                 size="large"
               />
               <BlockStack gap="150">
-                {coverChoices.length > 0 && (
-                  <InlineStack gap="150" blockAlign="center">
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      Pick:
-                    </Text>
+                {coverChoices.length > 0 ? (
+                  <InlineStack gap="150" align="start">
                     {coverChoices.map((c) => {
                       const active = group.coverImage === c.url;
                       return (
@@ -1117,8 +1128,8 @@ function GroupCard({
                           title={c.label}
                           onClick={() => onChange({ coverImage: c.url })}
                           style={{
-                            width: 44,
-                            height: 44,
+                            width: 48,
+                            height: 48,
                             padding: 0,
                             borderRadius: 8,
                             overflow: "hidden",
@@ -1132,14 +1143,19 @@ function GroupCard({
                           <img
                             src={c.url}
                             alt={c.label}
-                            width={42}
-                            height={42}
+                            width={46}
+                            height={46}
                             style={{ objectFit: "cover", display: "block" }}
                           />
                         </button>
                       );
                     })}
                   </InlineStack>
+                ) : (
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    This product has no images to pick from — add images to the
+                    main product first.
+                  </Text>
                 )}
                 {group.coverImage && (
                   <Button
@@ -1152,14 +1168,6 @@ function GroupCard({
                 )}
               </BlockStack>
             </InlineStack>
-            <TextField
-              label="Cover image URL"
-              labelHidden
-              autoComplete="off"
-              placeholder="https://cdn.shopify.com/…  (or pick above)"
-              value={group.coverImage || ""}
-              onChange={(v) => onChange({ coverImage: v.trim() || undefined })}
-            />
           </BlockStack>
         )}
 
