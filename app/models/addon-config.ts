@@ -64,6 +64,14 @@ export type AddonGroup = {
   accessories: AddonAccessory[];
 
   // ---- bundle-only ----
+  /**
+   * Optional bundle COVER image (a full image URL — an uploaded Shopify Files
+   * asset, or one of the bundle's own product images picked as the cover). When
+   * set, the storefront widget shows it collapsed (instead of the component
+   * thumbnails) and the search card uses it as the card image; expanding still
+   * reveals each component with its own image.
+   */
+  coverImage?: string;
   /** Stable id tying a limited bundle to its backing discount node. */
   offerId?: string;
   /** Optional limited-time promotion (bundles only). */

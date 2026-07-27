@@ -290,6 +290,7 @@ async function writeBundleCards(
       items: g.accessories.length + 1, // main + accessories
       price, // cents — theme renders with `| money`
       compareAt, // cents
+      cover: g.coverImage || "", // bundle cover image URL ("" = none → fall back to product image)
       images, // accessory image URLs (main image comes from the product itself)
     };
   });
