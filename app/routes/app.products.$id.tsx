@@ -27,6 +27,8 @@ import {
   Checkbox,
   Icon,
   Popover,
+  Tabs,
+  Collapsible,
 } from "@shopify/polaris";
 import {
   DeleteIcon,
@@ -35,6 +37,8 @@ import {
   ArchiveIcon,
   DragHandleIcon,
   QuestionCircleIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -932,6 +936,15 @@ function GroupCard({
     onChange({ accessories: arr });
   };
 
+  // Collapsed-by-default card; expand into tabs. Progressive disclosure inside.
+  const [expanded, setExpanded] = useState(false);
+  const [tab, setTab] = useState(0);
+  const [coverOpen, setCoverOpen] = useState(false);
+  const [mainVarsOpen, setMainVarsOpen] = useState(false);
+  const [openVarPids, setOpenVarPids] = useState<Record<string, boolean>>({});
+  const toggleVarOpen = (pid: string) =>
+    setOpenVarPids((m) => ({ ...m, [pid]: !m[pid] }));
+
   const isFree = group.type === "free";
   const isBundle = group.type === "bundle";
   const limitedOn = isBundle && Boolean(group.limited?.enabled);
@@ -996,11 +1009,45 @@ function GroupCard({
   ];
   const bundleTotalNow = bundleLines.reduce((s, l) => s + l.now, 0);
 
+  // ---- Collapsed summary values ----
+  const bundlePct = clampPercent(group.discountPercent);
+  const summaryNow = bundleTotalNow * (1 - bundlePct / 100);
+  const summaryOrig = bundleLines.reduce((s, l) => s + l.orig, 0);
+  const summaryOffPct =
+    summaryOrig > summaryNow + 0.005
+      ? Math.round(((summaryOrig - summaryNow) / summaryOrig) * 100)
+      : 0;
+  const summaryThumbs: string[] = [];
+  if (isBundle) {
+    const mt = group.coverImage || (mainImages && mainImages[0]?.url);
+    if (mt) summaryThumbs.push(mt);
+  }
+  group.accessories.forEach((a) => {
+    const im = info[a.productId]?.image;
+    if (im) summaryThumbs.push(im);
+  });
+  const invVals = group.accessories
+    .map((a) => inventory[a.productId])
+    .filter((v): v is number => v != null);
+  const minStock = invVals.length ? Math.min(...invVals) : null;
+  const tabItems = isBundle
+    ? [
+        { id: `t-info-${group.id}`, content: "Info" },
+        { id: `t-prod-${group.id}`, content: "Products" },
+        { id: `t-price-${group.id}`, content: "Price" },
+        { id: `t-lim-${group.id}`, content: "Limited" },
+      ]
+    : [
+        { id: `t-info-${group.id}`, content: "Info" },
+        { id: `t-prod-${group.id}`, content: "Products" },
+      ];
+
   return (
     <Card>
-      <BlockStack gap="400">
-        <InlineStack align="space-between" blockAlign="center">
-          <InlineStack gap="200" blockAlign="center">
+      <BlockStack gap="300">
+        {/* ---- Summary row (always visible) — click to expand into tabs ---- */}
+        <InlineStack align="space-between" blockAlign="center" wrap={false} gap="200">
+          <InlineStack gap="200" blockAlign="center" wrap={false}>
             {dragHandle}
             <Badge
               tone={
@@ -1015,15 +1062,67 @@ function GroupCard({
             >
               {formLabel(group)}
             </Badge>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <InlineStack gap="150" blockAlign="center" wrap={false}>
+                {group.code && (
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    {group.code}
+                  </Text>
+                )}
+                <Text as="span" variant="bodyMd" fontWeight="semibold">
+                  {group.title || "Untitled"}
+                </Text>
+              </InlineStack>
+            </button>
           </InlineStack>
-          <Button
-            icon={ArchiveIcon}
-            variant="tertiary"
-            onClick={onArchive}
-            accessibilityLabel="Archive group"
-          >
-            Archive
-          </Button>
+
+          <InlineStack gap="200" blockAlign="center" wrap={false}>
+            {summaryThumbs.length > 0 && (
+              <InlineStack gap="050" blockAlign="center" wrap={false}>
+                {summaryThumbs.slice(0, 5).map((u, i) => (
+                  <Thumbnail key={i} source={u} alt="" size="extraSmall" />
+                ))}
+                {summaryThumbs.length > 5 && (
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    +{summaryThumbs.length - 5}
+                  </Text>
+                )}
+              </InlineStack>
+            )}
+            {isBundle && haveAllPrices && (
+              <InlineStack gap="100" blockAlign="center" wrap={false}>
+                <Text as="span" variant="bodyMd" fontWeight="semibold">
+                  {fmtMoney(summaryNow, currency)}
+                </Text>
+                {summaryOffPct > 0 && (
+                  <Badge tone="critical">{`${summaryOffPct}% off`}</Badge>
+                )}
+              </InlineStack>
+            )}
+            {!isFree && <StockBadge qty={minStock} />}
+            <Button
+              variant="tertiary"
+              icon={expanded ? ChevronUpIcon : ChevronDownIcon}
+              onClick={() => setExpanded((v) => !v)}
+              accessibilityLabel={expanded ? "Collapse" : "Expand"}
+            />
+            <Button
+              icon={ArchiveIcon}
+              variant="tertiary"
+              onClick={onArchive}
+              accessibilityLabel="Archive group"
+            />
+          </InlineStack>
         </InlineStack>
 
         {offerWarning && (
@@ -1033,6 +1132,18 @@ function GroupCard({
             </Text>
           </Banner>
         )}
+        {codeError && !expanded && (
+          <Text as="span" variant="bodySm" tone="critical">
+            {codeError}
+          </Text>
+        )}
+
+        {expanded && (
+          <BlockStack gap="300">
+            <Tabs tabs={tabItems} selected={tab} onSelect={setTab} />
+
+            {tab === 0 && (
+              <BlockStack gap="400">
 
         {/* Code + title (+ discount for add-ons) on one tidy row. */}
         <InlineStack gap="300" wrap={false} blockAlign="start">
@@ -1188,12 +1299,14 @@ function GroupCard({
           </BlockStack>
         )}
 
-        {!isFree && mainVariants.length > 1 && (
+        {/* Add-on visibility targeting — bundles put their main variants in the
+            Products tab instead. */}
+        {!isFree && !isBundle && mainVariants.length > 1 && (
           <Box background="bg-surface-secondary" padding="300" borderRadius="200">
             <BlockStack gap="150">
               <Text as="span" variant="bodySm" tone="subdued">
-                {isBundle ? "Main product variants in this bundle" : "Show this add-on for main variants"}{" "}
-                ({group.mainVariantIds?.length ?? mainVariants.length}/
+                Show this add-on for main variants (
+                {group.mainVariantIds?.length ?? mainVariants.length}/
                 {mainVariants.length})
               </Text>
               <InlineStack gap="150" wrap>
@@ -1227,9 +1340,8 @@ function GroupCard({
                 })}
               </InlineStack>
               <Text as="span" variant="bodySm" tone="subdued">
-                {isBundle
-                  ? "Offered as the main-product options inside the bundle — the customer picks one (synced with the product page selector)."
-                  : "This add-on group only shows when the selected main variant is one of these — otherwise it's hidden."}
+                This add-on group only shows when the selected main variant is one
+                of these — otherwise it's hidden.
               </Text>
             </BlockStack>
           </Box>
@@ -1251,15 +1363,109 @@ function GroupCard({
             />
           </InlineStack>
         )}
+              </BlockStack>
+            )}
 
-        <Divider />
+            {/* ---- PRODUCTS TAB ---- */}
+            {tab === 1 && (
+              <BlockStack gap="300">
+                {isBundle && mainTitle && (
+                  <BlockStack gap="150">
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      In this kit
+                    </Text>
+                    <InlineStack
+                      align="space-between"
+                      blockAlign="center"
+                      wrap={false}
+                    >
+                      <InlineStack gap="200" blockAlign="center">
+                        <Thumbnail
+                          source={
+                            group.coverImage ||
+                            (mainImages && mainImages[0]?.url) ||
+                            ImageIcon
+                          }
+                          alt={mainTitle}
+                          size="small"
+                        />
+                        <BlockStack gap="050">
+                          <InlineStack gap="150" blockAlign="center" wrap>
+                            <Text as="span" variant="bodyMd">
+                              {mainTitle}
+                            </Text>
+                            <Badge>MAIN</Badge>
+                          </InlineStack>
+                          {mainPrice != null && (
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              {fmtMoney(mainRep.now, currency)}
+                            </Text>
+                          )}
+                        </BlockStack>
+                      </InlineStack>
+                      {mainVariants.length > 1 && (
+                        <Button
+                          size="slim"
+                          disclosure={mainVarsOpen ? "up" : "down"}
+                          onClick={() => setMainVarsOpen((o) => !o)}
+                        >
+                          {`Variants ${group.mainVariantIds?.length ?? mainVariants.length}/${mainVariants.length}`}
+                        </Button>
+                      )}
+                    </InlineStack>
+                    {mainVariants.length > 1 && (
+                      <Collapsible open={mainVarsOpen} id={`mainvars-${group.id}`}>
+                        <Box paddingInlineStart="800">
+                          <BlockStack gap="100">
+                            <InlineStack gap="150" wrap>
+                              {mainVariants.map((v) => {
+                                const current =
+                                  group.mainVariantIds &&
+                                  group.mainVariantIds.length
+                                    ? group.mainVariantIds
+                                    : mainVariants.map((x) => x.id);
+                                const on = current.includes(v.id);
+                                return (
+                                  <Button
+                                    key={v.id}
+                                    size="micro"
+                                    pressed={on}
+                                    onClick={() => {
+                                      const next = on
+                                        ? current.filter((x) => x !== v.id)
+                                        : [...current, v.id];
+                                      if (next.length === 0) return;
+                                      onChange({
+                                        mainVariantIds:
+                                          next.length === mainVariants.length
+                                            ? undefined
+                                            : next,
+                                      });
+                                    }}
+                                  >
+                                    {v.title}
+                                  </Button>
+                                );
+                              })}
+                            </InlineStack>
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              Offered as the main-product options inside the
+                              bundle — the customer picks one.
+                            </Text>
+                          </BlockStack>
+                        </Box>
+                      </Collapsible>
+                    )}
+                    <Divider />
+                  </BlockStack>
+                )}
 
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="span" variant="headingSm">
-            Accessories ({group.accessories.length})
-          </Text>
-          <Button onClick={onPickAccessories}>Select accessories</Button>
-        </InlineStack>
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text as="span" variant="headingSm">
+                    Accessories ({group.accessories.length})
+                  </Text>
+                  <Button onClick={onPickAccessories}>Select accessories</Button>
+                </InlineStack>
 
         {group.accessories.length > 0 ? (
           <BlockStack gap="200">
@@ -1342,13 +1548,26 @@ function GroupCard({
                       </BlockStack>
                     </InlineStack>
 
-                      <Button
-                        icon={DeleteIcon}
-                        variant="tertiary"
-                        tone="critical"
-                        accessibilityLabel={`Remove ${a.title}`}
-                        onClick={() => onRemoveAccessory(a.productId)}
-                      />
+                      <InlineStack gap="150" blockAlign="center" wrap={false}>
+                        {accVariants.length > 1 && (
+                          <Button
+                            size="slim"
+                            disclosure={
+                              openVarPids[a.productId] ? "up" : "down"
+                            }
+                            onClick={() => toggleVarOpen(a.productId)}
+                          >
+                            {`Variants ${offeredIds.length}/${accVariants.length}`}
+                          </Button>
+                        )}
+                        <Button
+                          icon={DeleteIcon}
+                          variant="tertiary"
+                          tone="critical"
+                          accessibilityLabel={`Remove ${a.title}`}
+                          onClick={() => onRemoveAccessory(a.productId)}
+                        />
+                      </InlineStack>
                     </InlineStack>
 
                     {isFree ? (
@@ -1413,55 +1632,72 @@ function GroupCard({
                     )}
 
                   {accVariants.length > 1 && (
-                    <Box paddingInlineStart="800">
-                      <BlockStack gap="100">
-                        <Text as="span" variant="bodySm" tone="subdued">
-                          Variants offered to the customer ({offeredIds.length}/
-                          {accVariants.length})
-                        </Text>
-                        <InlineStack gap="150" wrap>
-                          {accVariants.map((v) => (
-                            <Button
-                              key={v.id}
-                              size="micro"
-                              pressed={offeredIds.includes(v.id)}
-                              onClick={() => toggleVariant(v.id)}
-                            >
-                              {v.title}
-                            </Button>
-                          ))}
-                        </InlineStack>
-                      </BlockStack>
-                    </Box>
+                    <Collapsible
+                      open={!!openVarPids[a.productId]}
+                      id={`accvars-${a.productId}`}
+                    >
+                      <Box paddingInlineStart="800">
+                        <BlockStack gap="100">
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            Variants offered to the customer ({offeredIds.length}/
+                            {accVariants.length})
+                          </Text>
+                          <InlineStack gap="150" wrap>
+                            {accVariants.map((v) => (
+                              <Button
+                                key={v.id}
+                                size="micro"
+                                pressed={offeredIds.includes(v.id)}
+                                onClick={() => toggleVariant(v.id)}
+                              >
+                                {v.title}
+                              </Button>
+                            ))}
+                          </InlineStack>
+                        </BlockStack>
+                      </Box>
+                    </Collapsible>
                   )}
                   </BlockStack>
                 </div>
               );
             })}
           </BlockStack>
-        ) : (
-          <Text as="p" variant="bodyMd" tone="subdued">
-            No accessories in this group yet.
-          </Text>
-        )}
+                ) : (
+                  <Text as="p" variant="bodyMd" tone="subdued">
+                    No accessories in this group yet.
+                  </Text>
+                )}
+              </BlockStack>
+            )}
 
-        {isBundle && group.accessories.length > 0 && haveAllPrices && (
-          <BundleTotals
-            group={group}
-            lines={bundleLines}
-            currency={currency}
-            onChange={onChange}
-          />
-        )}
+            {/* ---- PRICE TAB (bundle) ---- */}
+            {isBundle &&
+              tab === 2 &&
+              (group.accessories.length > 0 && haveAllPrices ? (
+                <BundleTotals
+                  group={group}
+                  lines={bundleLines}
+                  currency={currency}
+                  onChange={onChange}
+                />
+              ) : (
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Add accessories with prices to set the bundle total.
+                </Text>
+              ))}
 
-        {isBundle && (
-          <LimitedOfferCard
-            group={group}
-            totalNow={bundleTotalNow}
-            haveTotal={haveAllPrices}
-            currency={currency}
-            onChange={onChange}
-          />
+            {/* ---- LIMITED TAB (bundle) ---- */}
+            {isBundle && tab === 3 && (
+              <LimitedOfferCard
+                group={group}
+                totalNow={bundleTotalNow}
+                haveTotal={haveAllPrices}
+                currency={currency}
+                onChange={onChange}
+              />
+            )}
+          </BlockStack>
         )}
       </BlockStack>
     </Card>
