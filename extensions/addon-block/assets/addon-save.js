@@ -171,9 +171,33 @@
     }
   }
 
+  // Match the widget accent to the store's own add-to-cart button (spec: the
+  // accent is dynamic — read from the theme button so selected states blend in).
+  // Falls back to the block's accent setting when no button colour is found.
+  function autoAccent(root) {
+    try {
+      var sels = [
+        'form[action*="/cart/add"] [type="submit"]',
+        ".product-form__submit",
+        'button[name="add"]',
+        "product-form button:not([disabled])",
+      ];
+      for (var i = 0; i < sels.length; i++) {
+        var btn = document.querySelector(sels[i]);
+        if (!btn) continue;
+        var bg = getComputedStyle(btn).backgroundColor;
+        if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+          root.style.setProperty("--cgp-accent", bg);
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+
   function init(root) {
     if (root.__cgpInit) return;
     root.__cgpInit = true;
+    autoAccent(root);
 
     // Gift campaigns run independently of the per-product add-on config — a pure
     // trigger product has gifts but no addon_config.
@@ -208,6 +232,13 @@
       mainHandle: root.getAttribute("data-product-handle") || "",
       mainProductId: (root.getAttribute("data-product-id") || "").split("/").pop(),
       showStrike: root.getAttribute("data-show-strikethrough") !== "false",
+      vatRate: parseFloat(root.getAttribute("data-vat-rate")) || 0,
+      bundleLayout:
+        root.getAttribute("data-bundle-layout") === "card" ? "card" : "list",
+      showDefaultCard: root.getAttribute("data-default-card") !== "false",
+      defaultLabel:
+        root.getAttribute("data-default-label") || "Just the product",
+      hasDefaultCard: false,
       modal: document.querySelector("[data-cgp-modal]"),
       cta: root.querySelector("[data-cgp-cta]"),
       summaryEl: root.querySelector("[data-cgp-summary]"),
@@ -218,6 +249,8 @@
       resetFns: [], // visual de-selectors, run after a successful add
       bundlePaints: [], // re-render hooks, run once the main product loads
       mainVarSync: [], // bundles re-sync their main variant on a page variant change
+      bundleDeselectors: [], // per-bundle deselect fns (No Bundle ↔ bundle exclusivity)
+      deselectDefaultCard: null, // set by the "No bundle" card to deselect itself
       mainData: null,
       mainInCart: false, // whether the main product is already in the cart
     };
@@ -437,6 +470,7 @@
           name: e.title || "Bundle",
           code: e.code || "",
           percent: e.percent,
+          qty: e.qty || 1,
           offerId: e.offerId || null,
           bid: e.bid || null,
           mainVariantId: e.mainVariantId || null,
@@ -446,20 +480,33 @@
             return { id: it.id, price: it.price, percent: itemPct(e, it) };
           }),
         });
+      } else if (e.kind === "main") {
+        // The "just the product" default card — handled via mainsForAddons below.
       } else {
+        var aq = e.qty || 1;
         e.items.forEach(function (it) {
           addonItems.push({
             id: it.id,
             price: it.price,
             percent: itemPct(e, it),
+            qty: aq,
           });
         });
       }
     });
     // Every add-to-cart is a COMPLETE unit: it always brings a main product.
-    // For add-ons (no bundle in this click) add one shared main; a bundle kit
-    // already brings its own main. A bare add also adds a main.
-    var mainsForAddons = bundles.length === 0 ? 1 : 0;
+    //  - With the "just the product" default card: its selection drives how many
+    //    plain mains to add (it also serves as the shared main for add-ons). When
+    //    deselected, a main is only added if add-ons need one.
+    //  - Without the default card (legacy): one shared main unless a bundle (which
+    //    brings its own main) is the only thing selected.
+    var mainSel = ctx.extras.get("main");
+    var mainsForAddons;
+    if (ctx.hasDefaultCard) {
+      mainsForAddons = mainSel ? mainSel.qty || 1 : addonItems.length > 0 ? 1 : 0;
+    } else {
+      mainsForAddons = bundles.length === 0 ? 1 : 0;
+    }
     return {
       bundles: bundles,
       addonItems: addonItems,
@@ -473,18 +520,21 @@
     cta.hidden = false;
     var mv = mainVariant(ctx);
     var plan = buildPlan(ctx, ctx.mainInCart);
-    var count = plan.mainsForAddons + plan.bundles.length;
+    var count = plan.mainsForAddons;
     var total = plan.mainsForAddons * (mv.price || 0);
     plan.addonItems.forEach(function (it) {
-      count += 1;
-      total += discounted(it.price, it.percent);
+      var q = it.qty || 1;
+      count += q;
+      total += q * discounted(it.price, it.percent);
     });
     plan.bundles.forEach(function (b) {
-      // bundle's own main (discounted only if the bundle opts in) + accessories
-      total += discounted(b.mainPrice || mv.price || 0, b.mainPercent || 0);
+      var q = b.qty || 1;
+      // bundle's own main ×q (discounted only if the bundle opts in) + accessories
+      count += q;
+      total += q * discounted(b.mainPrice || mv.price || 0, b.mainPercent || 0);
       b.items.forEach(function (it) {
-        count += 1;
-        total += discounted(it.price, it.percent);
+        count += q;
+        total += q * discounted(it.price, it.percent);
       });
     });
     // Free gifts always ride along (count them, $0 to the total).
@@ -535,9 +585,10 @@
         total = 0;
       ctx.extras.forEach(function (e) {
         if (e.kind !== "addon") return;
+        var q = e.qty || 1;
         e.items.forEach(function (it) {
-          n++;
-          total += discounted(it.price, itemPct(e, it));
+          n += q;
+          total += q * discounted(it.price, itemPct(e, it));
         });
       });
       ctx.counterEl.innerHTML = "";
@@ -561,10 +612,11 @@
         btotal = 0;
       ctx.extras.forEach(function (e) {
         if (e.kind !== "bundle") return;
-        bn++;
-        btotal += discounted(e.mainPrice || 0, e.mainPercent || 0);
+        var q = e.qty || 1;
+        bn += q;
+        btotal += q * discounted(e.mainPrice || 0, e.mainPercent || 0);
         e.items.forEach(function (it) {
-          btotal += discounted(it.price, it.percent || 0);
+          btotal += q * discounted(it.price, it.percent || 0);
         });
       });
       ctx.bundleCounterEl.innerHTML = "";
@@ -674,79 +726,57 @@
   function renderGroup(ctx, group) {
     var grid = ctx.gridEl;
     grid.innerHTML = "";
-    var rowsWrap = el("div", "cgp-addon__rows");
-    grid.appendChild(rowsWrap);
-    var nav = el("div", "cgp-addon__nav");
-    grid.appendChild(nav);
+    // Same card slider as the Bundle module (reuses its classes/styles).
+    var slider = el(
+      "div",
+      "cgp-addon__bundle-list cgp-addon__bundle-list--cards",
+    );
+    grid.appendChild(slider);
 
     Promise.all(
       (group.accessories || []).map(function (a) {
         return fetchProduct(a.handle);
       }),
     ).then(function (datas) {
-      var rows = [];
       datas.forEach(function (data) {
         if (!data) return;
         // "Hide when sold out": drop accessories with no available variant.
         if (group.hideWhenSoldOut && !accInStock(group, data)) return;
-        var row = renderRow(ctx, group, data);
-        rowsWrap.appendChild(row);
-        rows.push(row);
+        slider.appendChild(renderAddonCard(ctx, group, data));
       });
-      // Show 3 rows at a time; prev/next paging when there are more.
-      var per = 3;
-      var pages = Math.ceil(rows.length / per);
-      var page = 0;
-      function show() {
-        rows.forEach(function (r, i) {
-          r.style.display =
-            i >= page * per && i < (page + 1) * per ? "" : "none";
-        });
-      }
-      if (rows.length > per) {
-        var ind = el("span", "cgp-addon__navind", "");
-        var prev = el("button", "cgp-addon__navbtn", "‹");
-        prev.type = "button";
-        var next = el("button", "cgp-addon__navbtn", "›");
-        next.type = "button";
-        function upd() {
-          ind.textContent = page + 1 + " / " + pages;
-          prev.disabled = page <= 0;
-          next.disabled = page >= pages - 1;
-          show();
-        }
-        prev.addEventListener("click", function () {
-          if (page > 0) {
-            page--;
-            upd();
-          }
-        });
-        next.addEventListener("click", function () {
-          if (page < pages - 1) {
-            page++;
-            upd();
-          }
-        });
-        nav.appendChild(ind);
-        nav.appendChild(prev);
-        nav.appendChild(next);
-        upd();
-      } else {
-        show();
-      }
+      setupBundleSlider(slider); // 3 per view, scroll for more, nav buttons
     });
   }
 
-  // One add-on per row: image (link) + title (link) + inline variant picker +
-  // price/discount + round selector. If >1 variant is offered the customer must
-  // pick one before the row can be added.
-  function renderRow(ctx, group, data) {
+  // Per-location stock for an add-on card (same source/statuses as bundles).
+  function refreshAddonStock(card, handle, variantId) {
+    fetchLocStock(handle).then(function (m) {
+      if (!m || !m.variants || !Object.keys(m.variants).length) return;
+      var vv = m.variants[String(variantId)];
+      if (!vv) return;
+      applyStockTo(
+        card,
+        stkStatusFrom(
+          toInt(vv.uk_inv),
+          toInt(vv.es_inv),
+          toInt(vv.uk_inc),
+          vv.policy === "continue" ? "continue" : "deny",
+        ),
+      );
+    });
+  }
+
+  // One add-on as a CARD — same anatomy/style as a bundle card (badges, media,
+  // name, price, quantity stepper + select circle). Single product, toggle
+  // select; a multi-variant accessory needs a variant chosen before it adds.
+  function renderAddonCard(ctx, group, data) {
     var percent = accPercentFor(group, data.id);
     var offered = offeredVariants(group, data);
     var multi = offered.length > 1;
     var key = "addon:" + data.id;
     var selected = false;
     var chosen = multi ? null : firstAvailableIn(offered);
+    var qty = 1;
 
     var existing = ctx.extras.get(key);
     if (existing && existing.items && existing.items[0]) {
@@ -756,84 +786,14 @@
       if (ev) {
         chosen = ev;
         selected = true;
+        qty = existing.qty || 1;
       }
     }
 
-    var row = el("div", "cgp-addon__rowcard");
-    var link = data.handle ? "/products/" + data.handle : null;
-
-    var media = el(link ? "a" : "div", "cgp-addon__row-media");
-    if (link) media.href = link;
-    var img = data.featured_image || (data.images && data.images[0]);
-    if (img) {
-      var image = el("img");
-      image.src = img;
-      image.alt = data.title;
-      image.loading = "lazy";
-      media.appendChild(image);
-    }
-    row.appendChild(media);
-
-    var info = el("div", "cgp-addon__row-info");
-    var nameEl = el(link ? "a" : "div", "cgp-addon__row-name", data.title);
-    if (link) nameEl.href = link;
-    info.appendChild(nameEl);
-    var price = el("div", "cgp-addon__row-price");
-    info.appendChild(price);
-
-    var sel = null;
-    if (multi) {
-      sel = el("select", "cgp-addon__variant");
-      var ph = el("option", null, "Choose an option…");
-      ph.value = "";
-      sel.appendChild(ph);
-      offered.forEach(function (v) {
-        var o = el("option", null, v.title + (v.available ? "" : " — sold out"));
-        o.value = v.id;
-        if (!v.available) o.disabled = true;
-        sel.appendChild(o);
-      });
-      sel.value = chosen ? String(chosen.id) : "";
-      sel.addEventListener("click", function (e) {
-        e.stopPropagation();
-      });
-      sel.addEventListener("change", function (e) {
-        e.stopPropagation();
-        chosen =
-          offered.filter(function (x) {
-            return String(x.id) === sel.value;
-          })[0] || null;
-        sel.classList.remove("cgp-needs-choice");
-        renderPrice();
-        if (selected) {
-          if (chosen) store();
-          else setSelected(false);
-        }
-      });
-      info.appendChild(sel);
-    }
-    row.appendChild(info);
-
-    var toggle = el("span", "cgp-check" + (selected ? " is-on" : ""), selected ? "✓" : "");
-    toggle.setAttribute("role", "button");
-    toggle.setAttribute("aria-label", "Add " + data.title);
-    row.appendChild(toggle);
-
-    function renderPrice() {
-      var base = (chosen || offered[0] || data).price || 0;
-      price.innerHTML = "";
-      price.appendChild(
-        el(
-          "span",
-          "cgp-card__now",
-          "+" + money(discounted(base, percent), ctx.currency),
-        ),
-      );
-      if (percent > 0 && ctx.showStrike) {
-        price.appendChild(el("span", "cgp-card__was", money(base, ctx.currency)));
-        price.appendChild(el("span", "cgp-card__off", "-" + percent + "%"));
-      }
-    }
+    var card = el(
+      "div",
+      "cgp-bundle cgp-bundle--card" + (selected ? " is-selected" : ""),
+    );
 
     function store() {
       var v = chosen || (!multi ? offered[0] : null);
@@ -841,55 +801,197 @@
       ctx.extras.set(key, {
         kind: "addon",
         percent: percent,
+        qty: qty,
         items: [{ id: v.id, price: v.price }],
       });
     }
-
     function setSelected(on) {
       selected = on;
-      row.classList.toggle("is-selected", on);
-      toggle.textContent = on ? "✓" : "";
-      toggle.classList.toggle("is-on", on);
+      card.classList.toggle("is-selected", on);
+      var chk = card.querySelector(".cgp-check");
+      if (chk) chk.classList.toggle("is-on", on);
       if (on) store();
       else ctx.extras.delete(key);
       ctx.onChange();
     }
     ctx.resetFns.push(function () {
       selected = false;
-      row.classList.remove("is-selected");
-      toggle.textContent = "";
-      toggle.classList.remove("is-on");
-      if (sel) {
-        chosen = null;
-        sel.value = "";
-        renderPrice();
-      }
+      qty = 1;
+      card.classList.remove("is-selected");
+      var chk = card.querySelector(".cgp-check");
+      if (chk) chk.classList.remove("is-on");
     });
-
-    function activate() {
+    function toggle() {
       if (selected) {
         setSelected(false);
         return;
       }
       if (multi && !chosen) {
-        // Must pick a variant first.
-        if (sel) {
-          sel.classList.add("cgp-needs-choice");
+        var s = card.querySelector(".cgp-bundle__variant");
+        if (s) {
+          s.classList.add("cgp-needs-choice");
           try {
-            sel.focus();
+            s.focus();
           } catch (e) {}
         }
         return;
       }
       setSelected(true);
     }
-    toggle.addEventListener("click", function (e) {
-      e.stopPropagation();
-      activate();
-    });
 
-    renderPrice();
-    return row;
+    function paint() {
+      card.innerHTML = "";
+      card.classList.toggle("is-selected", selected);
+      var base = (chosen || offered[0] || data).price || 0;
+      var now = discounted(base, percent);
+      var saved = base - now;
+      var offPct = percent > 0 ? Math.round(percent) : 0;
+      var avail = offered.some(function (v) {
+        return v && v.available;
+      });
+
+      var head = el("div", "cgp-bundle__head");
+      var brow = el("div", "cgp-bundle__brow");
+      brow.appendChild(
+        offPct > 0
+          ? el("span", "cgp-bundle__bdg cgp-bundle__bdg--off", offPct + "% OFF")
+          : el("span"),
+      );
+      var sb = el(
+        "span",
+        "cgp-bundle__bdg cgp-stk--" + (avail ? "green" : "red"),
+        avail ? "In Stock" : "Out of Stock",
+      );
+      sb.setAttribute("data-cgp-stock", "1");
+      sb.setAttribute("data-cgp-base", "cgp-bundle__bdg");
+      brow.appendChild(sb);
+      head.appendChild(brow);
+
+      var mediaEl = el("div", "cgp-bundle__media");
+      var img =
+        (chosen &&
+          chosen.featured_image &&
+          (chosen.featured_image.src || chosen.featured_image)) ||
+        data.featured_image ||
+        (data.images && data.images[0]);
+      if (img) {
+        var im = el("img", "cgp-bundle__media-single");
+        im.src = img;
+        im.alt = data.title;
+        im.loading = "lazy";
+        mediaEl.appendChild(im);
+      }
+      head.appendChild(mediaEl);
+
+      var body = el("div", "cgp-bundle__body");
+      var nameLine = el("div", "cgp-bundle__nameline");
+      nameLine.appendChild(el("span", "cgp-bundle__name", data.title));
+      body.appendChild(nameLine);
+
+      var pr = el("div", "cgp-bundle__price");
+      var nowS = el("span", "cgp-bundle__now");
+      nowS.appendChild(document.createTextNode(money(now, ctx.currency)));
+      if (ctx.vatRate > 0) nowS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+      pr.appendChild(nowS);
+      if (saved > 0 && ctx.showStrike) {
+        var wasS = el("span", "cgp-bundle__was");
+        wasS.appendChild(document.createTextNode(money(base, ctx.currency)));
+        if (ctx.vatRate > 0) wasS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+        pr.appendChild(wasS);
+      }
+      if (saved > 0) {
+        var savedShown = ctx.vatRate > 0 ? saved * (1 + ctx.vatRate / 100) : saved;
+        var saveSpan = el("span", "cgp-bundle__save");
+        saveSpan.appendChild(
+          document.createTextNode("Save " + money(savedShown, ctx.currency)),
+        );
+        if (ctx.vatRate > 0) saveSpan.appendChild(el("span", "cgp-bundle__vat", " inc VAT"));
+        pr.appendChild(saveSpan);
+      }
+      body.appendChild(pr);
+
+      // Variant picker (only if the accessory offers a choice).
+      if (multi) {
+        var selEl = el("select", "cgp-bundle__variant");
+        var ph = el("option", null, "Choose an option…");
+        ph.value = "";
+        selEl.appendChild(ph);
+        offered.forEach(function (v) {
+          var o = el("option", null, v.title + (v.available ? "" : " — sold out"));
+          o.value = v.id;
+          if (!v.available) o.disabled = true;
+          selEl.appendChild(o);
+        });
+        selEl.value = chosen ? String(chosen.id) : "";
+        selEl.addEventListener("click", function (e) {
+          e.stopPropagation();
+        });
+        selEl.addEventListener("change", function (e) {
+          e.stopPropagation();
+          chosen =
+            offered.filter(function (x) {
+              return String(x.id) === selEl.value;
+            })[0] || null;
+          if (selected) {
+            if (chosen) store();
+            else setSelected(false);
+          }
+          paint();
+          ctx.onChange();
+        });
+        body.appendChild(selEl);
+      }
+
+      // Foot: quantity stepper (left) + select circle (right).
+      var qtyWrap = el("div", "cgp-bundle__qty");
+      var qMinus = el("button", "cgp-bundle__qtybtn", "−");
+      qMinus.type = "button";
+      var qNum = el("span", "cgp-bundle__qtyn", String(qty));
+      var qPlus = el("button", "cgp-bundle__qtybtn", "+");
+      qPlus.type = "button";
+      qtyWrap.appendChild(qMinus);
+      qtyWrap.appendChild(qNum);
+      qtyWrap.appendChild(qPlus);
+      function setQty(n) {
+        qty = Math.max(1, n | 0);
+        qNum.textContent = String(qty);
+        if (selected) {
+          store();
+          ctx.onChange();
+        }
+      }
+      qMinus.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setQty(qty - 1);
+      });
+      qPlus.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setQty(qty + 1);
+      });
+
+      var aside = el("div", "cgp-bundle__aside");
+      aside.appendChild(el("span", "cgp-check" + (selected ? " is-on" : "")));
+      var foot = el("div", "cgp-bundle__foot");
+      foot.appendChild(qtyWrap);
+      foot.appendChild(aside);
+      body.appendChild(foot);
+
+      head.appendChild(body);
+      card.appendChild(head);
+
+      aside.addEventListener("click", function (e) {
+        e.stopPropagation();
+        toggle();
+      });
+      head.addEventListener("click", function () {
+        toggle();
+      });
+
+      refreshAddonStock(card, data.handle, (chosen || offered[0] || {}).id);
+    }
+
+    paint();
+    return card;
   }
 
   function variantLabel(data, variant) {
@@ -900,22 +1002,60 @@
 
   /* ---------- Variant-picker modal (returns a variant via onChoose) ---------- */
 
+  // Remove the bundle-only header + footer so a later add-on modal is clean.
+  function cleanModalChrome(dialog) {
+    if (!dialog) return;
+    ["header", "selectbtn", "foot"].forEach(function (k) {
+      var n = dialog.querySelector(".cgp-modal__" + k);
+      if (n) n.remove();
+    });
+  }
+
   function setupModal(modal) {
     if (!modal || modal.__cgpReady) return;
     modal.__cgpReady = true;
+    function closeIt() {
+      modal.hidden = true;
+      cleanModalChrome(modal.querySelector(".cgp-modal__dialog"));
+    }
     modal.querySelectorAll("[data-cgp-modal-close]").forEach(function (n) {
-      n.addEventListener("click", function () {
-        modal.hidden = true;
-      });
+      n.addEventListener("click", closeIt);
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") modal.hidden = true;
+      if (e.key === "Escape" && !modal.hidden) closeIt();
     });
+  }
+
+  // Copy the merchant's theme/accent CSS vars onto the modal so they still
+  // resolve after it's portaled to <body> (outside .cgp-addon). Also portal it
+  // there so position:fixed isn't broken by a transformed theme ancestor.
+  function themeModal(ctx) {
+    var modal = ctx.modal;
+    if (!modal) return;
+    if (ctx.root) {
+      var cs = getComputedStyle(ctx.root);
+      [
+        "--cgp-cta-bg",
+        "--cgp-cta-text",
+        "--cgp-cta-radius",
+        "--cgp-accent",
+        "--cgp-border",
+        "--cgp-muted",
+        "--cgp-radius",
+      ].forEach(function (v) {
+        var val = cs.getPropertyValue(v);
+        if (val && val.trim()) modal.style.setProperty(v, val.trim());
+      });
+    }
+    if (modal.parentNode !== document.body) document.body.appendChild(modal);
   }
 
   function openModal(ctx, data, percent, onChoose) {
     var modal = ctx.modal;
     if (!modal) return;
+    setupModal(modal);
+    themeModal(ctx); // theme vars + portal (shared with the bundle info modal)
+    cleanModalChrome(modal.querySelector(".cgp-modal__dialog")); // no bundle chrome here
     var body = modal.querySelector("[data-cgp-modal-body]");
     body.innerHTML = "";
     body.appendChild(el("div", "cgp-modal__title", data.title));
@@ -992,19 +1132,434 @@
     modal.hidden = false;
   }
 
-  /* ---------- BUNDLE groups: one named, expandable, selectable card ---------- */
+  /* ---------- Per-location stock (links to the Stock Availability section) ----------
+     Reads the `VariantData-*` JSON that the theme's Stock Availability section
+     renders on every product page (per-variant uk_inventory / es_inventory /
+     uk_incoming), so a kit's badge matches that section exactly. Degrades to the
+     generic In stock / Out of stock when a store has no such section. */
+  var locStockCache = {};
+  function fetchLocStock(handle) {
+    if (locStockCache[handle]) return locStockCache[handle];
+    var p = fetch("/products/" + encodeURIComponent(handle), {
+      headers: { Accept: "text/html" },
+    })
+      .then(function (r) {
+        return r.text();
+      })
+      .then(function (html) {
+        var variants = {};
+        var mi = html.indexOf('id="VariantData-');
+        if (mi !== -1) {
+          var gt = html.indexOf(">", mi);
+          var end = html.indexOf("</" + "script>", gt);
+          if (gt !== -1 && end !== -1) {
+            try {
+              variants = JSON.parse(html.slice(gt + 1, end).trim());
+            } catch (e) {
+              variants = {};
+            }
+          }
+        }
+        return { variants: variants };
+      })
+      .catch(function () {
+        return { variants: {} };
+      });
+    locStockCache[handle] = p;
+    return p;
+  }
+  var toInt = function (x) {
+    return parseInt(x, 10) || 0;
+  };
+  // Same mapping as the section's getBadge, but UK-first then EW, and no quantity.
+  function stkStatusFrom(uk, es, inc, policy) {
+    var qty, transit;
+    if (uk > 0) {
+      qty = uk;
+      transit = inc;
+    } else if (es > 0) {
+      qty = es;
+      transit = 0;
+    } else {
+      qty = 0;
+      transit = inc;
+    }
+    if (qty >= 5) return { label: "In Stock", cls: "green" };
+    if (qty >= 1) return { label: "Low Stock", cls: "yellow" };
+    if (transit > 0) return { label: "In Transit", cls: "blue" };
+    return policy === "continue"
+      ? { label: "Out of Stock", cls: "red" }
+      : { label: "Unavailable", cls: "grey" };
+  }
+
+  // Push a computed stock status onto every [data-cgp-stock] badge inside a card.
+  function applyStockTo(card, st) {
+    card.querySelectorAll("[data-cgp-stock]").forEach(function (b) {
+      b.textContent = st.label;
+      b.className = b.getAttribute("data-cgp-base") + " cgp-stk--" + st.cls;
+    });
+  }
+  // Set the "just the product" card's badge to the Stock Availability section's
+  // exact status for the current main variant (falls back to the generic badge).
+  function refreshMainStock(card, ctx) {
+    fetchLocStock(ctx.mainHandle).then(function (m) {
+      if (!m || !m.variants || !Object.keys(m.variants).length) return;
+      var vv = m.variants[String(readMainVariantId())];
+      if (!vv) return;
+      applyStockTo(
+        card,
+        stkStatusFrom(
+          toInt(vv.uk_inv),
+          toInt(vv.es_inv),
+          toInt(vv.uk_inc),
+          vv.policy === "continue" ? "continue" : "deny",
+        ),
+      );
+    });
+  }
+
+  // The "just the product" default card: buy the main product on its own (no
+  // bundle), selected by default so customers know a bundle is optional. It's a
+  // normal multi-select card with a quantity stepper; its variant/price/stock
+  // follow the product page's own variant picker.
+  function renderDefaultCard(ctx, list) {
+    var cardMode = ctx.bundleLayout === "card";
+    var card = el(
+      "div",
+      "cgp-bundle cgp-bundle--default" + (cardMode ? " cgp-bundle--card" : ""),
+    );
+    list.appendChild(card);
+    var selected = true; // baseline: "just the product" is pre-selected
+    var qty = 1;
+    var KEY = "main";
+
+    function curVar() {
+      var vs = (ctx.mainData && ctx.mainData.variants) || [];
+      if (!vs.length) return null;
+      var cur = readMainVariantId();
+      return (
+        vs.filter(function (v) {
+          return String(v.id) === String(cur);
+        })[0] ||
+        firstAvailableIn(vs) ||
+        vs[0]
+      );
+    }
+    function store() {
+      ctx.extras.set(KEY, { kind: "main", qty: qty });
+    }
+    function setSel(on) {
+      selected = on;
+      card.classList.toggle("is-selected", on);
+      var c = card.querySelector(".cgp-check");
+      if (c) c.classList.toggle("is-on", on);
+      if (on) {
+        // "No Bundle" is exclusive with bundles — clear any selected bundles.
+        ctx.bundleDeselectors.forEach(function (f) {
+          try {
+            f();
+          } catch (e) {}
+        });
+        store();
+      } else ctx.extras.delete(KEY);
+      ctx.onChange();
+    }
+    ctx.deselectDefaultCard = function () {
+      if (selected) setSel(false);
+    };
+    ctx.resetFns.push(function () {
+      // After an add, return to the pre-selected baseline (qty 1).
+      selected = true;
+      qty = 1;
+      store();
+      paint();
+    });
+
+    function mainStockBadge(baseClass) {
+      var vs = (ctx.mainData && ctx.mainData.variants) || [];
+      var avail = vs.some(function (v) {
+        return v && v.available;
+      });
+      var b = el(
+        "span",
+        baseClass + " cgp-stk--" + (avail ? "green" : "red"),
+        avail ? "In Stock" : "Out of Stock",
+      );
+      b.setAttribute("data-cgp-stock", "1");
+      b.setAttribute("data-cgp-base", baseClass);
+      return b;
+    }
+
+    function paint() {
+      var d = ctx.mainData;
+      if (!d) {
+        card.innerHTML = "";
+        card.appendChild(el("div", "cgp-bundle__skeleton"));
+        return;
+      }
+      card.innerHTML = "";
+      card.classList.toggle("is-selected", selected); // reflect state on repaint
+      var v = curVar();
+      var price = v ? v.price : d.price;
+      var wasP =
+        v && v.compare_at_price && v.compare_at_price > price
+          ? v.compare_at_price
+          : 0;
+      var savedD = wasP ? wasP - price : 0;
+      var offPctD = wasP ? Math.round((savedD / wasP) * 100) : 0;
+      var head = el("div", "cgp-bundle__head");
+      if (cardMode) {
+        var brow = el("div", "cgp-bundle__brow");
+        // Same as bundle cards: discount %OFF top-left (empty span when none).
+        brow.appendChild(
+          offPctD > 0
+            ? el("span", "cgp-bundle__bdg cgp-bundle__bdg--off", offPctD + "% OFF")
+            : el("span"),
+        );
+        brow.appendChild(mainStockBadge("cgp-bundle__bdg"));
+        head.appendChild(brow);
+      }
+      var mediaEl = el("div", "cgp-bundle__media");
+      var img =
+        (v && v.featured_image && (v.featured_image.src || v.featured_image)) ||
+        d.featured_image ||
+        (d.images && d.images[0]);
+      if (img) {
+        var im = el("img", "cgp-bundle__media-single");
+        im.src = img;
+        im.alt = d.title;
+        im.loading = "lazy";
+        mediaEl.appendChild(im);
+      }
+      head.appendChild(mediaEl);
+      var body = el("div", "cgp-bundle__body");
+      var nameLine = el("div", "cgp-bundle__nameline");
+      // "No Bundle" sits in the KIT-NAME slot (this default = no bundle chosen).
+      nameLine.appendChild(
+        el("span", "cgp-bundle__name", ctx.defaultLabel || "No Bundle"),
+      );
+      body.appendChild(nameLine);
+      // Product name in the code/meta slot, directly under the name.
+      var meta = el("div", "cgp-bundle__meta");
+      meta.appendChild(el("span", "cgp-bundle__code", d.title));
+      body.appendChild(meta);
+      var pr = el("div", "cgp-bundle__price");
+      var nowS = el("span", "cgp-bundle__now");
+      nowS.appendChild(document.createTextNode(money(price, ctx.currency)));
+      if (ctx.vatRate > 0) nowS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+      pr.appendChild(nowS);
+      if (wasP && ctx.showStrike) {
+        var wasS = el("span", "cgp-bundle__was");
+        wasS.appendChild(document.createTextNode(money(wasP, ctx.currency)));
+        if (ctx.vatRate > 0) wasS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+        pr.appendChild(wasS);
+      }
+      if (savedD > 0) {
+        // List mode shows %OFF inline (card mode shows it top-left, like bundles).
+        if (!cardMode && offPctD > 0) {
+          pr.appendChild(el("span", "cgp-bundle__off", offPctD + "% OFF"));
+        }
+        var savedShown = ctx.vatRate > 0 ? savedD * (1 + ctx.vatRate / 100) : savedD;
+        var saveSpan = el("span", "cgp-bundle__save");
+        saveSpan.appendChild(
+          document.createTextNode("Save " + money(savedShown, ctx.currency)),
+        );
+        if (ctx.vatRate > 0) saveSpan.appendChild(el("span", "cgp-bundle__vat", " inc VAT"));
+        pr.appendChild(saveSpan);
+      }
+      body.appendChild(pr);
+      if (!cardMode) body.appendChild(mainStockBadge("cgp-bundle__stocktag"));
+      // Quantity stepper (shown when selected, via CSS).
+      var qw = el("div", "cgp-bundle__qty");
+      var mn = el("button", "cgp-bundle__qtybtn", "−");
+      mn.type = "button";
+      var qnum = el("span", "cgp-bundle__qtyn", String(qty));
+      var pl = el("button", "cgp-bundle__qtybtn", "+");
+      pl.type = "button";
+      qw.appendChild(mn);
+      qw.appendChild(qnum);
+      qw.appendChild(pl);
+      function setQ(n) {
+        qty = Math.max(1, n | 0);
+        qnum.textContent = String(qty);
+        if (selected) {
+          store();
+          ctx.onChange();
+        }
+      }
+      mn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setQ(qty - 1);
+      });
+      pl.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setQ(qty + 1);
+      });
+      var aside = el("div", "cgp-bundle__aside");
+      aside.appendChild(el("span", "cgp-check" + (selected ? " is-on" : "")));
+      if (cardMode) {
+        // Foot row: quantity stepper (left) + select circle (right), like Setup Kit.
+        var foot = el("div", "cgp-bundle__foot");
+        foot.appendChild(qw);
+        foot.appendChild(aside);
+        body.appendChild(foot);
+        head.appendChild(body);
+      } else {
+        body.appendChild(qw);
+        head.appendChild(body);
+        head.appendChild(aside);
+      }
+      card.appendChild(head);
+      aside.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setSel(!selected);
+      });
+      head.addEventListener("click", function () {
+        setSel(!selected);
+      });
+      refreshMainStock(card, ctx);
+    }
+
+    store(); // baseline selection present immediately
+    paint();
+    ctx.bundlePaints.push(paint); // repaint once the main product loads
+    ctx.mainVarSync.push(paint); // repaint on page variant change
+    return card;
+  }
 
   function renderBundles(ctx, groups, root) {
     var wrap = root.querySelector("[data-cgp-bundles]");
     var list = root.querySelector("[data-cgp-bundle-list]");
     if (!wrap || !list || !groups.length) return;
     wrap.hidden = false;
+    var cardMode = ctx.bundleLayout === "card";
+    if (cardMode) list.classList.add("cgp-addon__bundle-list--cards");
+    // The "just the product" default card goes first and stays out of paging.
+    if (ctx.showDefaultCard) {
+      renderDefaultCard(ctx, list);
+      ctx.hasDefaultCard = true;
+    }
+    var cards = [];
     groups.forEach(function (group) {
-      var card = el("div", "cgp-bundle");
+      var card = el("div", "cgp-bundle" + (cardMode ? " cgp-bundle--card" : ""));
       card.appendChild(el("div", "cgp-bundle__skeleton"));
       list.appendChild(card);
+      cards.push(card);
       renderBundle(ctx, card, group);
     });
+    // Card mode = horizontal slider (3 in view, scroll for more). List mode =
+    // stacked rows paged at 4.
+    if (cardMode) setupBundleSlider(list);
+    else setupBundlePaging(list, cards, 4);
+  }
+
+  // Simple pager over the bundle cards. Uses a class (not inline display) so it
+  // never fights the sold-out hide (which uses its own class).
+  function setupBundlePaging(list, cards, perPage) {
+    if (cards.length <= perPage) return;
+    var pages = Math.ceil(cards.length / perPage);
+    var page = 0;
+    var pager = el("div", "cgp-bundle-pager");
+    var prev = el("button", "cgp-bundle-pager__btn cgp-bundle-pager__btn--prev");
+    prev.type = "button";
+    var label = el("span", "cgp-bundle-pager__label", "");
+    var next = el("button", "cgp-bundle-pager__btn cgp-bundle-pager__btn--next");
+    next.type = "button";
+    pager.appendChild(prev);
+    pager.appendChild(label);
+    pager.appendChild(next);
+    if (list.parentNode) list.parentNode.insertBefore(pager, list.nextSibling);
+
+    function show() {
+      cards.forEach(function (c, i) {
+        var onPage = Math.floor(i / perPage) === page;
+        c.classList.toggle("cgp-bundle--pg-hidden", !onPage);
+      });
+      label.textContent = page + 1 + " / " + pages;
+      prev.disabled = page === 0;
+      next.disabled = page === pages - 1;
+    }
+    prev.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (page > 0) {
+        page--;
+        show();
+      }
+    });
+    next.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (page < pages - 1) {
+        page++;
+        show();
+      }
+    });
+    show();
+  }
+
+  // Card mode = a horizontal slider: ~3 cards per view, scroll for more, with
+  // prev/next nav buttons below. All cards live in one scroll track (default +
+  // bundles); the buttons scroll it by one full view and disable at the ends.
+  function setupBundleSlider(list) {
+    var pager = el("div", "cgp-bundle-pager");
+    var prev = el("button", "cgp-bundle-pager__btn cgp-bundle-pager__btn--prev");
+    prev.type = "button";
+    prev.setAttribute("aria-label", "Previous");
+    var next = el("button", "cgp-bundle-pager__btn cgp-bundle-pager__btn--next");
+    next.type = "button";
+    next.setAttribute("aria-label", "Next");
+    pager.appendChild(prev);
+    pager.appendChild(next);
+    // Place the nav in the section header (top-right), like the theme carousels.
+    // Re-inserting per add-on tab switch: drop any existing pager first.
+    var section = list.closest("[data-cgp-bundles], [data-cgp-addons]");
+    var secHead = section && section.querySelector(".cgp-addon__sec-head");
+    if (secHead) {
+      var oldPager = secHead.querySelector(".cgp-bundle-pager");
+      if (oldPager) oldPager.remove();
+      secHead.appendChild(pager);
+    } else if (list.parentNode) {
+      list.parentNode.insertBefore(pager, list.nextSibling);
+    }
+
+    // One "page" = the number of whole cards currently in view.
+    function step() {
+      var first = list.querySelector(".cgp-bundle");
+      if (!first) return list.clientWidth;
+      var cs = getComputedStyle(list);
+      var gap = parseFloat(cs.columnGap || cs.gap) || 10;
+      var cw = first.getBoundingClientRect().width + gap;
+      var vis = Math.max(1, Math.round(list.clientWidth / cw));
+      return cw * vis;
+    }
+    // scroll-snap + the panel's left padding make the "start" settle at
+    // scrollLeft ≈ padding (not 0), so the edge threshold must allow for it.
+    function update() {
+      var pad = (parseFloat(getComputedStyle(list).paddingLeft) || 0) + 6;
+      var maxScroll = list.scrollWidth - list.clientWidth;
+      pager.style.display = maxScroll <= pad ? "none" : "";
+      prev.disabled = list.scrollLeft <= pad;
+      next.disabled = list.scrollLeft >= maxScroll - 6;
+    }
+    prev.addEventListener("click", function (e) {
+      e.stopPropagation();
+      list.scrollBy({ left: -step(), behavior: "smooth" });
+    });
+    next.addEventListener("click", function (e) {
+      e.stopPropagation();
+      list.scrollBy({ left: step(), behavior: "smooth" });
+    });
+    prev.disabled = true; // a slider always starts at the left edge
+    list.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    // Re-check once the slider has its real width / cards have laid out.
+    if (window.ResizeObserver) {
+      try {
+        new ResizeObserver(update).observe(list);
+      } catch (e) {}
+    }
+    requestAnimationFrame(update);
+    setTimeout(update, 150);
+    setTimeout(update, 800);
   }
 
   function renderBundle(ctx, card, group) {
@@ -1022,6 +1577,7 @@
       var selected = false;
       var timer = null;
       var expanded = false; // View-more open state (persists across re-renders)
+      var chosenQty = 1; // how many of THIS kit to buy (buy multiples of one bundle)
       // Customer's chosen variant per accessory (numeric product id -> variant).
       var chosenVars = {};
       // Customer's chosen MAIN-product variant for this bundle.
@@ -1033,7 +1589,8 @@
       function chosenVarFor(p) {
         var off = offeredFor(p);
         if (off.length <= 1) return off[0];
-        return chosenVars[gidTail(p.id)] || null;
+        // Default to the first in-stock variant so the kit is ready right away.
+        return chosenVars[gidTail(p.id)] || firstAvailableIn(off) || off[0] || null;
       }
 
       // Which MAIN-product variants this bundle offers (mainVariantIds, else all).
@@ -1054,7 +1611,19 @@
       function curMainVar() {
         if (chosenMainVar) return chosenMainVar;
         var om = offeredMainVar();
-        return om.length === 1 ? om[0] : null;
+        if (!om.length) return null;
+        if (om.length === 1) return om[0];
+        // Default to the page's current variant if this bundle offers it, else the
+        // first in-stock one — so the kit is ready without picking anything.
+        var cur = readMainVariantId();
+        return (
+          om.filter(function (v) {
+            return String(v.id) === String(cur);
+          })[0] ||
+          firstAvailableIn(om) ||
+          om[0] ||
+          null
+        );
       }
       function mainPriceVal() {
         var v = curMainVar();
@@ -1098,9 +1667,29 @@
         var v = chosenVarFor(p) || firstAvailableIn(offeredFor(p));
         return v && v.price != null ? v.price : p.price;
       }
+      // The TRUE original (RRP) of a variant = its compare-at when on sale, else
+      // its price. The bundle % stacks on the CURRENT (already-discounted) price,
+      // but the struck "was" shows this real original so the displayed saving
+      // reflects the sale + the bundle discount combined (never looks worse than
+      // buying the item on its own). A bundle is therefore always ≤ buying apart.
+      function origOf(v) {
+        if (!v) return 0;
+        var pr = v.price || 0;
+        var ca = v.compare_at_price || 0;
+        return ca > pr ? ca : pr;
+      }
+      function mainOrigVal() {
+        var v = curMainVar();
+        if (v) return origOf(v);
+        var om = offeredMainVar();
+        return origOf(om[0]) || mainVariant(ctx).price || 0;
+      }
+      function accOrigVal(p) {
+        return origOf(chosenVarFor(p) || firstAvailableIn(offeredFor(p)));
+      }
 
       function bundleReady() {
-        if (offeredMainVar().length > 1 && !chosenMainVar) return false;
+        if (!curMainVar()) return false;
         return products.every(function (p) {
           return !!chosenVarFor(p);
         });
@@ -1140,6 +1729,68 @@
           list.push({ handle: p.handle, variantId: v ? v.id : null });
         });
         return list;
+      }
+      // Apply a computed stock status to this card's badges + (if open) its popup.
+      function applyStock(st) {
+        card.querySelectorAll("[data-cgp-stock]").forEach(function (b) {
+          b.textContent = st.label;
+          b.className = b.getAttribute("data-cgp-base") + " cgp-stk--" + st.cls;
+        });
+        var modal = ctx.modal;
+        if (modal && !modal.hidden) {
+          var ms = modal.querySelector("[data-cgp-modal-stock]");
+          if (
+            ms &&
+            ms.getAttribute("data-cgp-forcode") === String(group.code || group.id)
+          ) {
+            ms.textContent = st.label;
+            ms.className = ms.getAttribute("data-cgp-base") + " cgp-stk--" + st.cls;
+          }
+        }
+      }
+      // Compute the kit's combined per-location stock (min across chosen variants)
+      // and set the badge to the Stock Availability section's exact status.
+      function refreshKitStock() {
+        var comps = bundleComponents();
+        Promise.all(
+          comps.map(function (c) {
+            return fetchLocStock(c.handle).then(function (m) {
+              return { c: c, m: m };
+            });
+          }),
+        ).then(function (res) {
+          var minUk = Infinity,
+            minEs = Infinity,
+            minInc = Infinity,
+            anyDeny = false,
+            gotData = false,
+            gotAny = false;
+          res.forEach(function (r) {
+            if (!r.m || !r.m.variants || !Object.keys(r.m.variants).length) return;
+            gotData = true;
+            var vv = r.m.variants[String(r.c.variantId)];
+            if (!vv) return;
+            gotAny = true;
+            minUk = Math.min(minUk, toInt(vv.uk_inv));
+            minEs = Math.min(minEs, toInt(vv.es_inv));
+            minInc = Math.min(minInc, toInt(vv.uk_inc));
+            if (vv.policy !== "continue") anyDeny = true;
+          });
+          if (!gotData) return; // no section data on this store — keep generic badge
+          if (!gotAny) {
+            minUk = 0;
+            minEs = 0;
+            minInc = 0;
+          }
+          applyStock(
+            stkStatusFrom(
+              minUk === Infinity ? 0 : minUk,
+              minEs === Infinity ? 0 : minEs,
+              minInc === Infinity ? 0 : minInc,
+              anyDeny ? "deny" : "continue",
+            ),
+          );
+        });
       }
       // Fire the public integration event. `on` selected -> carries the chosen
       // variant of every component so a theme can compute real combinable stock.
@@ -1214,6 +1865,7 @@
         ctx.extras.set(key, {
           kind: "bundle",
           percent: 0, // each item carries its own percent
+          qty: chosenQty, // buy N of this kit (Function discounts all N)
           offerId: offerId || null,
           bid: group.id || null, // which bundle group (for main-line discount)
           title: group.title || "Bundle",
@@ -1240,10 +1892,11 @@
         card.classList.toggle("is-selected", on);
         var check = card.querySelector(".cgp-check");
         if (check) {
-          check.textContent = on ? "✓" : "";
           check.classList.toggle("is-on", on);
         }
         if (on) {
+          // Selecting a bundle clears the "No Bundle" default (they're exclusive).
+          if (ctx.deselectDefaultCard) ctx.deselectDefaultCard();
           storeSelection(state, offerId); // fires cgp:bundle-selected
         } else {
           ctx.extras.delete(key);
@@ -1254,12 +1907,16 @@
 
       ctx.resetFns.push(function () {
         selected = false;
+        chosenQty = 1;
         card.classList.remove("is-selected");
         var check = card.querySelector(".cgp-check");
         if (check) {
-          check.textContent = "";
           check.classList.remove("is-on");
         }
+      });
+      // Registered so the "No Bundle" card can clear every bundle when picked.
+      ctx.bundleDeselectors.push(function () {
+        if (selected) setSelected(false);
       });
 
       // Rebuilding the card (innerHTML reset) can nudge the page scroll —
@@ -1291,10 +1948,10 @@
         var stock = bundleStock();
         if (group.hideWhenSoldOut && stock <= 0) {
           if (selected) setSelected(false);
-          card.style.display = "none";
+          card.classList.add("cgp-bundle--oos-hidden");
           return;
         }
-        card.style.display = "";
+        card.classList.remove("cgp-bundle--oos-hidden");
 
         var live = hasLimited && (state === "active" || state === "upcoming");
         card.classList.toggle("cgp-limited", live);
@@ -1313,33 +1970,141 @@
           }
         }
 
+        // "now" = bundle % stacked on the CURRENT price; "was" = the TRUE original
+        // (compare-at), so the saving reflects the sale + the bundle combined.
         var accNow = 0,
           accWas = 0;
         products.forEach(function (p) {
-          var base = accPriceVal(p);
-          accWas += base;
-          accNow += discounted(base, itemPercentFor(p, state));
+          accNow += discounted(accPriceVal(p), itemPercentFor(p, state));
+          accWas += accOrigVal(p);
         });
-        // The bundle shows its WHOLE total (main + accessories). The main is
-        // full price unless this bundle opts into discounting the main too.
-        var mainWas = mainPriceVal();
         var mainPct = mainPercentOf(state);
-        var mainNow = discounted(mainWas, mainPct);
+        var mainNow = discounted(mainPriceVal(), mainPct);
+        var mainWas = mainOrigVal();
         var totalNow = mainNow + accNow;
         var totalWas = mainWas + accWas;
         var saved = totalWas - totalNow;
         var hasSaving = saved > 0;
 
-        // HEAD (selectable): name (+ inline countdown badge) / one-line price /
-        // thumbnails + "View more" on the right, with the selector on the far right.
+        // Media (left): a cover image, else a grid of the component images
+        // (2×2 for ≤4, 3×3 for 5–9; >9 → one representative image).
+        function buildMedia(container) {
+          container.className = "cgp-bundle__media";
+          container.innerHTML = "";
+          if (group.coverImage) {
+            var imc = el("img", "cgp-bundle__media-single");
+            imc.src = group.coverImage;
+            imc.alt = group.title || "Bundle";
+            imc.loading = "lazy";
+            container.appendChild(imc);
+            return;
+          }
+          var imgs = [];
+          var mi = mainImg();
+          if (mi) imgs.push(mi);
+          products.forEach(function (p) {
+            var a = accImg(p);
+            if (a) imgs.push(a);
+          });
+          var n = imgs.length;
+          if (n === 0) return;
+          if (n === 1 || n > 9) {
+            var im1 = el("img", "cgp-bundle__media-single");
+            im1.src = imgs[0];
+            im1.alt = group.title || "";
+            im1.loading = "lazy";
+            container.appendChild(im1);
+            return;
+          }
+          // Flex montage: images shown WHOLE (contain), centred; a partial last
+          // row is centred too. 2–4 → 2 per row, 5–9 → 3 per row.
+          var perRow = n <= 4 ? 2 : 3;
+          container.className = "cgp-bundle__media cgp-bundle__media--grid";
+          var grid = el("div", "cgp-bundle__grid");
+          grid.style.setProperty("--cgp-cols", perRow);
+          imgs.slice(0, perRow * perRow).forEach(function (src) {
+            var cell = el("div", "cgp-bundle__grid-cell");
+            var im = el("img");
+            im.src = src;
+            im.loading = "lazy";
+            cell.appendChild(im);
+            grid.appendChild(cell);
+          });
+          container.appendChild(grid);
+        }
+        // A price value + an optional small "ex/inc VAT" suffix.
+        function priceEl(cls, cents, vatLabel) {
+          var s = el("span", cls);
+          s.appendChild(document.createTextNode(money(cents, ctx.currency)));
+          if (ctx.vatRate > 0 && vatLabel) {
+            s.appendChild(el("span", "cgp-bundle__vat", " " + vatLabel));
+          }
+          return s;
+        }
+
+        // Component availability + discount %, used by the stock tag, the save
+        // line, and (card mode) the image overlays.
+        var compAvail = function (vars) {
+          return (vars || []).some(function (v) {
+            return v && v.available;
+          });
+        };
+        var allAvail =
+          compAvail(offeredMainVar()) &&
+          products.every(function (p) {
+            return compAvail(offeredFor(p));
+          });
+        var offPct =
+          hasSaving && totalWas > 0 ? Math.round((saved / totalWas) * 100) : 0;
+
+        // A stock badge with a generic initial state; refreshKitStock() upgrades it
+        // to the Stock Availability section's exact status/colour once fetched.
+        function makeStockBadge(baseClass) {
+          var b = el(
+            "span",
+            baseClass + " cgp-stk--" + (allAvail ? "green" : "red"),
+            allAvail ? "In Stock" : "Out of Stock",
+          );
+          b.setAttribute("data-cgp-stock", "1");
+          b.setAttribute("data-cgp-base", baseClass);
+          return b;
+        }
+
+        var cardMode = ctx.bundleLayout === "card";
+
+        // HEAD: media (left) + body (right); selector top-right, expand bottom-right.
         var head = el("div", "cgp-bundle__head");
-        var mainCol = el("div", "cgp-bundle__main");
+
+        // Card mode: a badge row ABOVE the image (discount left, stock right) —
+        // same size/type, only the colour differs; never covering the image.
+        if (cardMode) {
+          var brow = el("div", "cgp-bundle__brow");
+          brow.appendChild(
+            offPct > 0
+              ? el("span", "cgp-bundle__bdg cgp-bundle__bdg--off", offPct + "% OFF")
+              : el("span"),
+          );
+          brow.appendChild(makeStockBadge("cgp-bundle__bdg"));
+          head.appendChild(brow);
+        }
+
+        var mediaEl = el("div", "cgp-bundle__media");
+        buildMedia(mediaEl);
+        // Image opens the detail popup (card) / expands the detail (list).
+        mediaEl.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (cardMode) openBundleInfo();
+          else setExpanded(!expanded);
+        });
+        head.appendChild(mediaEl);
+
+        var body = el("div", "cgp-bundle__body");
 
         var nameLine = el("div", "cgp-bundle__nameline");
         nameLine.appendChild(
           el("span", "cgp-bundle__name", group.title || "Bundle"),
         );
-        // Inline countdown badge next to the name (instead of a full-width bar).
+        // Inline countdown badge next to the name.
         var cdSpan = null;
         var cdTarget = null;
         if (live && state === "active" && group.limited.endsAt) {
@@ -1360,67 +2125,101 @@
           nameLine.appendChild(bd2);
           cdTarget = group.limited.startsAt;
         }
-        // Show the bundle code so customers/support can reference it and it
-        // matches what search + the deep-link use.
-        if (group.code) {
-          nameLine.appendChild(el("span", "cgp-bundle__code", group.code));
-        }
-        // Kit stock is shown by the theme's Stock Availability section (accurate
-        // per-location, per-chosen-variant), so the widget no longer paints its own.
-        mainCol.appendChild(nameLine);
+        body.appendChild(nameLine);
         if (cdSpan) timer = startCountdown(cdSpan, Date.parse(cdTarget), paint);
 
+        // Code sits directly under the name (above the price).
+        if (group.code) {
+          var metaLine = el("div", "cgp-bundle__meta");
+          metaLine.appendChild(el("span", "cgp-bundle__code", group.code));
+          body.appendChild(metaLine);
+        }
+
+        // Price: current price, struck original, and "Save £X" — card mode puts the
+        // current price on its own line and the struck + save on the next line; the
+        // % OFF pill is inline in list mode (on the image badge in card mode).
+        var itemCount = products.length + (ctx.mainData ? 1 : 0);
         var pr = el("div", "cgp-bundle__price");
-        pr.appendChild(
-          el("span", "cgp-bundle__now", money(totalNow, ctx.currency)),
-        );
+        pr.appendChild(priceEl("cgp-bundle__now", totalNow, "ex VAT"));
         if (hasSaving && ctx.showStrike) {
-          pr.appendChild(el("span", "cgp-bundle__was", money(totalWas, ctx.currency)));
+          pr.appendChild(priceEl("cgp-bundle__was", totalWas, "ex VAT"));
         }
         if (hasSaving) {
-          pr.appendChild(
-            el("span", "cgp-bundle__save", "Save " + money(saved, ctx.currency)),
+          if (!cardMode && offPct > 0) {
+            pr.appendChild(el("span", "cgp-bundle__off", offPct + "% OFF"));
+          }
+          var savedShown =
+            ctx.vatRate > 0 ? saved * (1 + ctx.vatRate / 100) : saved;
+          var saveSpan = el("span", "cgp-bundle__save");
+          saveSpan.appendChild(
+            document.createTextNode("Save " + money(savedShown, ctx.currency)),
           );
-          var offPct = totalWas > 0 ? Math.round((saved / totalWas) * 100) : 0;
-          pr.appendChild(el("span", "cgp-bundle__off", offPct + "% OFF"));
+          if (ctx.vatRate > 0) {
+            saveSpan.appendChild(el("span", "cgp-bundle__vat", " inc VAT"));
+          }
+          pr.appendChild(saveSpan);
         }
-        mainCol.appendChild(pr);
+        body.appendChild(pr);
 
-        // Thumbnails (main + accessories) on the left, "View more" on the right.
-        var thumbsRow = el("div", "cgp-bundle__thumbsrow");
-        var thumbs = el("div", "cgp-bundle__thumbs");
-        [ctx.mainData]
-          .concat(products)
-          .forEach(function (p) {
-            if (!p) return;
-            var t = el("span", "cgp-bundle__thumb-sm");
-            var img = p === ctx.mainData ? mainImg() : accImg(p);
-            if (img) {
-              var im = el("img");
-              im.src = img;
-              im.alt = p.title || "";
-              im.loading = "lazy";
-              t.appendChild(im);
-            }
-            // Clicking any thumbnail opens the detail (without selecting).
-            t.addEventListener("click", function (e) {
-              e.stopPropagation();
-              setExpanded(true);
-            });
-            thumbs.appendChild(t);
-          });
-        thumbsRow.appendChild(thumbs);
+        // Stock tag — list mode only (card mode shows it in the badge row above).
+        if (!cardMode) {
+          body.appendChild(makeStockBadge("cgp-bundle__stocktag"));
+        }
+
+        // Quantity stepper — buy several of THIS kit. CSS shows it only when the
+        // card is selected (foot-left, per the Setup Kit spec §5.6).
+        var qtyWrap = el("div", "cgp-bundle__qty");
+        var qMinus = el("button", "cgp-bundle__qtybtn", "−");
+        qMinus.type = "button";
+        qMinus.setAttribute("aria-label", "Decrease quantity");
+        var qNum = el("span", "cgp-bundle__qtyn", String(chosenQty));
+        var qPlus = el("button", "cgp-bundle__qtybtn", "+");
+        qPlus.type = "button";
+        qPlus.setAttribute("aria-label", "Increase quantity");
+        qtyWrap.appendChild(qMinus);
+        qtyWrap.appendChild(qNum);
+        qtyWrap.appendChild(qPlus);
+        function setQty(n) {
+          chosenQty = Math.max(1, n | 0);
+          qNum.textContent = String(chosenQty);
+          if (selected) {
+            storeSelection(state, offerIdFor(state)); // re-store with new qty
+            ctx.onChange(); // refresh totals + counter
+          }
+        }
+        qMinus.addEventListener("click", function (e) {
+          e.stopPropagation();
+          setQty(chosenQty - 1);
+        });
+        qPlus.addEventListener("click", function (e) {
+          e.stopPropagation();
+          setQty(chosenQty + 1);
+        });
+        // Selector: a "+" that becomes a tick when selected.
+        var aside = el("div", "cgp-bundle__aside");
+        aside.appendChild(el("span", "cgp-check" + (selected ? " is-on" : "")));
+
+        // Detail toggle: "View more" (list) / "View N items" (card).
         var toggleLine = el("button", "cgp-bundle__expand", "View more ▾");
         toggleLine.type = "button";
-        thumbsRow.appendChild(toggleLine);
-        mainCol.appendChild(thumbsRow);
-        head.appendChild(mainCol);
 
-        var aside = el("div", "cgp-bundle__aside");
-        aside.appendChild(
-          el("span", "cgp-check" + (selected ? " is-on" : ""), selected ? "✓" : ""),
-        );
-        head.appendChild(aside);
+        if (cardMode) {
+          // Card: "View N items" link in the body, then a foot row pairing the
+          // quantity stepper (left) with the select circle (right) — like Setup Kit.
+          body.appendChild(toggleLine);
+          var foot = el("div", "cgp-bundle__foot");
+          foot.appendChild(qtyWrap);
+          foot.appendChild(aside);
+          body.appendChild(foot);
+          head.appendChild(body);
+        } else {
+          // List: stepper in the body flow; selector + toggle pinned (absolute).
+          body.appendChild(qtyWrap);
+          head.appendChild(body);
+          head.appendChild(aside);
+          head.appendChild(toggleLine);
+        }
+
         card.appendChild(head);
 
         var listEl = el("div", "cgp-bundle__contents");
@@ -1428,16 +2227,16 @@
 
         function variantSelect(offered, currentId, onPick) {
           var s = el("select", "cgp-bundle__variant");
-          var ph = el("option", null, "Choose an option…");
-          ph.value = "";
-          s.appendChild(ph);
           offered.forEach(function (v) {
             var o = el("option", null, v.title + (v.available ? "" : " — sold out"));
             o.value = v.id;
             if (!v.available) o.disabled = true;
             s.appendChild(o);
           });
-          s.value = currentId ? String(currentId) : "";
+          // No "Choose an option…" — default to the current/first in-stock variant.
+          var def =
+            currentId || (firstAvailableIn(offered) || offered[0] || {}).id;
+          s.value = def ? String(def) : "";
           s.addEventListener("change", function () {
             s.classList.remove("cgp-needs-choice");
             onPick(
@@ -1451,13 +2250,14 @@
 
         // Detail list: the MAIN product (with its own variant picker, like the
         // accessories) first, then each accessory.
-        function buildContents() {
-          listEl.innerHTML = "";
+        function buildContents(target) {
+          target = target || listEl;
+          target.innerHTML = "";
           if (ctx.mainData) {
             var om = offeredMainVar();
             var mainSel =
               om.length > 1
-                ? variantSelect(om, chosenMainVar && chosenMainVar.id, function (v) {
+                ? variantSelect(om, (curMainVar() || {}).id, function (v) {
                     holdScroll(600); // Dawn re-renders media async; keep page put
                     chosenMainVar = v;
                     if (v) selectMainVariant(ctx, v.id); // sync to the page picker
@@ -1468,9 +2268,10 @@
                     }
                     paint();
                     ctx.onChange(); // refresh totals above the Add-to-cart button
+                    armedAutoSelect(state); // deep-linked kit: select once complete
                   })
                 : null;
-            listEl.appendChild(
+            target.appendChild(
               contentRow(
                 ctx,
                 ctx.mainData,
@@ -1480,6 +2281,7 @@
                 mainSel,
                 mainImg(),
                 mainPriceVal(),
+                mainOrigVal(),
               ),
             );
           }
@@ -1487,7 +2289,7 @@
             var off = offeredFor(p);
             var sel =
               off.length > 1
-                ? variantSelect(off, chosenVars[gidTail(p.id)] && chosenVars[gidTail(p.id)].id, function (v) {
+                ? variantSelect(off, (chosenVarFor(p) || {}).id, function (v) {
                     chosenVars[gidTail(p.id)] = v;
                     if (selected) {
                       if (bundleReady()) storeSelection(state, offerIdFor(state));
@@ -1495,26 +2297,271 @@
                     }
                     paint(); // refresh this accessory's thumbnail + price
                     ctx.onChange(); // refresh totals above the Add-to-cart button
+                    armedAutoSelect(state); // deep-linked kit: select once complete
                   })
                 : null;
-            listEl.appendChild(
-              contentRow(ctx, p, itemPercentFor(p, state), null, false, sel, accImg(p), accPriceVal(p)),
+            target.appendChild(
+              contentRow(ctx, p, itemPercentFor(p, state), null, false, sel, accImg(p), accPriceVal(p), accOrigVal(p)),
             );
           });
+        }
+        // One component row for the Info popup: image + title / price / variant,
+        // each on its own line (cleaner than the compact inline detail rows).
+        function modalRow(data, percent, tag, sel, img, basePrice, link, origPrice) {
+          var row = el("div", "cgp-modal__crow");
+          var thumb = el(link ? "a" : "div", "cgp-modal__cthumb");
+          if (link) {
+            thumb.href = link;
+            thumb.target = "_blank";
+            thumb.rel = "noopener";
+          }
+          if (img) {
+            var im = el("img");
+            im.src = img;
+            im.loading = "lazy";
+            thumb.appendChild(im);
+          }
+          row.appendChild(thumb);
+          var info = el("div", "cgp-modal__cinfo");
+          var nameEl = el(link ? "a" : "div", "cgp-modal__cname", data.title);
+          if (link) {
+            nameEl.href = link;
+            nameEl.target = "_blank";
+            nameEl.rel = "noopener";
+          }
+          info.appendChild(nameEl);
+          if (tag) info.appendChild(el("span", "cgp-modal__ctag", tag));
+          var pl = el("div", "cgp-modal__cprice");
+          var rowNow = discounted(basePrice, percent);
+          var rowWas = origPrice != null ? origPrice : basePrice;
+          var nowS = el("span", "cgp-modal__cnow");
+          nowS.appendChild(document.createTextNode(money(rowNow, ctx.currency)));
+          if (ctx.vatRate > 0) nowS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+          pl.appendChild(nowS);
+          if (rowWas > rowNow && ctx.showStrike) {
+            var wasS = el("span", "cgp-modal__cwas");
+            wasS.appendChild(document.createTextNode(money(rowWas, ctx.currency)));
+            if (ctx.vatRate > 0) wasS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+            pl.appendChild(wasS);
+          }
+          info.appendChild(pl);
+          if (sel) info.appendChild(sel);
+          row.appendChild(info);
+          // External-link icon → opens the product page in a new tab.
+          if (link) {
+            var ext = el("a", "cgp-modal__ext");
+            ext.href = link;
+            ext.target = "_blank";
+            ext.rel = "noopener";
+            ext.setAttribute("aria-label", "Open " + data.title + " in a new tab");
+            ext.innerHTML =
+              "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 4h6v6'/><path d='M20 4l-8.5 8.5'/><path d='M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6'/></svg>";
+            ext.addEventListener("click", function (e) {
+              e.stopPropagation();
+            });
+            row.appendChild(ext);
+          }
+          return row;
+        }
+
+        // Card mode: the "Info" button opens the bundle detail in the modal, with a
+        // fixed header (title + stock), a scrolling component list (images update
+        // with the chosen variant), and a "Select this bundle" footer that syncs
+        // the card's selected state.
+        function openBundleInfo() {
+          var modal = ctx.modal;
+          if (!modal) return;
+          setupModal(modal);
+          var dialog = modal.querySelector(".cgp-modal__dialog");
+          var mbody = modal.querySelector("[data-cgp-modal-body]");
+          if (!dialog || !mbody) return;
+          cleanModalChrome(dialog); // drop any header/footer from a previous open
+
+          // Fixed header: name (+ code) on line 1, stock on line 2 (left). The X
+          // badge is the liquid button (top-right).
+          var header = el("div", "cgp-modal__header");
+          var titleEl = el("div", "cgp-modal__title");
+          titleEl.appendChild(
+            el("span", "cgp-modal__title-name", group.title || "Bundle"),
+          );
+          if (group.code) {
+            titleEl.appendChild(el("span", "cgp-modal__title-code", group.code));
+          }
+          header.appendChild(titleEl);
+          var pstock = el(
+            "span",
+            "cgp-modal__stock cgp-stk--" + (allAvail ? "green" : "red"),
+            allAvail ? "In Stock" : "Out of Stock",
+          );
+          pstock.setAttribute("data-cgp-modal-stock", "1");
+          pstock.setAttribute("data-cgp-base", "cgp-modal__stock");
+          pstock.setAttribute("data-cgp-forcode", String(group.code || group.id));
+          header.appendChild(pstock);
+          dialog.insertBefore(header, mbody);
+
+          mbody.innerHTML = "";
+          var clist = el("div", "cgp-modal__clist");
+          mbody.appendChild(clist);
+
+          // Footer: total price (left) + Select button (right). Clicking Select
+          // toggles the selection AND closes the popup.
+          var footer = el("div", "cgp-modal__foot");
+          var footPrice = el("div", "cgp-modal__foot-price");
+          var selBtn = el("button", "cgp-modal__selectbtn", "");
+          selBtn.type = "button";
+          footer.appendChild(footPrice);
+          footer.appendChild(selBtn);
+
+          function computeTotals() {
+            var accNow = 0,
+              accWas = 0;
+            products.forEach(function (p) {
+              accNow += discounted(accPriceVal(p), itemPercentFor(p, state));
+              accWas += accOrigVal(p);
+            });
+            var mNow = discounted(mainPriceVal(), mainPercentOf(state));
+            var mWas = mainOrigVal();
+            return { now: mNow + accNow, was: mWas + accWas };
+          }
+          function syncSelectBtn() {
+            selBtn.textContent = selected ? "✓ Selected" : "Select this bundle";
+            selBtn.classList.toggle("is-selected", selected);
+            // Total price (recomputes when a variant changes).
+            var tp = computeTotals();
+            var saved = tp.was - tp.now;
+            var offPct = saved > 0 && tp.was > 0 ? Math.round((saved / tp.was) * 100) : 0;
+            footPrice.innerHTML = "";
+            var nowRow = el("div", "cgp-modal__foot-nowrow");
+            var nowS = el("span", "cgp-modal__foot-now");
+            nowS.appendChild(document.createTextNode(money(tp.now, ctx.currency)));
+            if (ctx.vatRate > 0) nowS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+            nowRow.appendChild(nowS);
+            if (offPct > 0) {
+              nowRow.appendChild(el("span", "cgp-bundle__off", offPct + "% OFF"));
+            }
+            footPrice.appendChild(nowRow);
+            if (saved > 0 && ctx.showStrike) {
+              var wasS = el("span", "cgp-modal__foot-was");
+              wasS.appendChild(document.createTextNode(money(tp.was, ctx.currency)));
+              footPrice.appendChild(wasS);
+            }
+            if (saved > 0) {
+              var savedShown =
+                ctx.vatRate > 0 ? saved * (1 + ctx.vatRate / 100) : saved;
+              var saveS = el("span", "cgp-modal__foot-save");
+              saveS.appendChild(
+                document.createTextNode("Save " + money(savedShown, ctx.currency)),
+              );
+              if (ctx.vatRate > 0) saveS.appendChild(el("span", "cgp-bundle__vat", " inc VAT"));
+              footPrice.appendChild(saveS);
+            }
+          }
+          selBtn.addEventListener("click", function () {
+            setSelected(!selected, state, offerIdFor(state));
+            modal.hidden = true; // auto-close on select
+            cleanModalChrome(dialog);
+          });
+
+          // Rebuild the list on every variant change so each component's image +
+          // price track the chosen variant.
+          function renderModalList() {
+            clist.innerHTML = "";
+            if (ctx.mainData) {
+              var om = offeredMainVar();
+              var mainSel =
+                om.length > 1
+                  ? variantSelect(om, (curMainVar() || {}).id, function (v) {
+                      holdScroll(600);
+                      chosenMainVar = v;
+                      if (v) selectMainVariant(ctx, v.id);
+                      if (selected) {
+                        if (bundleReady()) storeSelection(state, offerIdFor(state));
+                        else setSelected(false, state, offerIdFor(state));
+                      }
+                      paint();
+                      ctx.onChange();
+                      armedAutoSelect(state);
+                      renderModalList();
+                      syncSelectBtn();
+                    })
+                  : null;
+              clist.appendChild(
+                modalRow(
+                  ctx.mainData,
+                  mainPercentOf(state),
+                  "Main",
+                  mainSel,
+                  mainImg(),
+                  mainPriceVal(),
+                  ctx.mainHandle ? "/products/" + ctx.mainHandle : null,
+                  mainOrigVal(),
+                ),
+              );
+            }
+            products.forEach(function (p) {
+              var off = offeredFor(p);
+              var sel =
+                off.length > 1
+                  ? variantSelect(off, (chosenVarFor(p) || {}).id, function (v) {
+                      chosenVars[gidTail(p.id)] = v;
+                      if (selected) {
+                        if (bundleReady()) storeSelection(state, offerIdFor(state));
+                        else setSelected(false, state, offerIdFor(state));
+                      }
+                      paint();
+                      ctx.onChange();
+                      armedAutoSelect(state);
+                      renderModalList();
+                      syncSelectBtn();
+                    })
+                  : null;
+              clist.appendChild(
+                modalRow(
+                  p,
+                  itemPercentFor(p, state),
+                  null,
+                  sel,
+                  accImg(p),
+                  accPriceVal(p),
+                  p.handle ? "/products/" + p.handle : null,
+                  accOrigVal(p),
+                ),
+              );
+            });
+          }
+          renderModalList();
+
+          syncSelectBtn();
+          dialog.appendChild(footer);
+
+          themeModal(ctx); // copy theme vars + portal to <body>
+          modal.hidden = false;
+          refreshKitStock(); // set the popup's stock badge to the section's status
         }
 
         function setExpanded(open) {
           expanded = open;
           listEl.hidden = !open;
-          thumbs.hidden = open;
-          if (open && !listEl.childNodes.length) buildContents();
+          if (open && !listEl.childNodes.length) buildContents(listEl);
           toggleLine.textContent = open ? "Hide ▴" : "View more ▾";
         }
-        setExpanded(expanded); // restore open state across re-renders
-        toggleLine.addEventListener("click", function (e) {
-          e.stopPropagation();
-          setExpanded(!expanded);
-        });
+        if (cardMode) {
+          // Card mode: no inline detail; "View N items" opens the modal.
+          listEl.hidden = true;
+          toggleLine.textContent =
+            "View " + itemCount + " item" + (itemCount === 1 ? "" : "s");
+          toggleLine.classList.add("cgp-bundle__expand--info");
+          toggleLine.addEventListener("click", function (e) {
+            e.stopPropagation();
+            openBundleInfo();
+          });
+        } else {
+          setExpanded(expanded); // restore open state across re-renders
+          toggleLine.addEventListener("click", function (e) {
+            e.stopPropagation();
+            setExpanded(!expanded);
+          });
+        }
 
         if (state === "upcoming") {
           // Not buyable yet — the deep price only applies once it starts.
@@ -1522,54 +2569,91 @@
           if (selected) setSelected(false);
         } else {
           card.classList.remove("is-disabled");
-          head.addEventListener("click", function () {
+          function toggleSelect() {
             if (selected) {
               setSelected(false, state, offerIdFor(state));
               return;
             }
-            // Force variant choices first: open the detail + flag empty pickers.
             if (!bundleReady()) {
-              setExpanded(true);
+              // Need a choice: card opens the popup, list expands the detail.
+              if (cardMode) openBundleInfo();
+              else setExpanded(true);
               listEl.querySelectorAll("select").forEach(function (s) {
                 if (!s.value) s.classList.add("cgp-needs-choice");
               });
               return;
             }
             setSelected(true, state, offerIdFor(state));
+          }
+          // Card mode: clicking the middle/blank of the card SELECTS it (the image
+          // and "View N items" open the popup — they stopPropagation). List mode:
+          // the head toggles the inline detail.
+          head.addEventListener("click", function () {
+            if (cardMode) toggleSelect();
+            else setExpanded(!expanded);
+          });
+          aside.addEventListener("click", function (e) {
+            e.stopPropagation();
+            toggleSelect();
           });
           // Keep a live selection's price/offer in sync across a transition.
           if (selected) storeSelection(state, offerIdFor(state));
         }
+
+        // Deep-link landing (⑤): on the first matching paint, scroll to + expand +
+        // select this kit. Runs HERE (inside paint) so setExpanded/listEl are in
+        // scope. Guarded globally so it fires once. If the kit isn't ready yet
+        // (data still loading) it stays armed and selects on the next paint / once
+        // every option is chosen.
+        if (
+          !window.__cgpDeepDone &&
+          state !== "upcoming" &&
+          state !== "ended"
+        ) {
+          var dlWant = deepLinkBundle();
+          if (
+            dlWant &&
+            (String(group.code || "").toLowerCase() === dlWant.toLowerCase() ||
+              String(group.id) === dlWant)
+          ) {
+            deepArmed = true;
+            scrollToDeepCard();
+            if (ctx.bundleLayout !== "card") setExpanded(true);
+            if (bundleReady()) {
+              deepArmed = false;
+              window.__cgpDeepDone = true;
+              setSelected(true, state, offerIdFor(state));
+            }
+          }
+        }
+        refreshKitStock(); // upgrade the badge to the section's exact status
         ctx.onChange();
       }
 
+      // Set by the deep-link block inside paint(); read by armedAutoSelect. Declared
+      // BEFORE the first paint() so that first paint's assignment isn't clobbered.
+      var deepArmed = false;
       paint();
       // Re-render once the main product loads (for its thumbnail + total price).
       ctx.bundlePaints.push(paint);
 
-      // Deep link (⑤): /products/x?kb_bundle=<code|id> → auto-select this bundle,
-      // scroll to it and flash it. Lets a search result land on the right kit.
-      var want = deepLinkBundle();
-      if (
-        want &&
-        !window.__cgpDeepDone &&
-        (String(group.code || "").toLowerCase() === want.toLowerCase() ||
-          String(group.id) === want)
-      ) {
-        window.__cgpDeepDone = true;
-        var st = hasLimited ? offerState(group) : "active";
-        if (st !== "ended") {
-          if (bundleReady()) setSelected(true, st, offerIdFor(st));
-          else setExpanded(true);
-          setTimeout(function () {
-            try {
-              card.scrollIntoView({ behavior: "smooth", block: "center" });
-            } catch (e) {}
-            card.classList.add("cgp-bundle--flash");
-            setTimeout(function () {
-              card.classList.remove("cgp-bundle--flash");
-            }, 2200);
-          }, 350);
+      // Deep-link helpers (the actual expand+select is at the END of paint(), where
+      // setExpanded/listEl are in scope). These just scroll to the kit and, as a
+      // fallback, select it once every option is chosen. Function declarations are
+      // hoisted, so paint() can call them even though they're defined here.
+      function scrollToDeepCard() {
+        if (window.__cgpDeepFlashed) return;
+        window.__cgpDeepFlashed = true;
+        setTimeout(function () {
+          try {
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+          } catch (e) {}
+        }, 350);
+      }
+      function armedAutoSelect(state) {
+        if (deepArmed && !selected && bundleReady()) {
+          deepArmed = false;
+          setSelected(true, state, offerIdFor(state));
         }
       }
     });
@@ -1585,7 +2669,7 @@
     }
   }
 
-  function contentRow(ctx, data, percent, tag, isMain, sel, imgOverride, priceOverride) {
+  function contentRow(ctx, data, percent, tag, isMain, sel, imgOverride, priceOverride, origOverride) {
     var basePrice = priceOverride != null ? priceOverride : data.price;
     var row = el("div", "cgp-bundle__content-row");
     var link = !isMain && data.handle ? "/products/" + data.handle : null;
@@ -1610,15 +2694,17 @@
     if (sel) info.appendChild(sel); // variant picker
     row.appendChild(info);
     var p = el("div", "cgp-bundle__content-price");
-    p.appendChild(
-      el(
-        "span",
-        "cgp-bundle__now",
-        money(discounted(basePrice, percent), ctx.currency),
-      ),
-    );
-    if (percent > 0 && ctx.showStrike) {
-      p.appendChild(el("span", "cgp-bundle__was", money(basePrice, ctx.currency)));
+    var rNow = discounted(basePrice, percent);
+    var rWas = origOverride != null ? origOverride : basePrice;
+    var nowS = el("span", "cgp-bundle__now");
+    nowS.appendChild(document.createTextNode(money(rNow, ctx.currency)));
+    if (ctx.vatRate > 0) nowS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+    p.appendChild(nowS);
+    if (rWas > rNow && ctx.showStrike) {
+      var wasS = el("span", "cgp-bundle__was");
+      wasS.appendChild(document.createTextNode(money(rWas, ctx.currency)));
+      if (ctx.vatRate > 0) wasS.appendChild(el("span", "cgp-bundle__vat", " ex VAT"));
+      p.appendChild(wasS);
     }
     row.appendChild(p);
     return row;
@@ -1904,14 +2990,15 @@
         });
         var plan = buildPlan(ctx, mainInCart);
         var items = [];
-        // Shared main for add-ons (no bundle tag).
+        // Plain main(s): the "just the product" default card's quantity, and/or
+        // the shared main add-ons attach to (no bundle tag).
         if (plan.mainsForAddons > 0 && mv.id) {
-          items.push({ id: mv.id, quantity: 1 });
+          items.push({ id: mv.id, quantity: plan.mainsForAddons });
         }
         plan.addonItems.forEach(function (it) {
           items.push({
             id: it.id,
-            quantity: 1,
+            quantity: it.qty || 1,
             properties: { _addon_for: ctx.mainHandle },
           });
         });
@@ -1944,14 +3031,17 @@
             return p;
           };
           // A bundle tied to a specific main variant adds THAT variant as its main.
+          // Quantity N: main + every accessory get quantity N under the SAME grp,
+          // so the Function's kitCount = N and all N kits are discounted.
+          var bq = b.qty || 1;
           var bundleMainId = b.mainVariantId || mv.id;
           if (bundleMainId) {
-            items.push({ id: bundleMainId, quantity: 1, properties: props() });
+            items.push({ id: bundleMainId, quantity: bq, properties: props() });
           }
           b.items.forEach(function (it) {
             items.push({
               id: it.id,
-              quantity: 1,
+              quantity: bq,
               properties: props({ _addon_for: ctx.mainHandle }),
             });
           });

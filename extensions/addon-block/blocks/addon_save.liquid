@@ -18,6 +18,10 @@
     data-product-handle="{{ product.handle }}"
     data-currency="{{ cart.currency.iso_code | default: shop.currency }}"
     data-show-strikethrough="{{ block.settings.show_strikethrough }}"
+    data-vat-rate="{{ block.settings.vat_rate | default: 0 }}"
+    data-bundle-layout="{{ block.settings.bundle_layout | default: 'card' }}"
+    data-default-card="{{ block.settings.show_default_card | default: true }}"
+    data-default-label="{{ block.settings.default_card_label | default: 'No Bundle' | escape }}"
     style="
       {%- if block.settings.accent_color != blank %}--cgp-accent: {{ block.settings.accent_color }};{% endif -%}
       {%- if block.settings.cta_bg != blank %}--cgp-cta-bg: {{ block.settings.cta_bg }};{% endif -%}
@@ -120,6 +124,30 @@
       "default": "Bundle & Save"
     },
     {
+      "type": "select",
+      "id": "bundle_layout",
+      "label": "Bundle layout",
+      "options": [
+        { "value": "card", "label": "Slider (cards)" },
+        { "value": "list", "label": "List (stacked rows)" }
+      ],
+      "default": "card",
+      "info": "Slider shows 3 cards per view and scrolls horizontally with nav buttons for more. List shows stacked rows with inline detail (paged at 4). Both share the same card styling."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_default_card",
+      "label": "Show a “just the product” option first",
+      "default": true,
+      "info": "Adds a first card for buying the product on its own (no bundle), selected by default — so customers know a bundle is optional."
+    },
+    {
+      "type": "text",
+      "id": "default_card_label",
+      "label": "“No bundle” card badge label",
+      "default": "No Bundle"
+    },
+    {
       "type": "text",
       "id": "heading",
       "label": "Add-on section heading",
@@ -130,6 +158,12 @@
       "id": "show_strikethrough",
       "label": "Show original price struck through",
       "default": true
+    },
+    {
+      "type": "number",
+      "id": "vat_rate",
+      "label": "VAT rate for price labels (%)",
+      "info": "0 = off. When set (e.g. 20), bundle prices show “ex VAT” and the savings show “inc VAT” (× the rate). For tax-inclusive markets."
     },
     {
       "type": "header",

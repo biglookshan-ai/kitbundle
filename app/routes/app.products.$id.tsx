@@ -1723,6 +1723,27 @@ function BundleTotals({
   const bundlePrice = totalNow * (1 - pct / 100);
   const totalSave = totalOrig - bundlePrice; // vs original
   const savePct = totalOrig > 0 ? (totalSave / totalOrig) * 100 : 0;
+  // Reasonableness check: the kit's TOTAL discount vs its best single item's own
+  // sale. If a component is already discounted more on its own than the whole
+  // kit is, shoppers may find the bundle less appealing — warn and suggest a
+  // bundle % that makes the kit at least as good as that item.
+  let bestItemPct = 0;
+  let bestItemLabel = "";
+  lines.forEach((l) => {
+    const p = l.orig > 0 ? ((l.orig - l.now) / l.orig) * 100 : 0;
+    if (p > bestItemPct) {
+      bestItemPct = p;
+      bestItemLabel = l.label;
+    }
+  });
+  const belowBestItem = bestItemPct - savePct > 0.5;
+  const suggestedPct =
+    totalNow > 0
+      ? Math.max(
+          0,
+          Math.ceil((1 - (totalOrig * (1 - bestItemPct / 100)) / totalNow) * 100),
+        )
+      : 0;
   const priceCell = (orig: number, now: number, strong?: boolean) => (
     <InlineStack gap="150" blockAlign="center" wrap={false}>
       {orig > now + 0.005 && (
@@ -1793,6 +1814,18 @@ function BundleTotals({
             {savePct > 0.05 ? ` · ${pctStr(savePct)}% off` : ""}
           </Text>
         </InlineStack>
+
+        {belowBestItem && (
+          <Banner tone="warning">
+            <Text as="span" variant="bodySm">
+              This kit’s total discount ({pctStr(savePct)}% off) is lower than “
+              {bestItemLabel}”’s own sale ({pctStr(bestItemPct)}% off), so the
+              bundle may look less appealing than buying that item alone. Raise the
+              bundle discount to about {suggestedPct}% so the kit is the better
+              deal.
+            </Text>
+          </Banner>
+        )}
       </BlockStack>
     </Box>
   );

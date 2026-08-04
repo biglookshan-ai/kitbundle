@@ -11,6 +11,7 @@
 - App Store 提审前收尾:Railway 设 `SHOPIFY_BILLING_TEST=false`、listing 图、演示店示例 bundle
 
 ## ⏭ 下一步
+- **独立 Bundle 页面**:做一个单独的页面,显示店铺所有套装(bundles)—— 让顾客一处浏览全部 bundle(用户 2026-07-29 定)
 - 正式店铺测试通过 → 提交 App Store 审核 → 上架
 - 上架后:真实商家安装/计费验证、性能与评价跟进
 

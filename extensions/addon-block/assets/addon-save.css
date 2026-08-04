@@ -16,7 +16,7 @@
 }
 
 .cgp-addon__heading {
-  font-size: 1.05rem;
+  font-size: 18px;
   font-weight: 600;
   margin: 0 0 14px;
   letter-spacing: 0.01em;
@@ -172,6 +172,12 @@
 /* Modal */
 .cgp-modal[hidden] { display: none; }
 .cgp-modal {
+  /* Defaults so the portaled modal (moved to <body>, outside .cgp-addon) still
+     resolves these vars; themeModal() overrides with the merchant's colours. */
+  --cgp-accent: #2b44ff;
+  --cgp-border: #e3e3e3;
+  --cgp-muted: #6b7177;
+  --cgp-radius: 12px;
   position: fixed;
   inset: 0;
   z-index: 9999;
@@ -179,6 +185,7 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
+  font-family: inherit;
 }
 .cgp-modal__backdrop {
   position: absolute;
@@ -189,29 +196,82 @@
   position: relative;
   background: #fff;
   border-radius: 16px;
-  max-width: 420px;
+  max-width: 440px;
   width: 100%;
   max-height: 85vh;
-  overflow-y: auto;
-  padding: 26px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
 }
+/* Fixed header: title + stock tag. Stays put while the list scrolls. */
+.cgp-modal__header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 16px 52px 14px 18px;
+  border-bottom: 1px solid var(--cgp-border);
+}
+.cgp-modal__title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+.cgp-modal__title-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1d222c;
+}
+.cgp-modal__title-code {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cgp-muted);
+}
+.cgp-modal__stock {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 5px;
+}
+.cgp-modal__stock.is-in {
+  background: #dff5e1;
+  color: #1a7f37;
+}
+.cgp-modal__stock.is-out {
+  background: #fde7e3;
+  color: #c0341d;
+}
+/* Scroll area (component list). Header, X badge and footer stay outside it. */
+.cgp-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 6px 18px 12px;
+}
+/* Close = a fixed badge in the top-right corner, always visible. */
 .cgp-modal__x {
   position: absolute;
   top: 12px;
-  right: 14px;
-  background: none;
+  right: 12px;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f0f0f1;
   border: none;
-  font-size: 1.5rem;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  color: var(--cgp-muted);
+  color: #333;
 }
-.cgp-modal__title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin-bottom: 18px;
-  padding-right: 24px;
+.cgp-modal__x:hover {
+  background: #e2e2e4;
 }
 .cgp-modal__option { margin-bottom: 16px; }
 .cgp-modal__option-label {
@@ -338,7 +398,8 @@
   cursor: default;
 }
 .cgp-cta.is-done {
-  background: #1a7f37;
+  /* Keep the theme button colour on success (no green); the "✓ Added to cart"
+     text is enough feedback. */
 }
 
 /* Bundle & Save — named, expandable, selectable cards */
@@ -350,17 +411,27 @@
 }
 .cgp-bundle {
   border: 1px solid var(--cgp-border);
-  border-radius: var(--cgp-radius);
-  padding: 6px 14px 12px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border-radius: 14px;
+  padding: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 .cgp-bundle.is-selected {
   border-color: var(--cgp-accent);
   box-shadow: inset 0 0 0 1px var(--cgp-accent);
+  background: #fafbfc;
+}
+/* Hover-highlight whichever kit the mouse is over. */
+.cgp-bundle:not(.is-disabled):hover {
+  border-color: var(--cgp-accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+/* The top half is the open/close toggle. */
+.cgp-bundle__head {
+  cursor: pointer;
 }
 /* Deep-link (?kb_bundle=) landing flash. */
 .cgp-bundle--flash {
-  animation: cgp-bundle-flash 1.1s ease-out 2;
+  animation: cgp-bundle-flash 1.1s ease-out 3;
 }
 @keyframes cgp-bundle-flash {
   0%,
@@ -403,9 +474,10 @@
   min-width: 0;
 }
 .cgp-bundle__name {
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   font-weight: 700;
   line-height: 1.25;
+  color: #1d222c;
 }
 .cgp-bundle__meta {
   font-size: 0.74rem;
@@ -418,9 +490,9 @@
   gap: 6px;
 }
 .cgp-bundle__now {
-  font-size: 0.88rem;
+  font-size: 1.08rem;
   font-weight: 700;
-  color: var(--cgp-accent);
+  color: #1d222c;
 }
 .cgp-bundle__was {
   font-size: 0.74rem;
@@ -465,7 +537,7 @@
 }
 .cgp-bundle__contents {
   border-top: 1px solid var(--cgp-border);
-  margin-top: 6px;
+  margin-top: 10px;
   padding-top: 6px;
 }
 .cgp-bundle__content-row {
@@ -496,11 +568,11 @@
   flex-wrap: wrap;
 }
 .cgp-bundle__content-name {
-  font-size: 0.8rem;
+  font-size: 14px;
   font-weight: 600;
 }
 .cgp-bundle__content-tag {
-  font-size: 0.62rem;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -734,6 +806,11 @@ a.cgp-free__name:hover {
   flex-wrap: wrap;
   margin-top: 2px;
 }
+/* `display:flex` above beats the [hidden] UA rule, so hide it explicitly when
+   expanded (the detail below already shows every component). */
+.cgp-bundle__thumbs[hidden] {
+  display: none;
+}
 .cgp-bundle__thumb-sm {
   width: 46px;
   height: 46px;
@@ -761,19 +838,13 @@ a.cgp-free__name:hover {
   align-items: center;
 }
 .cgp-bundle__save {
+  background: #fce9e5;
   color: #c0341d;
   font-weight: 700;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-.cgp-bundle__off {
-  background: #fde7e3;
-  color: #c0341d;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  padding: 2px 7px;
-  border-radius: 5px;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  padding: 2px 8px;
+  border-radius: 6px;
   white-space: nowrap;
 }
 .cgp-bundle__head {
@@ -836,18 +907,518 @@ a.cgp-free__name:hover {
 .cgp-bundle__thumbs {
   margin-top: 0;
 }
+.cgp-bundle__cover {
+  cursor: pointer;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+.cgp-bundle__cover img {
+  height: 64px;
+  width: auto;
+  max-width: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  display: block;
+}
 .cgp-bundle__thumb-sm {
   cursor: pointer;
 }
-.cgp-bundle__expand {
-  margin: 0;
+/* ===== Redesigned bundle card: media (left) + body (right), selector top-right,
+   expand bottom-right. These rules come after the older ones, so they win. ===== */
+.cgp-bundle__head {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
   padding: 0;
+  cursor: default;
+}
+.cgp-bundle__media {
+  position: relative;
+  flex: 0 0 116px;
+  width: 116px;
+  height: 116px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--cgp-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+/* Card-mode badge row ABOVE the image (discount left, stock right). Both badges
+   share size/type — only the colour differs. */
+.cgp-bundle__brow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 2px;
+  min-height: 20px;
+}
+.cgp-bundle__bdg {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0px 6px;
+  border-radius: 4px;
+}
+.cgp-bundle__bdg--off {
+  background: #b3182f;
+  color: #fff;
+}
+.cgp-bundle__bdg--in {
+  background: #dff5e1;
+  color: #1a7f37;
+}
+.cgp-bundle__bdg--out {
+  background: #fde7e3;
+  color: #c0341d;
+}
+/* Stock status colours — match the Stock Availability section's badge defaults. */
+.cgp-stk--green {
+  background: #b5ee87;
+  color: #1d222c;
+}
+.cgp-stk--yellow {
+  background: #fae541;
+  color: #1d222c;
+}
+.cgp-stk--red {
+  background: #e3625e;
+  color: #1d222c;
+}
+.cgp-stk--blue {
+  background: #61a8ea;
+  color: #1d222c;
+}
+.cgp-stk--grey {
+  background: #989ca4;
+  color: #1d222c;
+}
+/* One image (or a cover): shown WHOLE, centred, never cropped. */
+.cgp-bundle__media-single {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+/* Montage of component images: whole images, centred, partial last row centred. */
+.cgp-bundle__grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+.cgp-bundle__grid-cell {
+  flex: 0 0 calc((100% - (var(--cgp-cols) - 1) * 4px) / var(--cgp-cols));
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.cgp-bundle__grid-cell img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.cgp-bundle__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 40px;
+  cursor: pointer;
+}
+.cgp-bundle__body .cgp-bundle__name {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #1d222c;
+}
+.cgp-bundle__nameline {
+  margin-bottom: 0;
+}
+.cgp-bundle__price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+.cgp-bundle__body .cgp-bundle__now {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1d222c;
+}
+.cgp-bundle__content-price .cgp-bundle__now {
+  font-size: 14px;
+}
+.cgp-bundle__was {
+  font-size: 14px;
+}
+.cgp-bundle__vat {
+  font-size: 12px;
+  color: var(--cgp-muted);
+  font-weight: 400;
+}
+.cgp-bundle__saveline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cgp-bundle__off {
+  background: #b3182f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 5px;
   white-space: nowrap;
+}
+.cgp-bundle__save {
+  background: none;
+  padding: 0;
+  color: #c0341d;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.cgp-bundle__meta {
+  font-size: 14px;
+  color: var(--cgp-muted);
+}
+.cgp-bundle__meta .cgp-bundle__code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 500;
+  letter-spacing: 0;
+  font-size: 14px;
+  color: var(--cgp-muted);
+}
+.cgp-bundle__stocktag {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.cgp-bundle__stocktag.is-in {
+  background: #dff5e1;
+  color: #1a7f37;
+}
+.cgp-bundle__stocktag.is-out {
+  background: #fde7e3;
+  color: #c0341d;
+}
+.cgp-bundle__aside {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.cgp-bundle__expand {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  background: #fff;
+  border: 1px solid var(--cgp-border);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d222c;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cgp-bundle__expand:hover {
+  border-color: var(--cgp-accent);
+  color: var(--cgp-accent);
+}
+
+/* ===== Pagination (both modes, ≤4 per page) ===== */
+.cgp-bundle--pg-hidden,
+.cgp-bundle--oos-hidden {
+  display: none !important;
+}
+.cgp-bundle-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0; /* lives in the section header, top-right */
   flex: 0 0 auto;
+}
+.cgp-bundle-pager__btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--cgp-border);
+  background: var(--cgp-panel);
+  border-radius: 50%; /* circular */
+  cursor: pointer;
+  font-size: 0; /* no text glyph — the arrow is a drawn chevron */
+  line-height: 1;
+  color: var(--cgp-ink);
+  transition: border-color 0.15s, opacity 0.15s;
+}
+/* Clean, equal-stroke chevron drawn with borders, centred in the circle. */
+.cgp-bundle-pager__btn::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: solid currentColor;
+  border-width: 2px 2px 0 0; /* › (next / right) */
+  transform: translate(-65%, -50%) rotate(45deg);
+}
+.cgp-bundle-pager__btn--prev::after {
+  border-width: 0 0 2px 2px; /* ‹ (prev / left) */
+  transform: translate(-35%, -50%) rotate(45deg);
+}
+.cgp-bundle-pager__btn:hover:not(:disabled) {
+  border-color: var(--cgp-accent);
+  color: var(--cgp-accent);
+}
+.cgp-bundle-pager__btn:disabled {
+  cursor: default;
+  background: var(--cgp-panel);
+  border-color: rgba(var(--cgp-fg), 0.1); /* faint border, like the theme */
+}
+.cgp-bundle-pager__btn:disabled::after {
+  border-color: rgba(var(--cgp-fg), 0.22); /* faded chevron */
+}
+.cgp-bundle-pager__label {
+  font-size: 13px;
+  color: var(--cgp-muted);
+  min-width: 42px;
+  text-align: center;
+}
+
+/* ===== Card mode: 3 compact vertical cards per row ===== */
+.cgp-addon__bundle-list--cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.cgp-bundle--card {
+  padding: 10px;
+}
+.cgp-bundle--card .cgp-bundle__head {
+  flex-direction: column;
+  gap: 0;
+}
+.cgp-bundle--card .cgp-bundle__media {
+  width: 100%;
+  flex: 0 0 auto;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border: none;
+  background: #fff;
+  padding: 4px;
+  margin-bottom: 10px;
+}
+.cgp-bundle--card .cgp-bundle__body {
+  width: 100%;
+  padding-right: 0;
+  padding-bottom: 34px;
+  gap: 3px;
+}
+/* Compact type scale for cards: title 11, price 11, rest 10, tiny 8. */
+.cgp-bundle--card .cgp-bundle__body .cgp-bundle__name {
+  font-size: 11px;
+  line-height: 1.25;
+}
+.cgp-bundle--card .cgp-bundle__body .cgp-bundle__now {
+  font-size: 15px;
+}
+/* Card mode: price on 3 lines — current, struck original, then save. */
+.cgp-bundle--card .cgp-bundle__price {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.cgp-bundle--card .cgp-bundle__was {
+  font-size: 10px;
+}
+.cgp-bundle--card .cgp-bundle__save {
+  font-size: 10px;
+}
+.cgp-bundle--card .cgp-bundle__meta,
+.cgp-bundle--card .cgp-bundle__meta .cgp-bundle__code {
+  font-size: 10px;
+}
+.cgp-bundle--card .cgp-bundle__off {
+  font-size: 9px;
+  padding: 1px 6px;
+}
+.cgp-bundle--card .cgp-bundle__stocktag {
+  font-size: 9px;
+  padding: 2px 8px;
+}
+.cgp-bundle--card .cgp-bundle__vat {
+  font-size: 8px;
+}
+/* Card mode: discount + stock live on the image, so hide the in-body copies. */
+.cgp-bundle--card .cgp-bundle__off,
+.cgp-bundle--card .cgp-bundle__stocktag {
+  display: none;
+}
+.cgp-bundle--card .cgp-check {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  font-size: 18px;
+  font-weight: 400;
+}
+.cgp-bundle--card .cgp-bundle__aside {
+  top: auto;
+  bottom: 0;
+  right: 0;
+}
+.cgp-bundle--card .cgp-bundle__expand {
+  font-size: 11px;
+  padding: 6px 11px;
+  right: 38px;
+  bottom: 0;
+}
+@media screen and (max-width: 700px) {
+  .cgp-addon__bundle-list--cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media screen and (max-width: 430px) {
+  .cgp-addon__bundle-list--cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== Info popup (card-mode): title / price / variant each on its own line ===== */
+.cgp-modal__clist {
+  display: flex;
+  flex-direction: column;
+}
+.cgp-modal__crow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--cgp-border);
+}
+.cgp-modal__crow:first-child {
+  border-top: none;
+}
+.cgp-modal__cthumb {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--cgp-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+.cgp-modal__cthumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.cgp-modal__cinfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cgp-modal__cname {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #1d222c;
+  text-decoration: none;
+}
+.cgp-modal__cinfo .cgp-bundle__variant {
+  max-width: 260px;
+  margin-top: 2px;
+  border: 1px solid var(--cgp-border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+a.cgp-modal__cname:hover {
+  text-decoration: underline;
+}
+.cgp-modal__ctag {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--cgp-muted);
+  border: 1px solid var(--cgp-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.cgp-modal__cprice {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cgp-modal__cnow {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d222c;
+}
+.cgp-modal__cwas {
+  font-size: 11px;
+  color: var(--cgp-muted);
+  text-decoration: line-through;
+}
+/* Always-visible footer button (on the dialog, below the scroll area). Uses the
+   theme's Add-to-cart colour — never green. */
+.cgp-modal__selectbtn {
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: 15px;
+  border: none;
+  border-top: 1px solid var(--cgp-border);
+  border-radius: 0 0 16px 16px;
+  background: var(--cgp-cta-bg, var(--cgp-accent));
+  color: var(--cgp-cta-text, #fff);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cgp-modal__selectbtn:hover {
+  opacity: 0.92;
+}
+.cgp-modal__selectbtn.is-selected {
+  opacity: 0.85;
 }
 
 /* Unified round selector (bundle / add-on / free) */
 .cgp-check {
+  box-sizing: border-box;
   width: 26px;
   height: 26px;
   flex: 0 0 26px;
@@ -859,7 +1430,7 @@ a.cgp-free__name:hover {
   justify-content: center;
   font-size: 0.85rem;
   line-height: 1;
-  color: #fff;
+  color: var(--cgp-accent);
   cursor: pointer;
   user-select: none;
   transition: background 0.15s, border-color 0.15s;
@@ -870,6 +1441,7 @@ a.cgp-free__name:hover {
 .cgp-check.is-on {
   background: var(--cgp-accent);
   border-color: var(--cgp-accent);
+  color: #fff;
 }
 .cgp-check.is-locked {
   background: #c0392b;
@@ -883,8 +1455,8 @@ a.cgp-free__name:hover {
   margin-top: 4px;
   max-width: 240px;
   width: 100%;
-  font-size: 0.8rem;
-  padding: 6px 8px;
+  font-size: 14px;
+  padding: 8px 10px;
   border: 1px solid var(--cgp-border);
   border-radius: 7px;
   background: #fff;
@@ -1105,4 +1677,605 @@ a.cgp-free__name:hover {
     height: 56px;
     flex-basis: 56px;
   }
+}
+
+/* ==================================================================
+   SETUP-KIT-ALIGNED DESIGN REFRESH  (appended last → wins the cascade)
+   Mirrors SETUP-KIT-DESIGN-SPEC.md: theme-derived colours, a shared
+   radius/type scale, and one card anatomy used by BOTH list + grid.
+   Deviations kept on purpose (prior merchant calls):
+     • "Save £X" stays RED (theme discount colour), not the spec green.
+     • Bundle current price a touch larger than the spec's 12px (it's
+       the headline here, not a secondary product-grid price).
+   Images are shown WHOLE (contain) — never cropped.
+   ================================================================== */
+.cgp-addon {
+  /* Theme-derived palette (Dawn-style comma RGB triplets). Falls back to
+     sensible neutrals if the theme doesn't expose these vars. */
+  --cgp-fg: var(--color-foreground, 18, 24, 33);
+  --cgp-bg: var(--color-background, 255, 255, 255);
+  --cgp-ink: rgb(var(--cgp-fg));
+  --cgp-canvas: rgba(var(--cgp-fg), 0.05);
+  --cgp-panel: rgb(var(--cgp-bg));
+  --cgp-border: rgba(var(--cgp-fg), 0.12);
+  --cgp-border-strong: rgba(var(--cgp-fg), 0.3);
+  --cgp-muted: rgba(var(--cgp-fg), 0.6);
+  --cgp-field: rgba(var(--cgp-fg), 0.04);
+  /* Radius scale */
+  --cgp-r-canvas: 22px;
+  --cgp-r-panel: 18px;
+  --cgp-r-media: 14px;
+  --cgp-r-card: 12px;
+  --cgp-r-img: 8px;
+  --cgp-r-variant: 7px;
+}
+
+/* ---- Bundle + Add-On sections = grey canvas wrapping a white card panel ---- */
+.cgp-addon__bundles,
+.cgp-addon__addons {
+  background: var(--cgp-canvas);
+  border-radius: var(--cgp-r-canvas);
+  padding: 20px;
+}
+.cgp-addon__bundles .cgp-addon__sec-head,
+.cgp-addon__addons .cgp-addon__sec-head {
+  margin-bottom: 14px;
+  align-items: center;
+  gap: 12px;
+}
+.cgp-addon__bundles .cgp-addon__heading,
+.cgp-addon__addons .cgp-addon__heading {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--cgp-ink);
+  flex: 1 1 auto; /* push the counter + nav to the right */
+}
+/* Add-On tabs sit above the card panel, inside the canvas. */
+.cgp-addon__addons .cgp-addon__tabs {
+  border-bottom: none;
+  margin-bottom: 12px;
+}
+/* The list/grid of bundle cards sits on a white panel (spec §4). */
+.cgp-addon__bundle-list {
+  background: var(--cgp-panel);
+  border-radius: var(--cgp-r-panel);
+  padding: 12px;
+}
+/* Card mode = horizontal slider: ~3 cards in view, scroll for the rest. */
+.cgp-addon__bundle-list--cards {
+  display: flex;
+  flex-direction: row; /* base .cgp-addon__bundle-list is column — override it */
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  /* Align snap points to the panel's padding so the first card keeps its left
+     gap (without this, snap scrolls the 12px padding away → card touches edge). */
+  scroll-padding-inline: 12px;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Safari: preserve the panel's rounded corners while scrolling. */
+  transform: translateZ(0);
+  isolation: isolate;
+}
+.cgp-addon__bundle-list--cards::-webkit-scrollbar {
+  display: none;
+}
+.cgp-addon__bundle-list--cards > .cgp-bundle {
+  /* 3 per view + ~30px peek of the next card (hints there's more to scroll). */
+  flex: 0 0 calc((100% - 60px) / 3);
+  min-width: 0; /* without this the square media forces each card full-width */
+  scroll-snap-align: start;
+}
+
+/* ---- One card anatomy for both modes ---- */
+.cgp-bundle {
+  border: 1px solid var(--cgp-border);
+  border-radius: var(--cgp-r-card);
+  background: var(--cgp-panel);
+  transition: border-color 0.18s ease, transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+/* Hover: lift 2px + border to strong colour, NO shadow (spec §8).
+   Selected cards are excluded — they keep only the accent border on hover. */
+.cgp-addon__bundle-list .cgp-bundle:not(.is-disabled):not(.is-selected):hover {
+  border-color: var(--cgp-border-strong);
+  transform: translateY(-2px);
+  box-shadow: none;
+}
+.cgp-addon__bundle-list .cgp-bundle.is-selected,
+.cgp-addon__bundle-list .cgp-bundle.is-selected:hover {
+  border-color: var(--cgp-accent);
+  box-shadow: inset 0 0 0 1px var(--cgp-accent);
+  background: var(--cgp-panel);
+  transform: none; /* no lift when selected — just the yellow border */
+}
+
+/* Media: framed square, image shown WHOLE (contain), never cropped. */
+.cgp-bundle__media {
+  background: var(--cgp-field);
+  border: 1px solid var(--cgp-border);
+  border-radius: var(--cgp-r-img);
+}
+
+/* Type scale — grid (compact) cards. */
+.cgp-bundle--card .cgp-bundle__body .cgp-bundle__name {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--cgp-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cgp-bundle--card .cgp-bundle__body .cgp-bundle__now {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+}
+.cgp-bundle--card .cgp-bundle__was {
+  font-size: 10px;
+  color: var(--cgp-muted);
+}
+.cgp-bundle--card .cgp-bundle__save {
+  font-size: 10px;
+}
+.cgp-bundle--card .cgp-bundle__meta,
+.cgp-bundle--card .cgp-bundle__meta .cgp-bundle__code {
+  font-size: 10px;
+  color: var(--cgp-muted);
+}
+
+/* Type scale — list (roomier) cards. */
+.cgp-bundle:not(.cgp-bundle--card) .cgp-bundle__body .cgp-bundle__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+}
+.cgp-bundle:not(.cgp-bundle--card) .cgp-bundle__body .cgp-bundle__now {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+}
+
+/* Variant dropdown — spec §5.6: self-drawn chevron, radius 7. */
+.cgp-bundle__variant,
+.cgp-addon__variant,
+.cgp-modal__cinfo .cgp-bundle__variant {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--cgp-border);
+  border-radius: var(--cgp-r-variant);
+  background-color: var(--cgp-panel);
+  background-image: linear-gradient(45deg, transparent 50%, var(--cgp-muted) 50%),
+    linear-gradient(135deg, var(--cgp-muted) 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+  color: var(--cgp-ink);
+}
+
+/* ---- Unified round selector: CSS-drawn "+" / tick (no font glyph) ----
+   Colours follow the "on-accent = dark ink" rule so a light accent (e.g. the
+   yellow store button) keeps a readable tick. */
+.cgp-check {
+  position: relative;
+  font-size: 0;
+  color: var(--cgp-muted); /* the "+" icon colour */
+  background: rgba(var(--cgp-fg), 0.07); /* grey filled circle (Setup Kit __pick) */
+  border: none;
+}
+.cgp-check:not(.is-on):not(.is-locked):hover {
+  background: rgba(var(--cgp-fg), 0.14); /* darken on hover */
+}
+/* The "+" is drawn as two crossing bars (no font glyph → always dead-centre);
+   the tick is drawn with rotated borders. Both follow currentColor. */
+.cgp-check::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+}
+.cgp-check.is-on {
+  color: var(--cgp-ink); /* dark tick on the accent fill (readable on yellow) */
+}
+.cgp-check.is-locked {
+  color: #fff; /* free-gift lock is red — white tick */
+}
+.cgp-check.is-on::after,
+.cgp-check.is-locked::after {
+  width: 6px;
+  height: 11px;
+  background: none;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -60%) rotate(45deg);
+}
+/* Neutral hover accents (a light accent makes accent-coloured TEXT unreadable). */
+.cgp-bundle__expand:hover,
+.cgp-bundle-pager__btn:hover:not(:disabled) {
+  border-color: var(--cgp-border-strong);
+  color: var(--cgp-ink);
+}
+
+/* ---- Quantity stepper (buy N of a kit) — shown only when the card is selected ---- */
+.cgp-bundle__qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 2px;
+  border: 1px solid var(--cgp-border);
+  border-radius: 999px;
+  background: var(--cgp-panel);
+}
+/* Quantity stepper is always shown (foot: qty left, select circle right). */
+.cgp-bundle__qtybtn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--cgp-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cgp-bundle__qtybtn:hover {
+  background: var(--cgp-field);
+}
+.cgp-bundle__qtyn {
+  min-width: 22px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+  font-variant-numeric: tabular-nums;
+}
+/* Card mode: keep the stepper clear of the absolute foot (check + expand). */
+.cgp-bundle--card .cgp-bundle__qty {
+  margin-bottom: 4px;
+}
+
+/* ---- Card foot: quantity stepper (left) + select circle (right), one row ---- */
+/* Make each card a full-height flex column so the foot pins to the bottom and
+   all cards in a row line their foot up (Setup Kit alignment). */
+.cgp-bundle--card {
+  display: flex;
+  flex-direction: column;
+}
+.cgp-bundle--card .cgp-bundle__head {
+  flex: 1 1 auto;
+}
+.cgp-bundle--card .cgp-bundle__body {
+  padding-bottom: 0; /* foot is in normal flow now — no reserved strip */
+}
+.cgp-bundle--card .cgp-bundle__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto; /* pin the foot to the bottom of the card body */
+  padding-top: 10px;
+}
+.cgp-bundle--card .cgp-bundle__foot .cgp-bundle__qty {
+  margin: 0;
+}
+/* In the foot the circle + "View items" are in normal flow, not pinned. */
+.cgp-bundle--card .cgp-bundle__aside {
+  position: static;
+  top: auto;
+  right: auto;
+  bottom: auto;
+}
+/* Card body split into THREE groups: ① name + code, ② price stack, ③ view + foot.
+   Spacing is controlled by margins (not a uniform gap): tight WITHIN a group,
+   clearly separated BETWEEN groups. */
+.cgp-bundle--card .cgp-bundle__body {
+  flex: 1 1 auto;
+  gap: 0;
+  padding-bottom: 0;
+}
+/* Group ① — code tight under the name. */
+.cgp-bundle--card .cgp-bundle__meta {
+  margin-top: 4px;
+}
+/* Group ② — separated from group ①; now/was/save tight together inside.
+   margin-bottom guarantees a gap before group ③ even when the bottom-pin
+   (margin-top:auto) collapses to 0 on the tallest card. */
+.cgp-bundle--card .cgp-bundle__price {
+  margin-top: 4px;
+  margin-bottom: 12px;
+  gap: 0px;
+}
+/* Group ③ — view-items + foot pinned to the bottom, tight to each other. */
+.cgp-bundle--card .cgp-bundle__expand {
+  position: static;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  text-align: center;
+  margin: 0;
+  margin-top: auto; /* push group ③ to the bottom */
+}
+.cgp-bundle--card .cgp-bundle__foot {
+  margin-top: auto; /* default card (no view-items): foot to the bottom */
+  padding-top: 0;
+}
+.cgp-bundle--card .cgp-bundle__expand + .cgp-bundle__foot {
+  margin-top: 8px; /* tight to "View items" when both are present */
+}
+/* Add-on variant picker on a card — same small size as the code line.
+   Pin the "choose option + qty/add" together at the bottom, with a gap. */
+.cgp-bundle--card .cgp-bundle__variant {
+  margin-top: auto;
+  font-size: 10px;
+  padding: 7px 20px 7px 8px;
+  background-position: right 9px center, right 5px center;
+}
+.cgp-bundle--card .cgp-bundle__variant + .cgp-bundle__foot {
+  margin-top: 10px; /* gap between the variant and the qty/add row */
+}
+
+/* ---- "No bundle" default card ---- */
+.cgp-bundle__bdg--plain {
+  background: var(--cgp-field);
+  color: var(--cgp-muted);
+}
+.cgp-bundle--default .cgp-bundle__meta .cgp-bundle__code {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- Checkout summary bar: white panel, big total (spec §5.7) ---- */
+.cgp-total {
+  border: 1px solid var(--cgp-border);
+  border-radius: var(--cgp-r-panel);
+  background: var(--cgp-panel);
+  padding: 14px 16px;
+}
+.cgp-total__count {
+  font-size: 12.5px;
+  color: var(--cgp-muted);
+}
+.cgp-total__price {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+}
+
+/* Grid at narrower widths (spec §10). */
+@media screen and (max-width: 749px) {
+  .cgp-addon__bundle-list--cards > .cgp-bundle {
+    flex-basis: calc((100% - 48px) / 2); /* 2 per view + peek */
+  }
+  .cgp-addon__bundles {
+    padding: 14px;
+  }
+}
+@media screen and (max-width: 430px) {
+  .cgp-addon__bundle-list--cards > .cgp-bundle {
+    flex-basis: 84%; /* 1 per view + peek */
+  }
+}
+
+/* ================= Unified font weights (per merchant spec) =================
+   Module title 700 · badges 400 · card title 700 · code 400 · now 700 ·
+   was 400 · save 400 · view-items 400. Appended last so it wins the cascade. */
+.cgp-addon__bundles .cgp-addon__heading {
+  font-weight: 700;
+}
+.cgp-bundle__bdg {
+  font-weight: 400;
+}
+.cgp-bundle__name,
+.cgp-bundle--card .cgp-bundle__body .cgp-bundle__name {
+  font-weight: 700;
+}
+.cgp-bundle__meta,
+.cgp-bundle__meta .cgp-bundle__code,
+.cgp-bundle--card .cgp-bundle__meta .cgp-bundle__code {
+  font-weight: 400;
+}
+.cgp-bundle__now,
+.cgp-bundle--card .cgp-bundle__body .cgp-bundle__now {
+  font-weight: 700;
+}
+.cgp-bundle__was,
+.cgp-bundle__save,
+.cgp-bundle__expand {
+  font-weight: 400;
+}
+
+/* ================= Free-gift module — unified with the Bundle module =================
+   Same grey canvas + white panel + 22/700 heading + round-check selector + type
+   scale. Stays a LIST (choose one). "No thanks" is a plain checkable row (no box). */
+.cgp-free {
+  background: var(--cgp-canvas);
+  border: none;
+  box-shadow: none;
+  border-radius: var(--cgp-r-canvas);
+  padding: 20px;
+}
+.cgp-free__heading {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--cgp-ink);
+  margin: 0 0 4px;
+}
+.cgp-free__sub {
+  font-size: 13px;
+  color: var(--cgp-muted);
+  margin: 0 0 14px;
+  opacity: 1;
+}
+.cgp-free__list {
+  background: var(--cgp-panel);
+  border-radius: var(--cgp-r-panel);
+  padding: 4px 14px;
+  gap: 0;
+}
+/* Rows sit on one white panel, separated by a divider — not individual boxes. */
+.cgp-free__list .cgp-free__row {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 0;
+  gap: 14px;
+}
+.cgp-free__list .cgp-free__row + .cgp-free__row {
+  border-top: 1px solid var(--cgp-border);
+}
+/* Round-check selector (matches the bundle circle): grey → accent + dark tick. */
+.cgp-free__radio {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  border: 1px solid var(--cgp-border);
+  background-color: rgba(var(--cgp-fg), 0.07);
+  cursor: pointer;
+  margin: 0;
+}
+.cgp-free__radio:checked {
+  background-color: var(--cgp-accent);
+  border-color: var(--cgp-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.4 6.3l2.4 2.4 4.8-5.3' fill='none' stroke='%231d222c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 13px;
+}
+.cgp-free__thumb {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: var(--cgp-r-img);
+  border: 1px solid var(--cgp-border);
+  background: var(--cgp-panel);
+}
+.cgp-free__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+}
+.cgp-free__price {
+  font-size: 12px;
+  color: var(--cgp-muted);
+}
+.cgp-free__badge {
+  background: #fde7e3;
+  color: #c0341d;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+/* "No thanks" — a plain checkable row, no separate box/dashed border. */
+.cgp-free__list .cgp-free__row--decline {
+  border-top: 1px solid var(--cgp-border);
+  margin-top: 0;
+  padding: 12px 0;
+}
+.cgp-free__decline {
+  font-size: 13px;
+  color: var(--cgp-muted);
+}
+
+/* ===== Bundle popup footer: total price (left) + Select button (right) ===== */
+.cgp-modal__foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--cgp-border);
+  border-radius: 0 0 16px 16px;
+  background: var(--cgp-panel);
+}
+.cgp-modal__foot-price {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.cgp-modal__foot-nowrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Per-component external-link icon (opens the product page in a new tab). */
+.cgp-modal__ext {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--cgp-border);
+  background: var(--cgp-panel);
+  color: var(--cgp-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.cgp-modal__ext:hover {
+  border-color: var(--cgp-border-strong);
+  color: var(--cgp-ink);
+}
+.cgp-modal__foot-now {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cgp-ink);
+}
+.cgp-modal__foot-was {
+  font-size: 12px;
+  color: var(--cgp-muted);
+  text-decoration: line-through;
+}
+.cgp-modal__foot-save {
+  font-size: 12px;
+  font-weight: 400;
+  color: #c0341d;
+}
+/* Compact Select button (override the old full-width bar). */
+.cgp-modal__foot .cgp-modal__selectbtn {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  border: none;
+  border-radius: var(--cgp-cta-radius, 10px);
+  padding: 12px 22px;
+  background: var(--cgp-accent);
+  color: var(--cgp-ink);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cgp-modal__foot .cgp-modal__selectbtn:hover {
+  opacity: 0.92;
 }
