@@ -27,7 +27,6 @@ import {
   Checkbox,
   Icon,
   Popover,
-  Tabs,
   Collapsible,
 } from "@shopify/polaris";
 import {
@@ -1045,85 +1044,91 @@ function GroupCard({
   return (
     <Card>
       <BlockStack gap="300">
-        {/* ---- Summary row (always visible) — click to expand into tabs ---- */}
-        <InlineStack align="space-between" blockAlign="center" wrap={false} gap="200">
-          <InlineStack gap="200" blockAlign="center" wrap={false}>
-            {dragHandle}
-            <Badge
-              tone={
-                isFree
-                  ? "success"
-                  : limitedOn
-                    ? "attention"
-                    : isBundle
-                      ? "info"
-                      : undefined
-              }
-            >
-              {formLabel(group)}
-            </Badge>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <InlineStack gap="150" blockAlign="center" wrap={false}>
-                {group.code && (
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    {group.code}
+        {/* ---- Summary (always visible): row 1 = info, row 2 = thumbs + price ---- */}
+        <BlockStack gap="150">
+          <InlineStack align="space-between" blockAlign="center" wrap={false} gap="200">
+            <InlineStack gap="200" blockAlign="center" wrap={false}>
+              {dragHandle}
+              <Badge
+                tone={
+                  isFree
+                    ? "success"
+                    : limitedOn
+                      ? "attention"
+                      : isBundle
+                        ? "info"
+                        : undefined
+                }
+              >
+                {formLabel(group)}
+              </Badge>
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <InlineStack gap="150" blockAlign="center" wrap>
+                  {group.code && (
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      {group.code}
+                    </Text>
+                  )}
+                  <Text as="span" variant="bodyMd" fontWeight="semibold">
+                    {group.title || "Untitled"}
                   </Text>
-                )}
-                <Text as="span" variant="bodyMd" fontWeight="semibold">
-                  {group.title || "Untitled"}
-                </Text>
-              </InlineStack>
-            </button>
+                </InlineStack>
+              </button>
+            </InlineStack>
+            <InlineStack gap="100" blockAlign="center" wrap={false}>
+              <Button
+                variant="tertiary"
+                icon={expanded ? ChevronUpIcon : ChevronDownIcon}
+                onClick={() => setExpanded((v) => !v)}
+                accessibilityLabel={expanded ? "Collapse" : "Expand"}
+              />
+              <Button
+                icon={ArchiveIcon}
+                variant="tertiary"
+                onClick={onArchive}
+                accessibilityLabel="Archive group"
+              />
+            </InlineStack>
           </InlineStack>
 
-          <InlineStack gap="200" blockAlign="center" wrap={false}>
-            {summaryThumbs.length > 0 && (
-              <InlineStack gap="050" blockAlign="center" wrap={false}>
-                {summaryThumbs.slice(0, 5).map((u, i) => (
+          {(summaryThumbs.length > 0 || (isBundle && haveAllPrices) || !isFree) && (
+            <InlineStack align="space-between" blockAlign="center" gap="200">
+              <InlineStack gap="050" blockAlign="center" wrap>
+                {summaryThumbs.slice(0, 6).map((u, i) => (
                   <Thumbnail key={i} source={u} alt="" size="extraSmall" />
                 ))}
-                {summaryThumbs.length > 5 && (
+                {summaryThumbs.length > 6 && (
                   <Text as="span" variant="bodySm" tone="subdued">
-                    +{summaryThumbs.length - 5}
+                    +{summaryThumbs.length - 6}
                   </Text>
                 )}
               </InlineStack>
-            )}
-            {isBundle && haveAllPrices && (
-              <InlineStack gap="100" blockAlign="center" wrap={false}>
-                <Text as="span" variant="bodyMd" fontWeight="semibold">
-                  {fmtMoney(summaryNow, currency)}
-                </Text>
-                {summaryOffPct > 0 && (
-                  <Badge tone="critical">{`${summaryOffPct}% off`}</Badge>
+              <InlineStack gap="150" blockAlign="center" wrap={false}>
+                {isBundle && haveAllPrices && (
+                  <>
+                    <Text as="span" variant="bodyMd" fontWeight="semibold">
+                      {fmtMoney(summaryNow, currency)}
+                    </Text>
+                    {summaryOffPct > 0 && (
+                      <Badge tone="critical">{`${summaryOffPct}% off`}</Badge>
+                    )}
+                  </>
                 )}
+                {!isFree && <StockBadge qty={minStock} />}
               </InlineStack>
-            )}
-            {!isFree && <StockBadge qty={minStock} />}
-            <Button
-              variant="tertiary"
-              icon={expanded ? ChevronUpIcon : ChevronDownIcon}
-              onClick={() => setExpanded((v) => !v)}
-              accessibilityLabel={expanded ? "Collapse" : "Expand"}
-            />
-            <Button
-              icon={ArchiveIcon}
-              variant="tertiary"
-              onClick={onArchive}
-              accessibilityLabel="Archive group"
-            />
-          </InlineStack>
-        </InlineStack>
+            </InlineStack>
+          )}
+        </BlockStack>
 
         {offerWarning && (
           <Banner tone="critical" title="Limited offer not active">
@@ -1140,7 +1145,13 @@ function GroupCard({
 
         {expanded && (
           <BlockStack gap="300">
-            <Tabs tabs={tabItems} selected={tab} onSelect={setTab} />
+            <ButtonGroup variant="segmented">
+              {tabItems.map((t, i) => (
+                <Button key={t.id} pressed={tab === i} onClick={() => setTab(i)}>
+                  {t.content}
+                </Button>
+              ))}
+            </ButtonGroup>
 
             {tab === 0 && (
               <BlockStack gap="400">
@@ -1214,71 +1225,81 @@ function GroupCard({
           )}
         </InlineStack>
 
-        {/* Bundle cover image (bundle only): pick one of the MAIN product's images. */}
+        {/* Bundle cover image (bundle only): single thumbnail + click-to-open picker. */}
         {isBundle && (
           <BlockStack gap="150">
             <FieldLabel
               text="Bundle cover image"
               tip="Shown as the bundle's image in search and (collapsed) on the product page. Pick one of the main product's images — the kit / installation “demo” shots you upload to the main product are ideal. Leave empty to fall back to the product's main image."
             />
-            <InlineStack gap="300" blockAlign="start" wrap={false}>
+            <InlineStack gap="300" blockAlign="center" wrap={false}>
               <Thumbnail
                 source={group.coverImage || ImageIcon}
                 alt="Bundle cover"
                 size="large"
               />
-              <BlockStack gap="150">
-                {coverChoices.length > 0 ? (
-                  <InlineStack gap="150" align="start">
-                    {coverChoices.map((c) => {
-                      const active = group.coverImage === c.url;
-                      return (
-                        <button
-                          key={c.url}
-                          type="button"
-                          title={c.label}
-                          onClick={() => onChange({ coverImage: c.url })}
-                          style={{
-                            width: 48,
-                            height: 48,
-                            padding: 0,
-                            borderRadius: 8,
-                            overflow: "hidden",
-                            cursor: "pointer",
-                            background: "#fff",
-                            border: active
-                              ? "2px solid #008060"
-                              : "1px solid #c9cccf",
-                          }}
-                        >
-                          <img
-                            src={c.url}
-                            alt={c.label}
-                            width={46}
-                            height={46}
-                            style={{ objectFit: "cover", display: "block" }}
-                          />
-                        </button>
-                      );
-                    })}
-                  </InlineStack>
-                ) : (
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    This product has no images to pick from — add images to the
-                    main product first.
-                  </Text>
-                )}
-                {group.coverImage && (
-                  <Button
-                    variant="plain"
-                    tone="critical"
-                    onClick={() => onChange({ coverImage: undefined })}
-                  >
-                    Remove cover
-                  </Button>
-                )}
-              </BlockStack>
+              <Button
+                disclosure={coverOpen ? "up" : "down"}
+                disabled={coverChoices.length === 0}
+                onClick={() => setCoverOpen((o) => !o)}
+              >
+                {group.coverImage ? "Change cover" : "Choose cover"}
+              </Button>
+              {group.coverImage && (
+                <Button
+                  variant="plain"
+                  tone="critical"
+                  onClick={() => onChange({ coverImage: undefined })}
+                >
+                  Remove
+                </Button>
+              )}
             </InlineStack>
+            <Collapsible open={coverOpen} id={`cover-${group.id}`}>
+              {coverChoices.length > 0 ? (
+                <InlineStack gap="150" wrap>
+                  {coverChoices.map((c) => {
+                    const active = group.coverImage === c.url;
+                    return (
+                      <button
+                        key={c.url}
+                        type="button"
+                        title={c.label}
+                        onClick={() => {
+                          onChange({ coverImage: c.url });
+                          setCoverOpen(false);
+                        }}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          padding: 0,
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          cursor: "pointer",
+                          background: "#fff",
+                          border: active
+                            ? "2px solid #008060"
+                            : "1px solid #c9cccf",
+                        }}
+                      >
+                        <img
+                          src={c.url}
+                          alt={c.label}
+                          width={46}
+                          height={46}
+                          style={{ objectFit: "cover", display: "block" }}
+                        />
+                      </button>
+                    );
+                  })}
+                </InlineStack>
+              ) : (
+                <Text as="span" variant="bodySm" tone="subdued">
+                  This product has no images to pick from — add images to the main
+                  product first.
+                </Text>
+              )}
+            </Collapsible>
           </BlockStack>
         )}
 
@@ -1508,67 +1529,73 @@ function GroupCard({
                   }}
                 >
                   <BlockStack gap="150">
-                    <InlineStack
-                      align="space-between"
-                      blockAlign="center"
-                      wrap={false}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        width: "100%",
+                      }}
                     >
-                      <InlineStack gap="200" blockAlign="center">
-                        <span
-                          draggable
-                          onDragStart={(e) => {
-                            dragAccId.current = a.productId;
-                            e.dataTransfer.effectAllowed = "move";
-                          }}
-                          onDragEnd={() => {
-                            dragAccId.current = null;
-                          }}
-                          style={{ cursor: "grab", display: "inline-flex" }}
-                          title="Drag to reorder"
-                        >
-                          <Icon source={DragHandleIcon} tone="subdued" />
-                        </span>
+                      <span
+                        draggable
+                        onDragStart={(e) => {
+                          dragAccId.current = a.productId;
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => {
+                          dragAccId.current = null;
+                        }}
+                        style={{ cursor: "grab", display: "inline-flex", flex: "none" }}
+                        title="Drag to reorder"
+                      >
+                        <Icon source={DragHandleIcon} tone="subdued" />
+                      </span>
+                      <div style={{ flex: "none" }}>
                         <Thumbnail
                           source={info[a.productId]?.image || ImageIcon}
                           alt={info[a.productId]?.title || a.title}
                           size="small"
                         />
-                      <BlockStack gap="050">
-                        <InlineStack gap="150" blockAlign="center" wrap>
-                          <Text as="span" variant="bodyMd">
-                            {info[a.productId]?.title || a.title || a.handle}
-                          </Text>
-                          <StockBadge qty={inventory[a.productId]} />
-                        </InlineStack>
-                        {price != null && (
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {fmtMoney(price, currency)}
-                          </Text>
-                        )}
-                      </BlockStack>
-                    </InlineStack>
-
-                      <InlineStack gap="150" blockAlign="center" wrap={false}>
-                        {accVariants.length > 1 && (
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <BlockStack gap="050">
+                          <InlineStack gap="150" blockAlign="center" wrap>
+                            <Text as="span" variant="bodyMd">
+                              {info[a.productId]?.title || a.title || a.handle}
+                            </Text>
+                            <StockBadge qty={inventory[a.productId]} />
+                          </InlineStack>
+                          {price != null && (
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              {fmtMoney(price, currency)}
+                            </Text>
+                          )}
+                        </BlockStack>
+                      </div>
+                      <div style={{ flex: "none" }}>
+                        <InlineStack gap="150" blockAlign="center" wrap={false}>
+                          {accVariants.length > 1 && (
+                            <Button
+                              size="slim"
+                              disclosure={
+                                openVarPids[a.productId] ? "up" : "down"
+                              }
+                              onClick={() => toggleVarOpen(a.productId)}
+                            >
+                              {`Variants ${offeredIds.length}/${accVariants.length}`}
+                            </Button>
+                          )}
                           <Button
-                            size="slim"
-                            disclosure={
-                              openVarPids[a.productId] ? "up" : "down"
-                            }
-                            onClick={() => toggleVarOpen(a.productId)}
-                          >
-                            {`Variants ${offeredIds.length}/${accVariants.length}`}
-                          </Button>
-                        )}
-                        <Button
-                          icon={DeleteIcon}
-                          variant="tertiary"
-                          tone="critical"
-                          accessibilityLabel={`Remove ${a.title}`}
-                          onClick={() => onRemoveAccessory(a.productId)}
-                        />
-                      </InlineStack>
-                    </InlineStack>
+                            icon={DeleteIcon}
+                            variant="tertiary"
+                            tone="critical"
+                            accessibilityLabel={`Remove ${a.title}`}
+                            onClick={() => onRemoveAccessory(a.productId)}
+                          />
+                        </InlineStack>
+                      </div>
+                    </div>
 
                     {isFree ? (
                       <InlineStack align="end">
