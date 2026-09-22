@@ -451,14 +451,17 @@ export default function GiftCampaignEditor() {
                 <Select
                   label="Reward mode"
                   options={[
-                    { label: "Fixed — auto-add the gift", value: "fixed" },
+                    { label: "Fixed — auto-add the first gift", value: "fixed" },
                     {
-                      label: "Choice — customer picks on the product page",
+                      label: "Choice — customer picks one gift",
                       value: "choice",
                     },
+                    { label: "All — auto-add every gift", value: "all" },
                   ]}
                   value={c.rewardMode}
-                  onChange={(v) => patch({ rewardMode: v as "fixed" | "choice" })}
+                  onChange={(v) =>
+                    patch({ rewardMode: v as "fixed" | "choice" | "all" })
+                  }
                 />
               </Box>
               <Box width="33%">

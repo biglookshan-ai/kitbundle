@@ -32,8 +32,13 @@ export type GiftCampaign = {
   endsAt: string; // ISO-8601 or ""
   /** Free gifts granted per qualifying unit (buy 2 -> 2). */
   perQualifying: number;
-  /** "fixed" = auto-add the single gift; "choice" = customer picks from the set. */
-  rewardMode: "fixed" | "choice";
+  /**
+   * "fixed"  = auto-add the single (first) gift.
+   * "choice" = customer picks one gift from the set.
+   * "all"    = every gift is auto-added; a multi-variant gift still lets the
+   *            customer choose its variant, and one "No thanks" declines the set.
+   */
+  rewardMode: "fixed" | "choice" | "all";
   badgeText: string;
   /** Storefront prompt shown above the gift picker (customizable per campaign). */
   subtitle: string;
@@ -120,7 +125,12 @@ export function rowToCampaign(row: any): GiftCampaign {
     startsAt: row.startsAt ? new Date(row.startsAt).toISOString() : "",
     endsAt: row.endsAt ? new Date(row.endsAt).toISOString() : "",
     perQualifying: Math.max(1, Number(row.perQualifying) || 1),
-    rewardMode: row.rewardMode === "choice" ? "choice" : "fixed",
+    rewardMode:
+      row.rewardMode === "choice"
+        ? "choice"
+        : row.rewardMode === "all"
+          ? "all"
+          : "fixed",
     badgeText: row.badgeText ?? "",
     subtitle: row.subtitle ?? "",
     hideWhenSoldOut: !!row.hideWhenSoldOut,

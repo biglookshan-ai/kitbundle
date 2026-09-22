@@ -460,7 +460,12 @@ export async function saveCampaign(
     startsAt: c.startsAt ? new Date(c.startsAt) : null,
     endsAt: c.endsAt ? new Date(c.endsAt) : null,
     perQualifying: Math.max(1, c.perQualifying || 1),
-    rewardMode: c.rewardMode === "choice" ? "choice" : "fixed",
+    rewardMode:
+      c.rewardMode === "choice"
+        ? "choice"
+        : c.rewardMode === "all"
+          ? "all"
+          : "fixed",
     badgeText: c.badgeText,
     subtitle: c.subtitle ?? "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,
