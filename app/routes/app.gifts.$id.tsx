@@ -444,7 +444,12 @@ export default function GiftCampaignEditor() {
                   onChange={(v) =>
                     patch({ perQualifying: Math.max(1, Number(v) || 1) })
                   }
-                  helpText={`Buy 1 → get ${c.perQualifying} free per qualifying item.`}
+                  disabled={c.rewardMode === "all"}
+                  helpText={
+                    c.rewardMode === "all"
+                      ? "Not used in All mode: every gift is given once per qualifying item (buy 2 → 2 of each)."
+                      : `Buy 1 → get ${c.perQualifying} free per qualifying item.`
+                  }
                 />
               </Box>
               <Box width="33%">

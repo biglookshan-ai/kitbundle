@@ -435,15 +435,16 @@ export function run(input) {
       )
         continue;
       const perQ = Number(e.perQualifying) || 1;
-      // "all" mode gives one of EVERY gift free, so the allowance scales with the
-      // number of gift products (each still capped at perQ per qualifying unit).
-      const giftMult =
+      // "all" mode = ONE of every gift per qualifying unit; perQualifying is
+      // deliberately NOT applied there (it would multiply every gift and let a
+      // bumped-up gift line claim extras free). Other modes: perQ per unit.
+      const units =
         e.rewardMode === "all" &&
         Array.isArray(e.giftIds) &&
         e.giftIds.length > 0
-          ? e.giftIds.length
-          : 1;
-      giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + q * perQ * giftMult);
+          ? q * e.giftIds.length
+          : q * perQ;
+      giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + units);
       if (!giftIdsByCamp.has(cid))
         giftIdsByCamp.set(
           cid,

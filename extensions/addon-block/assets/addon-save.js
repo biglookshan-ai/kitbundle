@@ -529,6 +529,16 @@
     };
   }
 
+  // Qualifying units in this add (plain mains + bundle kits), never below 1 —
+  // "all"-mode gifts are given once per unit.
+  function addUnitsOf(plan) {
+    var u = plan.mainsForAddons || 0;
+    (plan.bundles || []).forEach(function (b) {
+      u += b.qty || 1;
+    });
+    return u > 0 ? u : 1;
+  }
+
   // Keeps the total bar + our CTA in sync with the current selection.
   function updateCTA(ctx) {
     var cta = ctx.cta;
@@ -555,7 +565,7 @@
     // Free gifts always ride along (count them, $0 to the total) — both the
     // legacy "free" groups and the campaign gifts the shopper currently has on.
     count += ctx.freeItems.length;
-    count += campaignGiftUnits();
+    count += campaignGiftUnits(addUnitsOf(plan));
 
     // Total summary lives ABOVE the button; the button label stays static so it
     // can carry Pre-Order / Sold-out states without us overwriting it.
@@ -3176,8 +3186,11 @@
           var qty = Number(c.perQualifying) || 1;
           if (c.rewardMode === "all") {
             if (giftChoice[c.id] === GIFT_DECLINE) return; // declined the whole set
+            // One of EVERY gift per qualifying unit being added (perQualifying is
+            // not used in this mode — it would multiply each gift).
+            var eachQty = addUnitsOf(plan);
             (c.giftHandles || []).forEach(function (h) {
-              items.push({ handle: h, quantity: qty, _giftCampId: c.id });
+              items.push({ handle: h, quantity: eachQty, _giftCampId: c.id });
             });
             return;
           }
@@ -3492,20 +3505,21 @@
   }
 
   // How many gift units the current choices would add to the cart — mirrors the
-  // commit logic (trigger-variant gate, reward mode, "No thanks").
-  function campaignGiftUnits() {
+  // commit logic (trigger-variant gate, reward mode, "No thanks"). `units` =
+  // qualifying units being added; "all" mode gives one of every gift per unit.
+  function campaignGiftUnits(units) {
     var n = 0;
+    var u = units > 0 ? units : 1;
     var cur = String(readMainVariantId());
     (giftCampaigns || []).forEach(function (c) {
       if (!giftActive(c)) return;
       var tv = c.triggerVariants || [];
       if (tv.length && tv.map(String).indexOf(cur) < 0) return;
-      var q = Number(c.perQualifying) || 1;
       if (c.rewardMode === "all") {
         if (giftChoice[c.id] === GIFT_DECLINE) return;
-        n += (c.giftHandles || []).length * q;
+        n += (c.giftHandles || []).length * u;
       } else if (chosenGift(c)) {
-        n += q;
+        n += Number(c.perQualifying) || 1;
       }
     });
     return n;
