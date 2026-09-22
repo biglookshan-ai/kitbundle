@@ -319,7 +319,15 @@
                 fn();
               } catch (e) {}
             });
+            // The main variant's price / availability changed: refresh the
+            // total bar and re-mirror the theme button's label + state.
+            resyncNativeButton(ctx);
           }, 50);
+          // The theme re-renders the product form asynchronously, replacing the
+          // add button — run again once that has settled.
+          setTimeout(function () {
+            resyncNativeButton(ctx);
+          }, 450);
         }
       },
       true,
@@ -561,8 +569,10 @@
         ctx.summaryEl.hidden = true;
       }
     }
+    // Label mirrors the theme's own button ("Pre-order now" / "Sold out" / …).
     if (!cta.classList.contains("is-done") && !cta.classList.contains("is-loading")) {
-      cta.textContent = "Add to cart";
+      cta.textContent = ctx.ctaLabel || "Add to cart";
+      if (ctx.nativeDisabled) cta.disabled = true;
     }
   }
 
@@ -2953,9 +2963,70 @@
     ctx.cta.addEventListener("click", function () {
       commit(ctx);
     });
+    // Mirror the theme's own add button (label like "Pre-order now" / "Sold out"
+    // + disabled state) BEFORE hiding it, so our CTA matches the theme's state.
+    syncCtaFromNative(ctx);
     // This block's CTA is now the single add-to-cart, so hide the theme's own
     // add button to avoid two competing buttons / two cart logics.
     hideThemeAddButton();
+    // A pre-order / inventory app may relabel the native button after load —
+    // keep mirroring it.
+    observeNativeButton(ctx);
+  }
+
+  function nativeAddButton() {
+    return document.querySelector(
+      'form[action*="/cart/add"] [name="add"], form[action*="/cart/add"] .product-form__submit',
+    );
+  }
+
+  // Copy the theme add button's label + disabled/sold-out state onto our CTA so
+  // states like "Pre-order now" carry over instead of a hardcoded "Add to cart".
+  function syncCtaFromNative(ctx) {
+    if (!ctx.cta) return;
+    var nb = nativeAddButton();
+    if (!nb) return;
+    var txt = (nb.textContent || nb.value || "").replace(/\s+/g, " ").trim();
+    if (txt) ctx.ctaLabel = txt;
+    var disabled =
+      nb.disabled === true ||
+      nb.getAttribute("aria-disabled") === "true" ||
+      nb.classList.contains("disabled");
+    ctx.nativeDisabled = disabled;
+    if (!ctx.cta.classList.contains("is-loading")) {
+      ctx.cta.disabled = disabled;
+      if (!ctx.cta.classList.contains("is-done")) {
+        ctx.cta.textContent = ctx.ctaLabel || "Add to cart";
+      }
+    }
+  }
+
+  function observeNativeButton(ctx) {
+    var nb = nativeAddButton();
+    if (!nb || typeof MutationObserver !== "function") return;
+    if (ctx.nativeObserved === nb) return; // already watching this element
+    if (ctx.nativeObserver) ctx.nativeObserver.disconnect();
+    var mo = new MutationObserver(function () {
+      syncCtaFromNative(ctx);
+    });
+    mo.observe(nb, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled", "aria-disabled", "class"],
+    });
+    ctx.nativeObserver = mo;
+    ctx.nativeObserved = nb;
+  }
+
+  // After a page variant change the theme may swap the add button element
+  // asynchronously: re-hide it, re-watch it and re-mirror its state.
+  function resyncNativeButton(ctx) {
+    hideThemeAddButton();
+    observeNativeButton(ctx);
+    syncCtaFromNative(ctx);
+    updateCTA(ctx);
   }
 
   function hideThemeAddButton() {
