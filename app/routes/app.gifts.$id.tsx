@@ -42,14 +42,18 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     if (!campaign) throw new Response("Not found", { status: 404 });
   }
   const c = campaign ?? emptyCampaign();
-  // Variants of each gift product, so the editor can offer per-variant selection.
-  const giftIds = c.giftProducts.map((g) => g.id).filter(Boolean);
-  let giftVariantMap: Record<string, { id: string; title: string }[]> = {};
-  if (giftIds.length) {
-    const { variants } = await fetchProductPrices(admin, giftIds);
-    giftVariantMap = variants as Record<string, { id: string; title: string }[]>;
+  // Variants of each gift AND trigger product, so the editor can offer
+  // per-variant selection on both sides.
+  const productIds = [
+    ...c.giftProducts.map((g) => g.id),
+    ...c.triggerProducts.map((t) => t.id),
+  ].filter(Boolean);
+  let variantMap: Record<string, { id: string; title: string }[]> = {};
+  if (productIds.length) {
+    const { variants } = await fetchProductPrices(admin, productIds);
+    variantMap = variants as Record<string, { id: string; title: string }[]>;
   }
-  return { campaign: c, isNew: !campaign, giftVariantMap };
+  return { campaign: c, isNew: !campaign, variantMap };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -102,15 +106,17 @@ function fromLocalInput(v: string) {
 }
 
 export default function GiftCampaignEditor() {
-  const { campaign: initial, giftVariantMap } = useLoaderData<typeof loader>();
+  const { campaign: initial, variantMap: loadedVariants } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const shopify = useAppBridge();
   const [c, setC] = useState<GiftCampaign>(initial);
-  // Variants per gift product (seeded from the loader, augmented when picking).
+  // Variants per product (gift + trigger); seeded from the loader, augmented
+  // when picking.
   const [variantMap, setVariantMap] = useState<
     Record<string, { id: string; title: string }[]>
-  >(giftVariantMap || {});
+  >(loadedVariants || {});
   const [openVarPids, setOpenVarPids] = useState<Record<string, boolean>>({});
   const toggleVarOpen = (pid: string) =>
     setOpenVarPids((m) => ({ ...m, [pid]: !m[pid] }));
@@ -182,6 +188,98 @@ export default function GiftCampaignEditor() {
             </Button>
           </InlineStack>
         ))}
+      </BlockStack>
+    );
+
+  // Product list with an optional per-variant chooser (used for both trigger and
+  // gift products). All variants offered when none are explicitly picked.
+  const refVariantList = (
+    refs: Ref[],
+    onChange: (next: Ref[]) => void,
+    chipLabel: string,
+  ) =>
+    refs.length === 0 ? (
+      <Text as="span" variant="bodySm" tone="subdued">
+        None selected
+      </Text>
+    ) : (
+      <BlockStack gap="200">
+        {refs.map((r) => {
+          const vs = variantMap[r.id] || [];
+          const offeredIds =
+            r.variantIds && r.variantIds.length
+              ? r.variantIds
+              : vs.map((v) => v.id);
+          const toggle = (vid: string) => {
+            const next = offeredIds.includes(vid)
+              ? offeredIds.filter((x) => x !== vid)
+              : [...offeredIds, vid];
+            if (next.length === 0) return; // keep at least one
+            const variantIds = next.length === vs.length ? undefined : next;
+            onChange(refs.map((x) => (x.id === r.id ? { ...x, variantIds } : x)));
+          };
+          return (
+            <BlockStack key={r.id} gap="100">
+              <InlineStack
+                align="space-between"
+                blockAlign="center"
+                wrap={false}
+              >
+                <InlineStack gap="200" blockAlign="center">
+                  <Thumbnail
+                    source={r.image || ImageIcon}
+                    alt={r.title}
+                    size="small"
+                  />
+                  <Text as="span" variant="bodyMd">
+                    {r.title || r.handle || r.id}
+                  </Text>
+                </InlineStack>
+                <InlineStack gap="150" blockAlign="center" wrap={false}>
+                  {vs.length > 1 && (
+                    <Button
+                      size="slim"
+                      disclosure={openVarPids[r.id] ? "up" : "down"}
+                      onClick={() => toggleVarOpen(r.id)}
+                    >
+                      {`Variants ${offeredIds.length}/${vs.length}`}
+                    </Button>
+                  )}
+                  <Button
+                    variant="tertiary"
+                    tone="critical"
+                    onClick={() => onChange(refs.filter((x) => x.id !== r.id))}
+                  >
+                    Remove
+                  </Button>
+                </InlineStack>
+              </InlineStack>
+              {vs.length > 1 && (
+                <Collapsible open={!!openVarPids[r.id]} id={`vars-${r.id}`}>
+                  <Box paddingInlineStart="800">
+                    <BlockStack gap="100">
+                      <Text as="span" variant="bodySm" tone="subdued">
+                        {chipLabel} ({offeredIds.length}/{vs.length})
+                      </Text>
+                      <InlineStack gap="150" wrap>
+                        {vs.map((v) => (
+                          <Button
+                            key={v.id}
+                            size="micro"
+                            pressed={offeredIds.includes(v.id)}
+                            onClick={() => toggle(v.id)}
+                          >
+                            {v.title}
+                          </Button>
+                        ))}
+                      </InlineStack>
+                    </BlockStack>
+                  </Box>
+                </Collapsible>
+              )}
+            </BlockStack>
+          );
+        })}
       </BlockStack>
     );
 
@@ -280,10 +378,10 @@ export default function GiftCampaignEditor() {
                 Select products
               </Button>
             </InlineStack>
-            {refList(c.triggerProducts, (id) =>
-              patch({
-                triggerProducts: c.triggerProducts.filter((r) => r.id !== id),
-              }),
+            {refVariantList(
+              c.triggerProducts,
+              (r) => patch({ triggerProducts: r }),
+              "Variants that qualify",
             )}
             <Divider />
             <InlineStack align="space-between" blockAlign="center">
@@ -329,104 +427,10 @@ export default function GiftCampaignEditor() {
                 Select gifts
               </Button>
             </InlineStack>
-            {c.giftProducts.length === 0 ? (
-              <Text as="span" variant="bodySm" tone="subdued">
-                None selected
-              </Text>
-            ) : (
-              <BlockStack gap="200">
-                {c.giftProducts.map((g) => {
-                  const gvs = variantMap[g.id] || [];
-                  const offeredIds =
-                    g.variantIds && g.variantIds.length
-                      ? g.variantIds
-                      : gvs.map((v) => v.id);
-                  const toggleGiftVariant = (vid: string) => {
-                    const next = offeredIds.includes(vid)
-                      ? offeredIds.filter((x) => x !== vid)
-                      : [...offeredIds, vid];
-                    if (next.length === 0) return; // keep at least one offered
-                    const variantIds =
-                      next.length === gvs.length ? undefined : next;
-                    patch({
-                      giftProducts: c.giftProducts.map((x) =>
-                        x.id === g.id ? { ...x, variantIds } : x,
-                      ),
-                    });
-                  };
-                  return (
-                    <BlockStack key={g.id} gap="100">
-                      <InlineStack
-                        align="space-between"
-                        blockAlign="center"
-                        wrap={false}
-                      >
-                        <InlineStack gap="200" blockAlign="center">
-                          <Thumbnail
-                            source={g.image || ImageIcon}
-                            alt={g.title}
-                            size="small"
-                          />
-                          <Text as="span" variant="bodyMd">
-                            {g.title || g.handle || g.id}
-                          </Text>
-                        </InlineStack>
-                        <InlineStack gap="150" blockAlign="center" wrap={false}>
-                          {gvs.length > 1 && (
-                            <Button
-                              size="slim"
-                              disclosure={openVarPids[g.id] ? "up" : "down"}
-                              onClick={() => toggleVarOpen(g.id)}
-                            >
-                              {`Variants ${offeredIds.length}/${gvs.length}`}
-                            </Button>
-                          )}
-                          <Button
-                            variant="tertiary"
-                            tone="critical"
-                            onClick={() =>
-                              patch({
-                                giftProducts: c.giftProducts.filter(
-                                  (r) => r.id !== g.id,
-                                ),
-                              })
-                            }
-                          >
-                            Remove
-                          </Button>
-                        </InlineStack>
-                      </InlineStack>
-                      {gvs.length > 1 && (
-                        <Collapsible
-                          open={!!openVarPids[g.id]}
-                          id={`giftvars-${g.id}`}
-                        >
-                          <Box paddingInlineStart="800">
-                            <BlockStack gap="100">
-                              <Text as="span" variant="bodySm" tone="subdued">
-                                Variants offered free ({offeredIds.length}/
-                                {gvs.length})
-                              </Text>
-                              <InlineStack gap="150" wrap>
-                                {gvs.map((v) => (
-                                  <Button
-                                    key={v.id}
-                                    size="micro"
-                                    pressed={offeredIds.includes(v.id)}
-                                    onClick={() => toggleGiftVariant(v.id)}
-                                  >
-                                    {v.title}
-                                  </Button>
-                                ))}
-                              </InlineStack>
-                            </BlockStack>
-                          </Box>
-                        </Collapsible>
-                      )}
-                    </BlockStack>
-                  );
-                })}
-              </BlockStack>
+            {refVariantList(
+              c.giftProducts,
+              (r) => patch({ giftProducts: r }),
+              "Variants offered free",
             )}
             <Divider />
             <InlineStack gap="400" wrap={false} blockAlign="start">

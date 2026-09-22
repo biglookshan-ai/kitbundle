@@ -3375,8 +3375,15 @@
     var host = root.querySelector("[data-cgp-giftpromo]");
     if (!host || !giftCampaigns || !giftCampaigns.length) return;
     var currency = root.getAttribute("data-currency") || "USD";
+    var curMainVid = String(readMainVariantId());
     var active = giftCampaigns.filter(function (c) {
-      return giftActive(c) && (c.giftHandles || []).length;
+      if (!giftActive(c) || !(c.giftHandles || []).length) return false;
+      // Trigger-variant gate: when the campaign only triggers for specific
+      // variants of this product, hide the gift unless a qualifying variant is
+      // selected (the Function enforces the same rule at checkout).
+      var tv = c.triggerVariants || [];
+      if (tv.length && tv.map(String).indexOf(curMainVid) < 0) return false;
+      return true;
     });
     if (!active.length) {
       host.hidden = true;
@@ -3606,6 +3613,8 @@
         subtitle: e.subtitle || "",
         hideWhenSoldOut: !!e.hideWhenSoldOut,
         triggerProductIds: e.triggers || e.triggerProductIds || [],
+        // Variant-id tails of THIS product that qualify (empty = all variants).
+        triggerVariants: e.triggerVariants || [],
         giftHandles: e.gifts || e.giftHandles || [],
         // Parallel to giftHandles: numeric product-id tails, used to look up each
         // gift's offered-variant list below.
@@ -3621,6 +3630,26 @@
     // the discount Function prices them (free up to the main count). The customer
     // deletes what they don't want; nothing is auto-added or swapped.
     renderGiftPromo(root);
+    // A campaign may only trigger for certain main-product variants — re-evaluate
+    // the promo when the customer switches the page variant.
+    document.addEventListener(
+      "change",
+      function (e) {
+        var t = e.target;
+        if (
+          t &&
+          t.closest &&
+          t.closest(
+            'variant-selects, variant-radios, .product-form__input, form[action*="/cart/add"]',
+          )
+        ) {
+          setTimeout(function () {
+            renderGiftPromo(root);
+          }, 60);
+        }
+      },
+      true,
+    );
   }
 
   function cartPost(url, body) {

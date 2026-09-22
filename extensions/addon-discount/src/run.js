@@ -422,9 +422,18 @@ export function run(input) {
     }
     if (!Array.isArray(entries)) continue;
     const q = Number(line?.quantity) || 0;
+    const triggerVid = /** @type {any} */ (line?.merchandise)?.id;
     for (const e of entries) {
       const cid = e && e.id;
       if (!cid) continue;
+      // Trigger-variant gate: when a campaign restricts which variants of this
+      // product qualify, a line on an off-list variant grants no gift allowance.
+      if (
+        Array.isArray(e.triggerVariants) &&
+        e.triggerVariants.length &&
+        !e.triggerVariants.map(String).includes(gidTail(triggerVid))
+      )
+        continue;
       const perQ = Number(e.perQualifying) || 1;
       giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + q * perQ);
       if (!giftIdsByCamp.has(cid))

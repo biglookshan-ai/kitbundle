@@ -145,9 +145,20 @@ async function restampProducts(
       startsAt: c.startsAt || "",
       endsAt: c.endsAt || "",
     };
+    // Which variants of each manually-listed trigger product qualify (empty = all).
+    // Collection-expanded products aren't restricted.
+    const triggerVarsById = new Map<string, string[]>();
+    for (const t of c.triggerProducts) {
+      const vs = Array.isArray(t.variantIds)
+        ? t.variantIds.map(gidTail).filter(Boolean)
+        : [];
+      if (vs.length) triggerVarsById.set(t.id, vs);
+    }
     for (const pid of triggerGids) {
       if (!affected.has(pid)) continue; // only rewrite the affected set
-      map.get(pid)!.push(entry);
+      const tv = triggerVarsById.get(pid);
+      // Per-product stamp: attach this product's qualifying variants when limited.
+      map.get(pid)!.push(tv && tv.length ? { ...entry, triggerVariants: tv } : entry);
     }
   }
   const errors = await writeTriggerStamps(admin, map);
