@@ -390,6 +390,11 @@
   cursor: pointer;
   transition: opacity 0.15s, background 0.15s;
 }
+/* `display:block` above would otherwise beat the [hidden] attribute and paint
+   an empty bar while the widget is still loading. */
+.cgp-cta[hidden] {
+  display: none !important;
+}
 .cgp-cta:hover {
   opacity: 0.92;
 }

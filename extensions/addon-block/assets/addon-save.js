@@ -258,6 +258,10 @@
       updateCTA(ctx);
       updateCounter(ctx);
     };
+    // Gift picks (choose / decline) change the item count in the total bar.
+    giftChangeFns.push(function () {
+      updateCTA(ctx);
+    });
 
     // Load the main product so bundles can show its thumbnail + total price.
     fetchProduct(ctx.mainHandle).then(function (d) {
@@ -309,7 +313,7 @@
           t &&
           t.closest &&
           t.closest(
-            'variant-selects, variant-radios, .product-form__input, form[action*="/cart/add"]',
+            'variant-selects, variant-radios, .product-form__input, form[action*="/cart/add"], quantity-input, .product-form__quantity, [name="quantity"]',
           )
         ) {
           holdScroll(600); // theme re-renders media async on variant change
@@ -319,13 +323,14 @@
                 fn();
               } catch (e) {}
             });
-            // The main variant's price changed: refresh the total bar.
-            updateCTA(ctx);
+            // Variant price / quantity changed: re-mirror the theme button
+            // (label + availability) and refresh the total bar.
+            resyncNativeButton(ctx);
           }, 50);
-          // The theme re-renders the product form (and its price) asynchronously
-          // — recompute once that has settled.
+          // The theme re-renders the product form asynchronously (new button,
+          // new price) — run again once that has settled.
           setTimeout(function () {
-            updateCTA(ctx);
+            resyncNativeButton(ctx);
           }, 450);
         }
       },
@@ -513,7 +518,9 @@
     if (ctx.hasDefaultCard) {
       mainsForAddons = mainSel ? mainSel.qty || 1 : addonItems.length > 0 ? 1 : 0;
     } else {
-      mainsForAddons = bundles.length === 0 ? 1 : 0;
+      // No "No bundle" card with its own stepper: the theme's quantity box is
+      // the only quantity control on the page, so honour it.
+      mainsForAddons = bundles.length === 0 ? themeQty() : 0;
     }
     return {
       bundles: bundles,
@@ -522,9 +529,10 @@
     };
   }
 
-  // Keeps the total bar in sync. The add button itself is the theme's own (we
-  // intercept it), so nothing here touches a button label.
+  // Keeps the total bar + our CTA in sync with the current selection.
   function updateCTA(ctx) {
+    var cta = ctx.cta;
+    if (cta) cta.hidden = false;
     var mv = mainVariant(ctx);
     var plan = buildPlan(ctx, ctx.mainInCart);
     var count = plan.mainsForAddons;
@@ -544,8 +552,10 @@
         total += q * discounted(it.price, it.percent);
       });
     });
-    // Free gifts always ride along (count them, $0 to the total).
+    // Free gifts always ride along (count them, $0 to the total) — both the
+    // legacy "free" groups and the campaign gifts the shopper currently has on.
     count += ctx.freeItems.length;
+    count += campaignGiftUnits();
 
     // Total summary lives ABOVE the button; the button label stays static so it
     // can carry Pre-Order / Sold-out states without us overwriting it.
@@ -566,6 +576,12 @@
       } else {
         ctx.summaryEl.hidden = true;
       }
+    }
+    // Label + disabled state mirror the theme's own button ("Pre-Order Now",
+    // "Sold out", …) — never a hardcoded "Add to cart" when the theme says otherwise.
+    if (cta && !cta.classList.contains("is-done") && !cta.classList.contains("is-loading")) {
+      cta.textContent = ctx.ctaLabel || "Add to cart";
+      cta.disabled = !!ctx.nativeDisabled;
     }
   }
 
@@ -2951,20 +2967,19 @@
 
   /* ---------- Commit: add main + selected extras, then reset + open cart ---------- */
 
-  // Progressive enhancement: we do NOT replace the theme's add button. It keeps
-  // its own label ("Pre-order now" / "Sold out"), styling, disabled state and
-  // position — we just intercept its click and run our add instead. Nothing
-  // flashes or swaps on load, and if this script never runs the native button
-  // still works (it simply adds the main product without the extras).
+  // This block's CTA is the single add-to-cart: the theme's own add button is
+  // hidden (so two buttons / two cart logics — or a pre-order app's handler —
+  // can't fight ours), and our button MIRRORS it, so a theme state such as
+  // "Pre-Order Now" or "Sold out" is preserved instead of a generic label.
   function setupCTA(ctx) {
-    // Our own button is unused in this mode; keep it out of the layout.
-    if (ctx.cta) {
-      ctx.cta.hidden = true;
-      ctx.cta.addEventListener("click", function () {
-        commit(ctx);
-      });
-    }
-    interceptNativeAdd(ctx);
+    if (!ctx.cta) return;
+    ctx.cta.addEventListener("click", function () {
+      commit(ctx);
+    });
+    installNativeHide();
+    syncCtaFromNative(ctx);
+    observeNativeButton(ctx);
+    ctx.cta.hidden = false;
   }
 
   function nativeAddSelector() {
@@ -2975,28 +2990,76 @@
     return document.querySelector(nativeAddSelector());
   }
 
-  // Delegated + capture-phase so we run before the theme's own submit handler,
-  // and so a re-rendered button (variant change) is still covered.
-  function interceptNativeAdd(ctx) {
-    if (window.__cgpNativeIntercepted) return;
-    window.__cgpNativeIntercepted = true;
-    document.addEventListener(
-      "click",
-      function (e) {
-        var t = e.target;
-        if (!t || !t.closest) return;
-        var btn = t.closest(nativeAddSelector());
-        if (!btn || btn.disabled) return;
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof e.stopImmediatePropagation === "function") {
-          e.stopImmediatePropagation();
-        }
-        ctx.addBtn = btn; // show the busy/done state on the theme's own button
-        commit(ctx);
-      },
-      true,
-    );
+  // Hide the theme's add button with ONE stylesheet rule rather than inline
+  // styles per element: when the theme re-renders the product form (variant
+  // change) the new button is hidden instantly too — no flash back.
+  function installNativeHide() {
+    if (document.getElementById("cgp-hide-native")) return;
+    var s = document.createElement("style");
+    s.id = "cgp-hide-native";
+    s.textContent = nativeAddSelector() + " { display: none !important; }";
+    document.head.appendChild(s);
+  }
+  // Safety net: if the widget fails to initialise, give the theme button back.
+  function uninstallNativeHide() {
+    var s = document.getElementById("cgp-hide-native");
+    if (s) s.remove();
+  }
+
+  // Copy the theme add button's label + disabled/sold-out state onto our CTA
+  // (textContent is readable even while it's display:none).
+  function syncCtaFromNative(ctx) {
+    if (!ctx.cta) return;
+    var nb = nativeAddButton();
+    if (!nb) return;
+    var txt = (nb.textContent || nb.value || "").replace(/\s+/g, " ").trim();
+    if (txt) ctx.ctaLabel = txt;
+    ctx.nativeDisabled =
+      nb.disabled === true ||
+      nb.getAttribute("aria-disabled") === "true" ||
+      nb.classList.contains("disabled");
+    var cta = ctx.cta;
+    if (!cta.classList.contains("is-loading") && !cta.classList.contains("is-done")) {
+      cta.textContent = ctx.ctaLabel || "Add to cart";
+      cta.disabled = !!ctx.nativeDisabled;
+    }
+  }
+
+  // A pre-order / inventory app may relabel the native button after load —
+  // keep mirroring it. Re-attached after a variant change (new element).
+  function observeNativeButton(ctx) {
+    var nb = nativeAddButton();
+    if (!nb || typeof MutationObserver !== "function") return;
+    if (ctx.nativeObserved === nb) return;
+    if (ctx.nativeObserver) ctx.nativeObserver.disconnect();
+    var mo = new MutationObserver(function () {
+      syncCtaFromNative(ctx);
+    });
+    mo.observe(nb, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled", "aria-disabled", "class"],
+    });
+    ctx.nativeObserver = mo;
+    ctx.nativeObserved = nb;
+  }
+
+  // After a page variant/quantity change: re-watch the (possibly re-rendered)
+  // native button, re-mirror its state and recompute the total bar.
+  function resyncNativeButton(ctx) {
+    observeNativeButton(ctx);
+    syncCtaFromNative(ctx);
+    updateCTA(ctx);
+  }
+
+  // The theme's own quantity box (used for the plain main when no "No bundle"
+  // card provides its own stepper).
+  function themeQty() {
+    var q = document.querySelector('form[action*="/cart/add"] [name="quantity"]');
+    var n = q ? parseInt(q.value, 10) : 1;
+    return n > 0 ? n : 1;
   }
 
   // Add the main product + selected accessories in ONE request, asking for the
@@ -3004,9 +3067,7 @@
   // theme's own renderContents() — so the cart drawer/notification updates and
   // opens exactly like a native add, with no second cart logic to fight.
   function commit(ctx) {
-    // The busy/done state goes on whichever button was pressed — normally the
-    // theme's own add button, which we intercept.
-    var cta = ctx.addBtn || ctx.cta;
+    var cta = ctx.cta;
     if (!cta) return;
     var original = cta.textContent;
     cta.disabled = true;
@@ -3410,6 +3471,16 @@
   // Only relevant when the gift product has more than one variant.
   var giftVariantChoice = {};
   var GIFT_DECLINE = "__none__";
+  // Run whenever the shopper changes a gift choice, so the total bar's item
+  // count follows (registered by init()).
+  var giftChangeFns = [];
+  function notifyGiftChange() {
+    giftChangeFns.forEach(function (fn) {
+      try {
+        fn();
+      } catch (e) {}
+    });
+  }
   function chosenGift(c) {
     var handles = c.giftHandles || [];
     var sel = giftChoice[c.id];
@@ -3418,6 +3489,26 @@
     // which may differ from handles[0] when a sold-out gift was hidden).
     if (sel && handles.indexOf(sel) >= 0) return sel;
     return handles[0];
+  }
+
+  // How many gift units the current choices would add to the cart — mirrors the
+  // commit logic (trigger-variant gate, reward mode, "No thanks").
+  function campaignGiftUnits() {
+    var n = 0;
+    var cur = String(readMainVariantId());
+    (giftCampaigns || []).forEach(function (c) {
+      if (!giftActive(c)) return;
+      var tv = c.triggerVariants || [];
+      if (tv.length && tv.map(String).indexOf(cur) < 0) return;
+      var q = Number(c.perQualifying) || 1;
+      if (c.rewardMode === "all") {
+        if (giftChoice[c.id] === GIFT_DECLINE) return;
+        n += (c.giftHandles || []).length * q;
+      } else if (chosenGift(c)) {
+        n += q;
+      }
+    });
+    return n;
   }
 
   // On a trigger product page: show the "free gift" badge, and for choice mode a
@@ -3518,6 +3609,7 @@
             selector.checked = giftChoice[c.id] === h;
             selector.addEventListener("change", function () {
               if (selector.checked) giftChoice[c.id] = h;
+              notifyGiftChange();
             });
           }
           row.appendChild(selector);
@@ -3651,6 +3743,7 @@
               ? GIFT_DECLINE
               : handles[0] || "";
             applyDeclineState(declineInput.checked);
+            notifyGiftChange();
           });
         } else {
           declineInput.type = "radio";
@@ -3658,6 +3751,7 @@
           declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
           declineInput.addEventListener("change", function () {
             if (declineInput.checked) giftChoice[c.id] = GIFT_DECLINE;
+            notifyGiftChange();
           });
         }
         declineRow.appendChild(declineInput);
@@ -3796,7 +3890,17 @@
   }
 
   function boot() {
-    document.querySelectorAll("[data-cgp-addon]").forEach(init);
+    document.querySelectorAll("[data-cgp-addon]").forEach(function (root) {
+      try {
+        init(root);
+      } catch (e) {
+        // Never leave the page without an add button: give the theme's back.
+        uninstallNativeHide();
+        try {
+          console.error("[cgp] init failed:", e);
+        } catch (e2) {}
+      }
+    });
   }
 
   if (document.readyState === "loading") {
