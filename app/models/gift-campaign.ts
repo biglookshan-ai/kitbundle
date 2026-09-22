@@ -15,6 +15,13 @@ export type Ref = {
   title: string;
   handle: string;
   image?: string | null;
+  /**
+   * Gift products only: which variants (variant gids) are offered free. Undefined
+   * or empty = every variant is eligible. When more than one is offered the
+   * storefront makes the customer pick one; the discount Function enforces the
+   * set so an off-list variant can't be claimed free.
+   */
+  variantIds?: string[];
 };
 
 export type GiftCampaign = {
@@ -94,6 +101,9 @@ function parseRefs(json: string | null | undefined): Ref[] {
             title: typeof r.title === "string" ? r.title : "",
             handle: typeof r.handle === "string" ? r.handle : "",
             image: r.image ?? null,
+            variantIds: Array.isArray(r.variantIds)
+              ? r.variantIds.filter((x: any) => typeof x === "string")
+              : undefined,
           }))
       : [];
   } catch {

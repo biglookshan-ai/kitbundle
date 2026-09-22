@@ -404,6 +404,10 @@ export function run(input) {
   const giftAllow = new Map();
   /** @type {Map<string, Set<string>>} */
   const giftIdsByCamp = new Map();
+  // Per campaign: product-id-tail -> Set of offered variant-id-tails. A product
+  // absent here (or with an empty set) offers ALL its variants free.
+  /** @type {Map<string, Map<string, Set<string>>>} */
+  const giftVariantsByCamp = new Map();
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
@@ -428,6 +432,18 @@ export function run(input) {
           cid,
           new Set((Array.isArray(e.giftIds) ? e.giftIds : []).map(String)),
         );
+      if (!giftVariantsByCamp.has(cid)) {
+        /** @type {Map<string, Set<string>>} */
+        const vmap = new Map();
+        const gv = e && e.giftVariants;
+        if (gv && typeof gv === "object") {
+          for (const k of Object.keys(gv)) {
+            const arr = Array.isArray(gv[k]) ? gv[k].map(String) : [];
+            if (arr.length) vmap.set(String(k), new Set(arr));
+          }
+        }
+        giftVariantsByCamp.set(cid, vmap);
+      }
     }
   }
 
@@ -446,6 +462,16 @@ export function run(input) {
       const pid = /** @type {any} */ (line?.merchandise)?.product?.id;
       const set = giftIdsByCamp.get(cid);
       if (set && set.size > 0 && !set.has(gidTail(pid))) continue; // not a valid gift
+      // Variant enforcement: if this gift product restricts variants, the line's
+      // variant must be one of them — otherwise it isn't a free gift.
+      const vmap = giftVariantsByCamp.get(cid);
+      if (vmap && vmap.size > 0) {
+        const allowed = vmap.get(gidTail(pid));
+        if (allowed && allowed.size > 0) {
+          const vid = /** @type {any} */ (line?.merchandise)?.id;
+          if (!vid || !allowed.has(gidTail(vid))) continue; // off-list variant
+        }
+      }
       const arr = byCamp.get(cid) ?? [];
       arr.push({ id: line.id, pid, qty: Number(line?.quantity) || 0 });
       byCamp.set(cid, arr);

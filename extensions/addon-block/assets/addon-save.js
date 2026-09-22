@@ -3498,20 +3498,35 @@
           nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
           info.appendChild(nameRow);
 
-          // Variant picker — when the gift product has more than one variant, let
-          // the customer choose which one they get free (e.g. a lens-ring size).
-          var giftVariants = (data && data.variants) || [];
-          if (giftVariants.length > 1) {
-            var vkey = c.id + "|" + h;
-            var availV = giftVariants.filter(function (v) {
+          // Variant picker — offer only the variants the merchant chose for this
+          // gift (all variants when none are restricted). A single offered variant
+          // shows no dropdown, but we still record it so the right one is added.
+          var allVariants = (data && data.variants) || [];
+          var giftTail = (c.giftIds || [])[i];
+          var allowedTails = (c.giftVariants || {})[giftTail];
+          var offered =
+            allowedTails && allowedTails.length
+              ? allVariants.filter(function (v) {
+                  return allowedTails.indexOf(String(v.id)) >= 0;
+                })
+              : allVariants;
+          var vkey = c.id + "|" + h;
+          if (offered.length) {
+            var availOff = offered.filter(function (v) {
               return v.available;
             });
-            var poolV = availV.length ? availV : giftVariants;
+            var poolOff = availOff.length ? availOff : offered;
             if (giftVariantChoice[vkey] === undefined) {
-              giftVariantChoice[vkey] = poolV[0].id;
+              giftVariantChoice[vkey] = poolOff[0].id;
             }
+            var chosenNow = offered.filter(function (v) {
+              return String(v.id) === String(giftVariantChoice[vkey]);
+            })[0];
+            if (chosenNow) paintGiftValue(chosenNow);
+          }
+          if (offered.length > 1) {
             var vsel = el("select", "cgp-free__variant");
-            giftVariants.forEach(function (v) {
+            offered.forEach(function (v) {
               var o = el(
                 "option",
                 null,
@@ -3521,7 +3536,6 @@
               if (!v.available) o.disabled = true;
               if (String(v.id) === String(giftVariantChoice[vkey])) {
                 o.selected = true;
-                paintGiftValue(v);
               }
               vsel.appendChild(o);
             });
@@ -3529,7 +3543,7 @@
             vsel.addEventListener("change", function (e) {
               stop(e);
               giftVariantChoice[vkey] = vsel.value;
-              var picked = giftVariants.filter(function (v) {
+              var picked = offered.filter(function (v) {
                 return String(v.id) === String(vsel.value);
               })[0];
               paintGiftValue(picked);
@@ -3593,6 +3607,12 @@
         hideWhenSoldOut: !!e.hideWhenSoldOut,
         triggerProductIds: e.triggers || e.triggerProductIds || [],
         giftHandles: e.gifts || e.giftHandles || [],
+        // Parallel to giftHandles: numeric product-id tails, used to look up each
+        // gift's offered-variant list below.
+        giftIds: e.giftIds || [],
+        // { productIdTail: [variantIdTail,...] } — offered variants per gift
+        // (absent product = all its variants eligible).
+        giftVariants: e.giftVariants || {},
       };
     });
     if (!giftCampaigns.length) return;

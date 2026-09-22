@@ -123,6 +123,20 @@ async function restampProducts(
       gifts: c.giftProducts.map((g) => g.handle).filter(Boolean),
       // Numeric gift product ids — the discount Function matches gift lines by id.
       giftIds: c.giftProducts.map((g) => gidTail(g.id)).filter(Boolean),
+      // Per-gift offered variants { productIdTail: [variantIdTail,...] }. Only
+      // products that restrict variants appear; absent = all variants eligible.
+      // Read by the storefront (to list only these) and the Function (to enforce).
+      giftVariants: (() => {
+        const m: Record<string, string[]> = {};
+        for (const g of c.giftProducts) {
+          const t = gidTail(g.id);
+          const vs = Array.isArray(g.variantIds)
+            ? g.variantIds.map(gidTail).filter(Boolean)
+            : [];
+          if (t && vs.length) m[t] = vs;
+        }
+        return m;
+      })(),
       perQualifying: Math.max(1, c.perQualifying || 1),
       badge: c.badgeText || "",
       subtitle: c.subtitle || "",
