@@ -2279,3 +2279,24 @@ a.cgp-modal__cname:hover {
 .cgp-modal__foot .cgp-modal__selectbtn:hover {
   opacity: 0.92;
 }
+
+/* Free-gift variant picker — shown when a gift product has multiple variants
+   so the customer can choose which one they get free (self-drawn chevron). */
+.cgp-free__variant {
+  appearance: none;
+  -webkit-appearance: none;
+  margin-top: 8px;
+  max-width: 260px;
+  border: 1px solid var(--cgp-border);
+  border-radius: var(--cgp-r-variant, 7px);
+  background-color: var(--cgp-panel);
+  background-image: linear-gradient(45deg, transparent 50%, var(--cgp-muted) 50%),
+    linear-gradient(135deg, var(--cgp-muted) 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding: 7px 28px 7px 10px;
+  font-size: 12px;
+  color: var(--cgp-ink);
+  cursor: pointer;
+}

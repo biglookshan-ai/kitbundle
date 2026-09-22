@@ -3088,7 +3088,18 @@
           items.map(function (it) {
             if (!it._giftCampId) return null;
             return fetchProduct(it.handle).then(function (data) {
-              var v = data && firstAvailable(data);
+              // Use the variant the customer picked (multi-variant gift); fall
+              // back to the first available one.
+              var vkey = it._giftCampId + "|" + it.handle;
+              var chosenVid = giftVariantChoice[vkey];
+              var v = null;
+              if (chosenVid && data && data.variants) {
+                v =
+                  data.variants.filter(function (x) {
+                    return String(x.id) === String(chosenVid);
+                  })[0] || null;
+              }
+              if (!v) v = data && firstAvailable(data);
               it.id = v && v.id;
               it.properties = { _cgp_gift: it._giftCampId };
               delete it._giftCampId;
@@ -3344,6 +3355,9 @@
   // Which gift the customer chose per campaign. Default = first gift (selected);
   // the sentinel "__none__" means the customer opted OUT (no gift added).
   var giftChoice = {};
+  // Which VARIANT of the chosen gift the customer picked, keyed `${campId}|${handle}`.
+  // Only relevant when the gift product has more than one variant.
+  var giftVariantChoice = {};
   var GIFT_DECLINE = "__none__";
   function chosenGift(c) {
     var handles = c.giftHandles || [];
@@ -3469,14 +3483,62 @@
           nameEl.rel = "noopener";
           nameEl.addEventListener("click", stop);
           nameRow.appendChild(nameEl);
-          // Struck original price so the customer sees the gift's value.
-          var val = data && (data.compare_at_price || data.price);
-          if (val)
-            nameRow.appendChild(
-              el("span", "cgp-free__price", money(val, currency)),
-            );
+          // Struck original price so the customer sees the gift's value
+          // (updates to the chosen variant when a variant picker is shown).
+          var giftPriceSpan = el("span", "cgp-free__price", "");
+          function paintGiftValue(v) {
+            var val =
+              (v && (v.compare_at_price || v.price)) ||
+              (data && (data.compare_at_price || data.price));
+            giftPriceSpan.textContent = val ? money(val, currency) : "";
+            giftPriceSpan.style.display = val ? "" : "none";
+          }
+          paintGiftValue(null);
+          nameRow.appendChild(giftPriceSpan);
           nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
           info.appendChild(nameRow);
+
+          // Variant picker — when the gift product has more than one variant, let
+          // the customer choose which one they get free (e.g. a lens-ring size).
+          var giftVariants = (data && data.variants) || [];
+          if (giftVariants.length > 1) {
+            var vkey = c.id + "|" + h;
+            var availV = giftVariants.filter(function (v) {
+              return v.available;
+            });
+            var poolV = availV.length ? availV : giftVariants;
+            if (giftVariantChoice[vkey] === undefined) {
+              giftVariantChoice[vkey] = poolV[0].id;
+            }
+            var vsel = el("select", "cgp-free__variant");
+            giftVariants.forEach(function (v) {
+              var o = el(
+                "option",
+                null,
+                v.title + (v.available ? "" : " — sold out"),
+              );
+              o.value = v.id;
+              if (!v.available) o.disabled = true;
+              if (String(v.id) === String(giftVariantChoice[vkey])) {
+                o.selected = true;
+                paintGiftValue(v);
+              }
+              vsel.appendChild(o);
+            });
+            vsel.addEventListener("click", stop);
+            vsel.addEventListener("change", function (e) {
+              stop(e);
+              giftVariantChoice[vkey] = vsel.value;
+              var picked = giftVariants.filter(function (v) {
+                return String(v.id) === String(vsel.value);
+              })[0];
+              paintGiftValue(picked);
+              // Choosing a variant implies choosing this gift.
+              selector.checked = true;
+              giftChoice[c.id] = h;
+            });
+            info.appendChild(vsel);
+          }
           row.appendChild(info);
         });
 
