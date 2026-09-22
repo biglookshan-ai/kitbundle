@@ -38,6 +38,8 @@ import {
   QuestionCircleIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ViewIcon,
+  HideIcon,
 } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -1062,6 +1064,7 @@ function GroupCard({
               >
                 {formLabel(group)}
               </Badge>
+              {group.hidden && <Badge tone="warning">Hidden</Badge>}
               <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
@@ -1086,6 +1089,14 @@ function GroupCard({
               </button>
             </InlineStack>
             <InlineStack gap="100" blockAlign="center" wrap={false}>
+              <Button
+                icon={group.hidden ? HideIcon : ViewIcon}
+                variant="tertiary"
+                onClick={() => onChange({ hidden: !group.hidden })}
+                accessibilityLabel={
+                  group.hidden ? "Show on storefront" : "Hide from storefront"
+                }
+              />
               <Button
                 variant="tertiary"
                 icon={expanded ? ChevronUpIcon : ChevronDownIcon}

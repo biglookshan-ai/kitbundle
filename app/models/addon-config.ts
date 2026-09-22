@@ -96,6 +96,14 @@ export type AddonGroup = {
    * active dashboard tabs. Only a permanent delete drops them.
    */
   archived?: boolean;
+
+  /**
+   * Hidden from the storefront while still being edited. Unlike `archived`, a
+   * hidden group stays in the active editor tabs (so you can keep configuring
+   * it), but the widget and the search cards don't render it — a quick per-group
+   * show/hide switch. Absent/false = visible.
+   */
+  hidden?: boolean;
 };
 
 export type AddonConfig = {

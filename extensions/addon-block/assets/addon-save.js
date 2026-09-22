@@ -272,9 +272,10 @@
     // Know whether the main is already in the cart, so the CTA counts honestly.
     refreshMainInCart(ctx);
 
-    // Archived groups are soft-deleted: never render or discount them.
+    // Archived groups are soft-deleted; hidden groups are configured but held
+    // back from the storefront. Never render or discount either.
     var live = groups.filter(function (g) {
-      return g && !g.archived;
+      return g && !g.archived && !g.hidden;
     });
     var bundleGroups = live.filter(function (g) {
       return g.type === "bundle";

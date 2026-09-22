@@ -87,7 +87,7 @@ export async function saveConfig(
 ): Promise<{ ok: boolean; userErrors: string[] }> {
   const hasGroups = config.groups.length > 0;
   const hasLiveOffer = config.groups.some(
-    (g) => !g.archived && g.accessories.length > 0,
+    (g) => !g.archived && !g.hidden && g.accessories.length > 0,
   );
 
   // Search tags that were present before this save (to prune ones now removed).
@@ -225,7 +225,7 @@ const TAG_PREFIX = "kb ";
 function searchTagsFromConfig(config: AddonConfig): string[] {
   const out: string[] = [];
   for (const g of config.groups) {
-    if (g.archived) continue;
+    if (g.archived || g.hidden) continue;
     if (g.code) out.push(TAG_PREFIX + g.code);
     if (isKitForm(groupForm(g)) && g.title) out.push(TAG_PREFIX + g.title);
   }
@@ -260,7 +260,7 @@ async function writeBundleCards(
   config: AddonConfig,
 ): Promise<void> {
   const kits = config.groups.filter(
-    (g) => !g.archived && groupBucket(g) === "bundle",
+    (g) => !g.archived && !g.hidden && groupBucket(g) === "bundle",
   );
   if (kits.length === 0) {
     await deleteBundleCards(admin, product.id);
