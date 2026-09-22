@@ -3444,6 +3444,8 @@
         var groupName = "cgp-gift-" + c.id;
         var list = el("div", "cgp-free__list");
         section.appendChild(list);
+        // "all" mode: the per-gift included-checks, so "No thanks" can grey them.
+        var giftCheckEls = [];
 
         // Default = first shown gift. If the prior choice is now hidden, reset.
         var shownHandles = idx.map(function (i) {
@@ -3467,8 +3469,10 @@
           // other modes: a radio so the customer picks / declines.
           var selector;
           if (c.rewardMode === "all") {
-            selector = el("span", "cgp-check is-on");
+            var includedNow = giftChoice[c.id] !== GIFT_DECLINE;
+            selector = el("span", "cgp-check" + (includedNow ? " is-on" : ""));
             selector.setAttribute("aria-label", "Included free");
+            giftCheckEls.push(selector);
           } else {
             selector = el("input", "cgp-free__radio");
             selector.type = "radio";
@@ -3596,10 +3600,19 @@
           // all included — there's no per-gift radio to opt out of).
           declineInput.type = "checkbox";
           declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
+          var applyDeclineState = function (declined) {
+            // Reflect the whole-set decline on every gift's included-check + row.
+            giftCheckEls.forEach(function (chk) {
+              chk.classList.toggle("is-on", !declined);
+            });
+            list.classList.toggle("is-declined", declined);
+          };
+          applyDeclineState(declineInput.checked);
           declineInput.addEventListener("change", function () {
             giftChoice[c.id] = declineInput.checked
               ? GIFT_DECLINE
               : handles[0] || "";
+            applyDeclineState(declineInput.checked);
           });
         } else {
           declineInput.type = "radio";
