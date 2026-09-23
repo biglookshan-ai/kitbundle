@@ -408,6 +408,10 @@ export function run(input) {
   // absent here (or with an empty set) offers ALL its variants free.
   /** @type {Map<string, Map<string, Set<string>>>} */
   const giftVariantsByCamp = new Map();
+  // Per campaign: the merchant's badge text, used as the discount label shown
+  // on the cart line / at checkout.
+  /** @type {Map<string, string>} */
+  const giftLabelByCamp = new Map();
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
@@ -450,6 +454,10 @@ export function run(input) {
           cid,
           new Set((Array.isArray(e.giftIds) ? e.giftIds : []).map(String)),
         );
+      if (!giftLabelByCamp.has(cid) && typeof e.badge === "string") {
+        const label = e.badge.trim();
+        if (label) giftLabelByCamp.set(cid, label.slice(0, 120));
+      }
       if (!giftVariantsByCamp.has(cid)) {
         /** @type {Map<string, Set<string>>} */
         const vmap = new Map();
@@ -535,7 +543,9 @@ export function run(input) {
       const fq = giftFreeQty.get(line.id) ?? 0;
       if (fq > 0) {
         discounts.push({
-          message: "🎁 Free gift",
+          // The campaign's own badge text, so the merchant controls what the
+          // cart / checkout shows. Falls back to the generic label.
+          message: giftLabelByCamp.get(giftCamp) || "🎁 Free gift",
           targets: [{ cartLine: { id: line.id, quantity: fq } }],
           value: { percentage: { value: "100.0" } },
         });

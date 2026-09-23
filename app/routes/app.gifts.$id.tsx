@@ -475,7 +475,7 @@ export default function GiftCampaignEditor() {
                   autoComplete="off"
                   value={c.badgeText}
                   onChange={(v) => patch({ badgeText: v })}
-                  helpText="Shown on product / search."
+                  helpText="Shown on product / search, and as the discount label on the cart line & at checkout."
                 />
               </Box>
             </InlineStack>
