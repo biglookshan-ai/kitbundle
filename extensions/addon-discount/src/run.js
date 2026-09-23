@@ -261,7 +261,7 @@ export function run(input) {
       if (q <= 0) continue;
       allowance -= q;
       giftDiscounts.push({
-        message: "Free gift",
+        message: "FREE GIFT",
         targets: [{ cartLine: { id: line.id, quantity: q } }],
         value: { percentage: { value: "100.0" } },
       });
@@ -562,7 +562,7 @@ export function run(input) {
         // Which main a gift came with is still recorded on the line itself
         // (`_cgp_gift_for`) for order-level tracing.
         discounts.push({
-          message: "Free gift",
+          message: "FREE GIFT",
           targets: [{ cartLine: { id: line.id, quantity: fq } }],
           value: { percentage: { value: "100.0" } },
         });
@@ -665,7 +665,7 @@ export function run(input) {
       if (rem <= 0) continue; // not eligible, or the free unit is used up
       freeRemaining.set(pid, rem - 1);
       discounts.push({
-        message: "Free gift",
+        message: "FREE GIFT",
         targets: [{ cartLine: { id: line.id, quantity: 1 } }],
         value: { percentage: { value: "100.0" } },
       });
