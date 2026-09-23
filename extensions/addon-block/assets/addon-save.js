@@ -573,13 +573,22 @@
       ctx.summaryEl.innerHTML = "";
       if (count > 0) {
         ctx.summaryEl.hidden = false;
-        ctx.summaryEl.appendChild(
+        var left = el("div", "cgp-total__left");
+        // Quantity lives next to the count so raising it visibly moves both the
+        // item count and the price. Skipped when a "No bundle" card already
+        // owns the quantity with its own stepper.
+        if (!ctx.hasDefaultCard && themeQtyInput()) {
+          left.appendChild(buildTotalQty(ctx));
+          hideThemeQty();
+        }
+        left.appendChild(
           el(
             "span",
             "cgp-total__count",
             count + (count > 1 ? " items" : " item"),
           ),
         );
+        ctx.summaryEl.appendChild(left);
         ctx.summaryEl.appendChild(
           el("span", "cgp-total__price", money(total, ctx.currency)),
         );
@@ -3014,6 +3023,21 @@
   function uninstallNativeHide() {
     var s = document.getElementById("cgp-hide-native");
     if (s) s.remove();
+    var q = document.getElementById("cgp-hide-qty");
+    if (q) q.remove();
+  }
+
+  // The total bar carries the quantity stepper, so hide the theme's own
+  // quantity widget — one quantity control, not two.
+  function hideThemeQty() {
+    if (document.getElementById("cgp-hide-qty")) return;
+    var s = document.createElement("style");
+    s.id = "cgp-hide-qty";
+    s.textContent =
+      'form[action*="/cart/add"] .product-form__quantity,' +
+      'form[action*="/cart/add"] quantity-input,' +
+      '.product-form__quantity { display: none !important; }';
+    document.head.appendChild(s);
   }
 
   // Copy the theme add button's label + disabled/sold-out state onto our CTA
@@ -3066,10 +3090,55 @@
 
   // The theme's own quantity box (used for the plain main when no "No bundle"
   // card provides its own stepper).
+  function themeQtyInput() {
+    return document.querySelector('form[action*="/cart/add"] [name="quantity"]');
+  }
   function themeQty() {
-    var q = document.querySelector('form[action*="/cart/add"] [name="quantity"]');
+    var q = themeQtyInput();
     var n = q ? parseInt(q.value, 10) : 1;
     return n > 0 ? n : 1;
+  }
+  // Write a quantity into the theme's (hidden) input, honouring its min/max/step,
+  // and let the page know so anything else reading it stays in sync.
+  function setThemeQty(n) {
+    var inp = themeQtyInput();
+    if (!inp) return;
+    var min = parseInt(inp.min, 10) || 1;
+    var max = parseInt(inp.max, 10) || Infinity;
+    var step = parseInt(inp.step, 10) || 1;
+    n = Math.round(n / step) * step;
+    n = Math.max(min, Math.min(max, n));
+    inp.value = String(n);
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+    inp.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  // The quantity stepper shown in the total bar (same look as the card
+  // stepper) — it drives the theme's quantity input, so the item count, the
+  // total and the add-to-cart all follow one number.
+  function buildTotalQty(ctx) {
+    var cur = themeQty();
+    var wrap = el("div", "cgp-bundle__qty cgp-total__qty");
+    var minus = el("button", "cgp-bundle__qtybtn", "−");
+    minus.type = "button";
+    minus.setAttribute("aria-label", "Decrease quantity");
+    var num = el("span", "cgp-bundle__qtyn", String(cur));
+    var plus = el("button", "cgp-bundle__qtybtn", "+");
+    plus.type = "button";
+    plus.setAttribute("aria-label", "Increase quantity");
+    minus.addEventListener("click", function (e) {
+      e.preventDefault();
+      setThemeQty(cur - 1);
+      updateCTA(ctx);
+    });
+    plus.addEventListener("click", function (e) {
+      e.preventDefault();
+      setThemeQty(cur + 1);
+      updateCTA(ctx);
+    });
+    wrap.appendChild(minus);
+    wrap.appendChild(num);
+    wrap.appendChild(plus);
+    return wrap;
   }
 
   // Add the main product + selected accessories in ONE request, asking for the

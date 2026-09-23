@@ -2287,6 +2287,19 @@ a.cgp-modal__cname:hover {
 
 /* Free-gift variant picker — shown when a gift product has multiple variants
    so the customer can choose which one they get free (self-drawn chevron). */
+/* Total bar: quantity stepper + item count on the left, price on the right, so
+   changing the quantity visibly moves the count and the total next to it. */
+.cgp-total__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.cgp-total__qty {
+  margin: 0 !important;
+  align-self: center;
+}
+
 /* "All"-mode gifts dim when the whole set is declined via "No thanks". */
 .cgp-free__list.is-declined .cgp-free__row:not(.cgp-free__row--decline) {
   opacity: 0.45;
