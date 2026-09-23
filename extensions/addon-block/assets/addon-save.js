@@ -2978,6 +2978,16 @@
     return current;
   }
 
+  // Short, ASCII-only name of the main product this gift rides along with —
+  // it ends up in the cart/order discount label, which may be printed on a
+  // packing slip, so no emoji or fancy punctuation and keep it brief.
+  function giftForLabel(ctx) {
+    var t = (ctx.mainData && ctx.mainData.title) || "";
+    t = String(t).replace(/\s+/g, " ").trim();
+    if (t.length > 45) t = t.slice(0, 45).replace(/[\s,(-]+$/, "") + "...";
+    return t;
+  }
+
   // Line item properties that mark a free gift. `_cgp_free_for` ties the gift
   // to its main product so reconcile can clean it up from any page once the
   // main is removed (one-to-one). The Function gives the line "🎁 Free Gift"
@@ -3295,7 +3305,12 @@
               }
               if (!v) v = data && firstAvailable(data);
               it.id = v && v.id;
-              it.properties = { _cgp_gift: it._giftCampId };
+              it.properties = {
+                _cgp_gift: it._giftCampId,
+                // Which main this gift came with, so the cart/order discount can
+                // say "Free gift for <product>" when an order has several.
+                _cgp_gift_for: giftForLabel(ctx),
+              };
               delete it._giftCampId;
               delete it.handle;
             });
