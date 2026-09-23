@@ -2287,17 +2287,43 @@ a.cgp-modal__cname:hover {
 
 /* Free-gift variant picker — shown when a gift product has multiple variants
    so the customer can choose which one they get free (self-drawn chevron). */
-/* Total bar: quantity stepper + item count on the left, price on the right, so
-   changing the quantity visibly moves the count and the total next to it. */
-.cgp-total__left {
+/* Total row = TWO separate boxes side by side (mirrors the theme's own
+   quantity + button pairing): quantity box on the left, totals panel on the
+   right. The row itself carries no border/background of its own. */
+.cgp-total {
+  border: none !important;
+  background: none !important;
+  padding: 0 !important;
+  gap: 12px;
+  align-items: stretch;
+}
+.cgp-total__qtybox,
+.cgp-total__sum {
   display: flex;
   align-items: center;
-  gap: 12px;
+  border: 1px solid var(--cgp-border);
+  border-radius: 10px;
+  background: var(--cgp-panel, #fff);
+  padding: 11px 14px;
+}
+.cgp-total__qtybox {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+.cgp-total__sum {
+  flex: 1 1 auto;
+  justify-content: space-between;
+  gap: 10px;
   min-width: 0;
 }
+/* The stepper sits bare inside its own box — drop the pill chrome/margins it
+   carries on a bundle card. */
 .cgp-total__qty {
   margin: 0 !important;
   align-self: center;
+  border: none !important;
+  background: none !important;
+  padding: 0 !important;
 }
 
 /* "All"-mode gifts dim when the whole set is declined via "No thanks". */

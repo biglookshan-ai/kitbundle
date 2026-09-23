@@ -573,25 +573,27 @@
       ctx.summaryEl.innerHTML = "";
       if (count > 0) {
         ctx.summaryEl.hidden = false;
-        var left = el("div", "cgp-total__left");
-        // Quantity lives next to the count so raising it visibly moves both the
-        // item count and the price. Skipped when a "No bundle" card already
-        // owns the quantity with its own stepper.
+        // Two separate boxes on one row (like the theme's own quantity + button
+        // pairing): quantity on the left, the totals panel on the right. Quantity
+        // is skipped when a "No bundle" card already owns it with its own stepper.
         if (!ctx.hasDefaultCard && themeQtyInput()) {
-          left.appendChild(buildTotalQty(ctx));
+          var qbox = el("div", "cgp-total__qtybox");
+          qbox.appendChild(buildTotalQty(ctx));
+          ctx.summaryEl.appendChild(qbox);
           hideThemeQty();
         }
-        left.appendChild(
+        var sum = el("div", "cgp-total__sum");
+        sum.appendChild(
           el(
             "span",
             "cgp-total__count",
             count + (count > 1 ? " items" : " item"),
           ),
         );
-        ctx.summaryEl.appendChild(left);
-        ctx.summaryEl.appendChild(
+        sum.appendChild(
           el("span", "cgp-total__price", money(total, ctx.currency)),
         );
+        ctx.summaryEl.appendChild(sum);
       } else {
         ctx.summaryEl.hidden = true;
       }
