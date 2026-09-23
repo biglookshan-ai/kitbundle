@@ -2360,8 +2360,12 @@ a.cgp-modal__cname:hover {
 /* CTA = the theme's button (shape copied at runtime). */
 .cgp-cta {
   border-radius: var(--cgp-cta-radius, var(--buttons-radius, 8px));
+  font-family: var(--cgp-cta-family, inherit);
   font-size: var(--cgp-cta-font, 13px);
   font-weight: var(--cgp-cta-weight, 500);
+  /* The old 0.01em tracking made the label read heavier than the theme's. */
+  letter-spacing: var(--cgp-cta-spacing, normal);
+  line-height: var(--cgp-cta-line, normal);
   text-transform: var(--cgp-cta-transform, none);
   min-height: var(--cgp-cta-height, 45px);
   padding: 0 10px;

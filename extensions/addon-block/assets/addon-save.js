@@ -198,6 +198,15 @@
           if (cs.fontSize) root.style.setProperty("--cgp-cta-font", cs.fontSize);
           if (cs.fontWeight)
             root.style.setProperty("--cgp-cta-weight", cs.fontWeight);
+          // Family/tracking/leading matter as much as the numeric weight — the
+          // same 500 in a different face or with extra letter-spacing reads as
+          // a different thickness.
+          if (cs.fontFamily)
+            root.style.setProperty("--cgp-cta-family", cs.fontFamily);
+          if (cs.letterSpacing)
+            root.style.setProperty("--cgp-cta-spacing", cs.letterSpacing);
+          if (cs.lineHeight && cs.lineHeight !== "normal")
+            root.style.setProperty("--cgp-cta-line", cs.lineHeight);
           var h = parseFloat(cs.minHeight) || btn.offsetHeight || 0;
           if (h > 0) root.style.setProperty("--cgp-cta-height", h + "px");
           if (cs.textTransform)
