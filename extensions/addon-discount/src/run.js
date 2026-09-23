@@ -534,12 +534,12 @@ export function run(input) {
     if (giftCamp) {
       const fq = giftFreeQty.get(line.id) ?? 0;
       if (fq > 0) {
-        // Plain ASCII (no emoji — these labels get printed on packing slips),
-        // naming the main product so an order with several gifted products
-        // shows which gift came with which.
-        const giftFor = /** @type {any} */ (line)?.cgpGiftFor?.value;
+        // Short and plain ASCII: checkout upper-cases discount labels, so
+        // anything longer wraps onto two lines, and emoji can print as garbage.
+        // Which main a gift came with is still recorded on the line itself
+        // (`_cgp_gift_for`) for order-level tracing.
         discounts.push({
-          message: giftFor ? `Free gift for ${giftFor}` : "Free gift",
+          message: "Free gift",
           targets: [{ cartLine: { id: line.id, quantity: fq } }],
           value: { percentage: { value: "100.0" } },
         });

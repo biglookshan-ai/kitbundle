@@ -31,9 +31,6 @@ query RunInput {
       cgpGift: attribute(key: "_cgp_gift") {
         value
       }
-      cgpGiftFor: attribute(key: "_cgp_gift_for") {
-        value
-      }
       merchandise {
         __typename
         ... on ProductVariant {
