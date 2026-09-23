@@ -2304,7 +2304,7 @@ a.cgp-modal__cname:hover {
   border: 1px solid var(--cgp-border);
   border-radius: 10px;
   background: var(--cgp-panel, #fff);
-  padding: 11px 14px;
+  padding: 7px 14px;
 }
 .cgp-total__qtybox {
   flex: 0 0 auto;
@@ -2324,6 +2324,21 @@ a.cgp-modal__cname:hover {
   border: none !important;
   background: none !important;
   padding: 0 !important;
+}
+
+/* Keep the whole checkout strip compact: a smaller total, tighter button and
+   less air above/below, so it doesn't tower over the modules above it. */
+.cgp-total {
+  margin-top: 14px;
+}
+.cgp-total__price {
+  font-size: 18px;
+}
+.cgp-total + .cgp-cta {
+  margin-top: 8px;
+}
+.cgp-cta {
+  padding: 12px 16px;
 }
 
 /* "All"-mode gifts dim when the whole set is declined via "No thanks". */
