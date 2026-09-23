@@ -185,9 +185,23 @@
       for (var i = 0; i < sels.length; i++) {
         var btn = document.querySelector(sels[i]);
         if (!btn) continue;
-        var bg = getComputedStyle(btn).backgroundColor;
+        var cs = getComputedStyle(btn);
+        var bg = cs.backgroundColor;
         if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
           root.style.setProperty("--cgp-accent", bg);
+          // Copy the theme button's SHAPE too, so our CTA is indistinguishable
+          // from the theme's own (these override the block's inline defaults).
+          root.style.setProperty("--cgp-cta-bg", bg);
+          if (cs.color) root.style.setProperty("--cgp-cta-text", cs.color);
+          if (cs.borderRadius)
+            root.style.setProperty("--cgp-cta-radius", cs.borderRadius);
+          if (cs.fontSize) root.style.setProperty("--cgp-cta-font", cs.fontSize);
+          if (cs.fontWeight)
+            root.style.setProperty("--cgp-cta-weight", cs.fontWeight);
+          var h = parseFloat(cs.minHeight) || btn.offsetHeight || 0;
+          if (h > 0) root.style.setProperty("--cgp-cta-height", h + "px");
+          if (cs.textTransform)
+            root.style.setProperty("--cgp-cta-transform", cs.textTransform);
           return;
         }
       }
@@ -3756,9 +3770,12 @@
             giftPriceSpan.style.display = val ? "" : "none";
           }
           paintGiftValue(null);
-          nameRow.appendChild(giftPriceSpan);
-          nameRow.appendChild(el("span", "cgp-free__badge", "FREE"));
           info.appendChild(nameRow);
+          // Second line: FREE tag first, then the struck value at the same size.
+          var metaRow = el("div", "cgp-free__meta-row");
+          metaRow.appendChild(el("span", "cgp-free__badge", "FREE"));
+          metaRow.appendChild(giftPriceSpan);
+          info.appendChild(metaRow);
 
           // Variant picker — offer only the variants the merchant chose for this
           // gift (all variants when none are restricted). A single offered variant

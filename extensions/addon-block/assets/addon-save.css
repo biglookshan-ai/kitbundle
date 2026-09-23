@@ -2287,6 +2287,86 @@ a.cgp-modal__cname:hover {
 
 /* Free-gift variant picker — shown when a gift product has multiple variants
    so the customer can choose which one they get free (self-drawn chevron). */
+/* ==================================================================
+   THEME ALIGNMENT — match the surrounding product page (e.g. the
+   "Stock Availability" card) instead of carrying our own look:
+   panels use the theme's own tint + radius, and the CTA copies the
+   theme add-to-cart button's shape (vars set at runtime by autoAccent).
+   ================================================================== */
+.cgp-addon {
+  /* Same tint as the theme's stock card (#f9f9f9 on a white background) and
+     one shared radius scale for every panel/card in the widget. */
+  --cgp-canvas: rgba(var(--cgp-fg), 0.025);
+  --cgp-r-canvas: 6px;
+  --cgp-r-panel: 6px;
+  --cgp-r-card: 6px;
+  --cgp-r-media: 6px;
+  --cgp-r-img: 6px;
+  --cgp-r-variant: var(--inputs-radius, 4px);
+}
+
+/* Module shells: theme tint, theme radius, theme-ish padding. */
+.cgp-addon__bundles,
+.cgp-addon__addons,
+.cgp-free {
+  background: var(--cgp-canvas);
+  border-radius: var(--cgp-r-canvas);
+  padding: 20px;
+}
+.cgp-addon__bundles .cgp-addon__heading,
+.cgp-addon__addons .cgp-addon__heading,
+.cgp-free__heading {
+  font-size: 16px; /* = the stock card's title */
+  font-weight: 700;
+}
+.cgp-free__list,
+.cgp-addon__bundle-list {
+  border-radius: var(--cgp-r-panel);
+}
+
+/* Gift row: title on one line (ellipsis when long), then FREE + value. */
+.cgp-free__info {
+  min-width: 0;
+}
+.cgp-free__name-row {
+  min-width: 0;
+}
+.cgp-free__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cgp-free__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+/* FREE tag and the value read at the same size, tag first. */
+.cgp-free__meta-row .cgp-free__badge,
+.cgp-free__meta-row .cgp-free__price {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.cgp-free__meta-row .cgp-free__price {
+  color: var(--cgp-muted);
+  text-decoration: line-through;
+}
+
+/* CTA = the theme's button (shape copied at runtime). */
+.cgp-cta {
+  border-radius: var(--cgp-cta-radius, var(--buttons-radius, 8px));
+  font-size: var(--cgp-cta-font, 13px);
+  font-weight: var(--cgp-cta-weight, 500);
+  text-transform: var(--cgp-cta-transform, none);
+  min-height: var(--cgp-cta-height, 45px);
+  padding: 0 10px;
+}
+
 /* Total row = TWO separate boxes side by side (mirrors the theme's own
    quantity + button pairing): quantity box on the left, totals panel on the
    right. The row itself carries no border/background of its own. */
@@ -2302,9 +2382,11 @@ a.cgp-modal__cname:hover {
   display: flex;
   align-items: center;
   border: 1px solid var(--cgp-border);
-  border-radius: 10px;
+  border-radius: var(--cgp-r-panel, 6px);
   background: var(--cgp-panel, #fff);
   padding: 7px 14px;
+  min-height: var(--cgp-cta-height, 45px);
+  box-sizing: border-box;
 }
 .cgp-total__qtybox {
   flex: 0 0 auto;
