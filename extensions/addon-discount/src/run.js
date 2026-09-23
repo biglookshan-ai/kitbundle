@@ -408,6 +408,10 @@ export function run(input) {
   // absent here (or with an empty set) offers ALL its variants free.
   /** @type {Map<string, Map<string, Set<string>>>} */
   const giftVariantsByCamp = new Map();
+  // "all" mode only: how many free units EACH gift product may take (= number of
+  // qualifying units). Absent = the campaign uses the shared pool in giftAllow.
+  /** @type {Map<string, number>} */
+  const giftPerProductCap = new Map();
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
@@ -435,16 +439,19 @@ export function run(input) {
       )
         continue;
       const perQ = Number(e.perQualifying) || 1;
-      // "all" mode = ONE of every gift per qualifying unit; perQualifying is
-      // deliberately NOT applied there (it would multiply every gift and let a
-      // bumped-up gift line claim extras free). Other modes: perQ per unit.
-      const units =
+      // "all" mode = ONE of EVERY gift per qualifying unit, capped PER GIFT
+      // PRODUCT (see the distribution below) rather than as one shared pool —
+      // a shared pool let a shopper delete the cheap gift and take an extra of
+      // an expensive one instead. perQualifying deliberately doesn't apply here.
+      const isAll =
         e.rewardMode === "all" &&
         Array.isArray(e.giftIds) &&
-        e.giftIds.length > 0
-          ? q * e.giftIds.length
-          : q * perQ;
-      giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + units);
+        e.giftIds.length > 0;
+      if (isAll) {
+        giftPerProductCap.set(cid, (giftPerProductCap.get(cid) ?? 0) + q);
+      } else {
+        giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + q * perQ);
+      }
       if (!giftIdsByCamp.has(cid))
         giftIdsByCamp.set(
           cid,
@@ -495,6 +502,22 @@ export function run(input) {
       byCamp.set(cid, arr);
     }
     for (const [cid, glines] of byCamp) {
+      const perProduct = giftPerProductCap.get(cid);
+      if (perProduct !== undefined) {
+        // "all" mode: each gift PRODUCT gets its own cap, so removing one gift
+        // never frees up allowance for extra units of another (pricier) one.
+        /** @type {Map<string, number>} */
+        const usedByProduct = new Map();
+        for (const g of glines) {
+          const key = gidTail(g.pid);
+          const used = usedByProduct.get(key) ?? 0;
+          const take = Math.min(Math.max(0, perProduct - used), g.qty);
+          if (take <= 0) continue;
+          usedByProduct.set(key, used + take);
+          giftFreeQty.set(g.id, (giftFreeQty.get(g.id) ?? 0) + take);
+        }
+        continue;
+      }
       let rem = giftAllow.get(cid) ?? 0;
       let progressed = true;
       while (rem > 0 && progressed) {
