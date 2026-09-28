@@ -26,6 +26,7 @@
       {%- if block.settings.accent_color != blank %}--cgp-accent: {{ block.settings.accent_color }};{% endif -%}
       {%- if block.settings.cta_bg != blank %}--cgp-cta-bg: {{ block.settings.cta_bg }};{% endif -%}
       {%- if block.settings.cta_text != blank %}--cgp-cta-text: {{ block.settings.cta_text }};{% endif -%}
+      {%- if block.settings.gift_heading_color != blank %}--cgp-gift-heading: {{ block.settings.gift_heading_color }};{% endif -%}
       --cgp-cta-radius: {{ block.settings.cta_radius | default: 12 }}px;
       --cgp-cta-font: {{ block.settings.cta_font_size | default: 16 }}px;
     "
@@ -220,6 +221,12 @@
       "id": "accent_color",
       "label": "Highlight colour (selected items, prices)",
       "default": "#2b44ff"
+    },
+    {
+      "type": "color",
+      "id": "gift_heading_color",
+      "label": "Free gift heading colour",
+      "info": "Colour of the gift section's title (e.g. “Free item with purchase”). Leave empty to use the theme's text colour."
     }
   ]
 }

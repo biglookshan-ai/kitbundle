@@ -2318,6 +2318,9 @@ a.cgp-modal__cname:hover {
 .cgp-free__heading {
   font-size: 16px; /* = the stock card's title */
   font-weight: 700;
+  /* Merchant-set in the theme editor ("Free gift heading colour"); falls back
+     to the theme's own text colour when left empty. */
+  color: var(--cgp-gift-heading, var(--cgp-ink));
 }
 .cgp-free__list,
 .cgp-addon__bundle-list {
