@@ -226,14 +226,20 @@
     // trigger product has gifts but no addon_config.
     bootGifts(root);
 
+    // A product may have ONLY a gift campaign (no add-on config). Carry on with
+    // an empty config in that case: the bundle/add-on sections simply render
+    // nothing, but the CTA still takes over so the gifts are added with the
+    // main product. Bail only when there's nothing at all to do.
     var node = root.querySelector("[data-cgp-config]");
-    if (!node) return;
-    var config;
-    try {
-      config = JSON.parse(node.textContent);
-    } catch (e) {
-      return;
+    var config = null;
+    if (node) {
+      try {
+        config = JSON.parse(node.textContent);
+      } catch (e) {
+        config = null;
+      }
     }
+    if (!config && !(giftCampaigns && giftCampaigns.length)) return;
     var groups = (config && config.groups) || [];
 
     // Inventory map (handle -> total available, null = untracked). Emitted by

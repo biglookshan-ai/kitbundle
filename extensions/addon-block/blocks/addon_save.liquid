@@ -92,10 +92,16 @@
         <div class="cgp-addon__grid" data-cgp-grid aria-live="polite"></div>
       </div>
 
-      <div class="cgp-total" data-cgp-summary hidden></div>
-      <button class="cgp-cta" type="button" data-cgp-cta hidden></button>
-      <div class="cgp-addon__loading" data-cgp-loading>{{ 'Loading…' }}</div>
     {%- endif -%}
+
+    {%- comment -%}
+      Totals + add-to-cart belong to the whole widget, not just the add-on
+      config: a product with ONLY a gift campaign still needs our CTA, or the
+      theme's own button adds the main product without the gifts.
+    {%- endcomment -%}
+    <div class="cgp-total" data-cgp-summary hidden></div>
+    <button class="cgp-cta" type="button" data-cgp-cta hidden></button>
+    <div class="cgp-addon__loading" data-cgp-loading>{{ 'Loading…' }}</div>
   </div>
 
   {%- if has_addon -%}
