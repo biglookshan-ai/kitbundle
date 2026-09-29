@@ -3336,10 +3336,18 @@
               it.id = v && v.id;
               it.properties = {
                 _cgp_gift: it._giftCampId,
-                // Which main this gift came with, so the cart/order discount can
-                // say "Free gift for <product>" when an order has several.
+                // Which main this gift came with (hidden; order-level tracing).
                 _cgp_gift_for: giftForLabel(ctx),
               };
+              // Time-limited gift: a VISIBLE property, so the end date shows on
+              // the cart line, at checkout, on the order and the packing slip —
+              // and if it lapses, the line explains why it's no longer free.
+              var gcamp = (giftCampaigns || []).filter(function (x) {
+                return x.id === it._giftCampId;
+              })[0];
+              if (gcamp && gcamp.endsLabel) {
+                it.properties["Free until"] = gcamp.endsLabel;
+              }
               delete it._giftCampId;
               delete it.handle;
             });
@@ -3699,6 +3707,12 @@
         section.appendChild(
           el("div", "cgp-free__sub", c.subtitle || "Choose your free gift:"),
         );
+        // Time-limited offer: say plainly when it ends.
+        if (c.endsLabel) {
+          section.appendChild(
+            el("div", "cgp-free__ends", "Offer ends " + c.endsLabel),
+          );
+        }
         var groupName = "cgp-gift-" + c.id;
         var list = el("div", "cgp-free__list");
         section.appendChild(list);
@@ -3937,6 +3951,8 @@
         // { productIdTail: [variantIdTail,...] } — offered variants per gift
         // (absent product = all its variants eligible).
         giftVariants: e.giftVariants || {},
+        // Shopper-facing end date in the store's timezone, e.g. "12 Oct 2026".
+        endsLabel: e.endsLabel || "",
       };
     });
     if (!giftCampaigns.length) return;

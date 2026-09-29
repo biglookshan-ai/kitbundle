@@ -2327,6 +2327,18 @@ a.cgp-modal__cname:hover {
   border-radius: var(--cgp-r-panel);
 }
 
+/* "Offer ends 12 Oct 2026" under the gift prompt — a time-limited campaign. */
+.cgp-free__ends {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cgp-gift-heading, #c0341d);
+  background: rgba(192, 52, 29, 0.08);
+}
+
 /* Gift row: title on one line (ellipsis when long), then FREE + value. */
 .cgp-free__info {
   min-width: 0;

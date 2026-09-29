@@ -46,6 +46,27 @@ function gidTail(id) {
 }
 
 /**
+ * Is a gift campaign inside its date window TODAY (store's local date)?
+ * Server-side cutoff: without it an old cart — or a hand-made `_cgp_gift`
+ * line — could claim a gift free after the campaign ended (the storefront only
+ * stops OFFERING it). Uses the publisher's store-local `startDate`/`endDate`
+ * (YYYY-MM-DD), falling back to the UTC date of `startsAt`/`endsAt` for stamps
+ * written before those fields existed. ISO dates compare as plain strings.
+ */
+function campaignDateOk(e, today) {
+  if (!today) return true;
+  const start =
+    (typeof e.startDate === "string" && e.startDate) ||
+    (typeof e.startsAt === "string" ? e.startsAt.slice(0, 10) : "");
+  const end =
+    (typeof e.endDate === "string" && e.endDate) ||
+    (typeof e.endsAt === "string" ? e.endsAt.slice(0, 10) : "");
+  if (start && today < start) return false;
+  if (end && today > end) return false;
+  return true;
+}
+
+/**
  * Does this add-on group apply to the given main variant?
  * No restriction (empty mainVariantIds) = applies to every variant.
  * Mirrors the storefront's show/hide rule so the discount cap can't be
@@ -139,6 +160,8 @@ function accPercent(group, pid) {
 export function run(input) {
   const lines = input?.cart?.lines ?? [];
   if (lines.length === 0) return EMPTY;
+  // Store-local date ("YYYY-MM-DD") for gift-campaign date windows.
+  const today = /** @type {any} */ (input)?.shop?.localTime?.date || "";
 
   // 1. Index the cart.
   /** @type {Map<string, number>} */
@@ -430,6 +453,9 @@ export function run(input) {
     for (const e of entries) {
       const cid = e && e.id;
       if (!cid) continue;
+      // Date gate: an ended (or not-yet-started) campaign grants no allowance,
+      // so its gift lines stay at full price at checkout.
+      if (!campaignDateOk(e, today)) continue;
       // Trigger-variant gate: when a campaign restricts which variants of this
       // product qualify, a line on an off-list variant grants no gift allowance.
       if (

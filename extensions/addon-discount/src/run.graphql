@@ -1,6 +1,11 @@
 # Input for the product-discount Function (add-on / bundle / free / gift).
 # Comments count toward the 3000-char input-query limit, so keep them short.
 query RunInput {
+  shop {
+    localTime {
+      date
+    }
+  }
   discountNode {
     metafield(namespace: "$app:limited", key: "offer") {
       value

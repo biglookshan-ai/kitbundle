@@ -95,6 +95,63 @@ async function writeTriggerStamps(
   return errors;
 }
 
+/** The store's IANA timezone (e.g. "Europe/London"); "UTC" if unavailable. */
+async function shopTimezone(admin: AdminGraphql): Promise<string> {
+  try {
+    const resp = await admin.graphql(`#graphql
+      query ShopTz { shop { ianaTimezone } }`);
+    const json = await resp.json();
+    return json?.data?.shop?.ianaTimezone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/** Store-local "YYYY-MM-DD" and "HH:MM" for an instant. */
+function localParts(ms: number, tz: string): { date: string; hm: string } {
+  const f = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const p: Record<string, string> = {};
+  for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
+  return { date: `${p.year}-${p.month}-${p.day}`, hm: `${p.hour}:${p.minute}` };
+}
+
+/**
+ * Store-local date window + a shopper-facing end label for a campaign. The
+ * Function compares `startDate`/`endDate` against the store's local date, and
+ * the storefront shows `endsLabel` ("12 Oct 2026" / "12 Oct 2026, 14:00"). An
+ * end exactly at 00:00 means "through the previous day".
+ */
+function campaignWindow(
+  c: { startsAt?: string; endsAt?: string },
+  tz: string,
+): { startDate: string; endDate: string; endsLabel: string } {
+  const out = { startDate: "", endDate: "", endsLabel: "" };
+  const startMs = c.startsAt ? Date.parse(c.startsAt) : NaN;
+  if (!Number.isNaN(startMs)) out.startDate = localParts(startMs, tz).date;
+  const endMs = c.endsAt ? Date.parse(c.endsAt) : NaN;
+  if (!Number.isNaN(endMs)) {
+    const hm = localParts(endMs, tz).hm;
+    const dayMs = hm === "00:00" ? endMs - 1 : endMs;
+    out.endDate = localParts(dayMs, tz).date;
+    const day = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(dayMs));
+    out.endsLabel = hm === "00:00" || hm === "23:59" ? day : `${day}, ${hm}`;
+  }
+  return out;
+}
+
 /**
  * Recompute `custom.gift_trigger` for the given products from ALL enabled
  * campaigns. The stamp is SELF-CONTAINED per product — the theme reads only the
@@ -114,10 +171,13 @@ async function restampProducts(
   });
   const map = new Map<string, any[]>();
   for (const pid of affected) map.set(pid, []);
+  const tz = await shopTimezone(admin);
   for (const row of rows) {
     const c = rowToCampaign(row);
     const triggerGids = await expandTriggerProducts(admin, c);
     const entry = {
+      // Store-local window (enforced by the Function) + display label.
+      ...campaignWindow(c, tz),
       id: c.id,
       triggers: triggerGids.map(gidTail),
       gifts: c.giftProducts.map((g) => g.handle).filter(Boolean),
