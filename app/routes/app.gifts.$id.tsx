@@ -1,26 +1,8 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  InlineStack,
-  Text,
-  TextField,
-  Checkbox,
-  Select,
-  Button,
-  Badge,
-  Box,
-  Banner,
-  Thumbnail,
-  Divider,
-  Collapsible,
-} from "@shopify/polaris";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
-import { ImageIcon } from "@shopify/polaris-icons";
+import { useLoaderData, useFetcher } from "@remix-run/react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { canCreateCampaign } from "../models/plan.server";
@@ -33,6 +15,20 @@ import {
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
+import { GiftsShell, STATE_TONE, STATE_LABEL } from "../modules/gifts/ui";
+import {
+  PageHead,
+  Panel,
+  Field,
+  Input,
+  Select,
+  Checkbox,
+  Switch,
+  Btn,
+  Pill,
+  Thumb,
+  Banner,
+} from "../ui/kit";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -110,10 +106,9 @@ function fromLocalInput(v: string) {
 }
 
 export default function GiftCampaignEditor() {
-  const { campaign: initial, variantMap: loadedVariants } =
+  const { campaign: initial, isNew, variantMap: loadedVariants } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-  const navigate = useNavigate();
   const shopify = useAppBridge();
   const [c, setC] = useState<GiftCampaign>(initial);
   // Variants per product (gift + trigger); seeded from the loader, augmented
@@ -169,45 +164,47 @@ export default function GiftCampaignEditor() {
     }
   };
 
-  const refList = (
-    refs: Ref[],
-    onRemove: (id: string) => void,
-  ) =>
+  /** Collections: a plain list with remove. */
+  const collectionList = (refs: Ref[], onChange: (next: Ref[]) => void) =>
     refs.length === 0 ? (
-      <Text as="span" variant="bodySm" tone="subdued">
+      <p className="kb-sub" style={{ margin: 0 }}>
         None selected
-      </Text>
+      </p>
     ) : (
-      <BlockStack gap="150">
+      <div className="kb-refs">
         {refs.map((r) => (
-          <InlineStack key={r.id} align="space-between" blockAlign="center">
-            <InlineStack gap="200" blockAlign="center">
-              <Thumbnail source={r.image || ImageIcon} alt={r.title} size="small" />
-              <Text as="span" variant="bodyMd">
-                {r.title || r.handle || r.id}
-              </Text>
-            </InlineStack>
-            <Button variant="tertiary" tone="critical" onClick={() => onRemove(r.id)}>
+          <div className="kb-ref" key={r.id}>
+            <Thumb src={r.image} size={40} />
+            <span className="kb-title" style={{ fontWeight: 500 }}>
+              {r.title || r.handle || r.id}
+            </span>
+            <Btn
+              size="tiny"
+              variant="ghost"
+              onClick={() => onChange(refs.filter((x) => x.id !== r.id))}
+            >
               Remove
-            </Button>
-          </InlineStack>
+            </Btn>
+          </div>
         ))}
-      </BlockStack>
+      </div>
     );
 
-  // Product list with an optional per-variant chooser (used for both trigger and
-  // gift products). All variants offered when none are explicitly picked.
+  /**
+   * Products with an optional per-variant chooser (trigger and gift sides).
+   * All variants are offered when none are explicitly picked.
+   */
   const refVariantList = (
     refs: Ref[],
     onChange: (next: Ref[]) => void,
     chipLabel: string,
   ) =>
     refs.length === 0 ? (
-      <Text as="span" variant="bodySm" tone="subdued">
+      <p className="kb-sub" style={{ margin: 0 }}>
         None selected
-      </Text>
+      </p>
     ) : (
-      <BlockStack gap="200">
+      <div className="kb-refs">
         {refs.map((r) => {
           const vs = variantMap[r.id] || [];
           const offeredIds =
@@ -223,156 +220,99 @@ export default function GiftCampaignEditor() {
             onChange(refs.map((x) => (x.id === r.id ? { ...x, variantIds } : x)));
           };
           return (
-            <BlockStack key={r.id} gap="100">
-              <InlineStack
-                align="space-between"
-                blockAlign="center"
-                wrap={false}
-              >
-                <InlineStack gap="200" blockAlign="center">
-                  <Thumbnail
-                    source={r.image || ImageIcon}
-                    alt={r.title}
-                    size="small"
-                  />
-                  <Text as="span" variant="bodyMd">
-                    {r.title || r.handle || r.id}
-                  </Text>
-                </InlineStack>
-                <InlineStack gap="150" blockAlign="center" wrap={false}>
-                  {vs.length > 1 && (
-                    <Button
-                      size="slim"
-                      disclosure={openVarPids[r.id] ? "up" : "down"}
-                      onClick={() => toggleVarOpen(r.id)}
-                    >
-                      {`Variants ${offeredIds.length}/${vs.length}`}
-                    </Button>
-                  )}
-                  <Button
-                    variant="tertiary"
-                    tone="critical"
-                    onClick={() => onChange(refs.filter((x) => x.id !== r.id))}
-                  >
-                    Remove
-                  </Button>
-                </InlineStack>
-              </InlineStack>
-              {vs.length > 1 && (
-                <Collapsible open={!!openVarPids[r.id]} id={`vars-${r.id}`}>
-                  <Box paddingInlineStart="800">
-                    <BlockStack gap="100">
-                      <Text as="span" variant="bodySm" tone="subdued">
-                        {chipLabel} ({offeredIds.length}/{vs.length})
-                      </Text>
-                      <InlineStack gap="150" wrap>
-                        {vs.map((v) => (
-                          <Button
-                            key={v.id}
-                            size="micro"
-                            pressed={offeredIds.includes(v.id)}
-                            onClick={() => toggle(v.id)}
-                          >
-                            {v.title}
-                          </Button>
-                        ))}
-                      </InlineStack>
-                    </BlockStack>
-                  </Box>
-                </Collapsible>
-              )}
-            </BlockStack>
+            <div className="kb-ref" key={r.id}>
+              <Thumb src={r.image} size={40} />
+              <span className="kb-title" style={{ fontWeight: 500 }}>
+                {r.title || r.handle || r.id}
+              </span>
+              <div className="kb-inline">
+                {vs.length > 1 ? (
+                  <Btn size="tiny" onClick={() => toggleVarOpen(r.id)}>
+                    {`Variants ${offeredIds.length}/${vs.length} ${openVarPids[r.id] ? "▴" : "▾"}`}
+                  </Btn>
+                ) : null}
+                <Btn
+                  size="tiny"
+                  variant="ghost"
+                  onClick={() => onChange(refs.filter((x) => x.id !== r.id))}
+                >
+                  Remove
+                </Btn>
+              </div>
+              {vs.length > 1 && openVarPids[r.id] ? (
+                <div className="kb-ref__vars">
+                  <span className="kb-sub">
+                    {chipLabel} ({offeredIds.length}/{vs.length})
+                  </span>
+                  <div className="kb-chips">
+                    {vs.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`kb-chip${offeredIds.includes(v.id) ? " is-on" : ""}`}
+                        onClick={() => toggle(v.id)}
+                      >
+                        {v.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           );
         })}
-      </BlockStack>
+      </div>
     );
 
   const save = () =>
     fetcher.submit({ campaign: JSON.stringify(c) }, { method: "POST" });
 
-  const state = campaignState(c);
+  const state = campaignState(c) as keyof typeof STATE_LABEL;
 
   return (
-    <Page
-      backAction={{ content: "Gift campaigns", onAction: () => navigate("/app/gifts") }}
-    >
-      <TitleBar title={initial.title || "Gift campaign"} />
-      <BlockStack gap="400">
-        {fetcher.data?.error && (
-          <Banner tone="critical">{fetcher.data.error}</Banner>
-        )}
+    <GiftsShell>
+      <PageHead
+        back={{ to: "/app/gifts", label: "Campaigns" }}
+        title={c.title || (isNew ? "New campaign" : "Untitled campaign")}
+        subtitle={
+          <span className="kb-inline">
+            <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+            <span>
+              {`${c.triggerProducts.length + c.triggerCollections.length} trigger${
+                c.triggerProducts.length + c.triggerCollections.length === 1 ? "" : "s"
+              } → ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
+            </span>
+          </span>
+        }
+        actions={
+          <>
+            <Btn to="/app/gifts">Cancel</Btn>
+            <Btn variant="primary" loading={busy} onClick={save}>
+              Save campaign
+            </Btn>
+          </>
+        }
+      />
 
-        <Card>
-          <BlockStack gap="400">
-            <InlineStack gap="400" wrap={false} blockAlign="start">
-              <Box width="70%">
-                <TextField
-                  label="Campaign name"
-                  autoComplete="off"
-                  value={c.title}
-                  onChange={(v) => patch({ title: v })}
-                  helpText="Internal name, e.g. “Buy a camera, get a free battery”."
-                />
-              </Box>
-              <Box width="30%">
-                <BlockStack gap="150">
-                  <Checkbox
-                    label="Enabled"
-                    checked={c.enabled}
-                    onChange={(v) => patch({ enabled: v })}
-                  />
-                  <Badge
-                    tone={
-                      state === "active"
-                        ? "success"
-                        : state === "scheduled"
-                          ? "info"
-                          : state === "ended"
-                            ? "attention"
-                            : undefined
-                    }
-                  >
-                    {state}
-                  </Badge>
-                </BlockStack>
-              </Box>
-            </InlineStack>
+      {fetcher.data?.error ? <Banner tone="danger">{fetcher.data.error}</Banner> : null}
 
-            <InlineStack gap="400" wrap={false}>
-              <Box width="50%">
-                <TextField
-                  label="Starts (optional)"
-                  type={"datetime-local" as any}
-                  autoComplete="off"
-                  value={toLocalInput(c.startsAt)}
-                  onChange={(v) => patch({ startsAt: fromLocalInput(v) })}
-                  helpText="Blank = starts immediately."
-                />
-              </Box>
-              <Box width="50%">
-                <TextField
-                  label="Ends (optional)"
-                  type={"datetime-local" as any}
-                  autoComplete="off"
-                  value={toLocalInput(c.endsAt)}
-                  onChange={(v) => patch({ endsAt: fromLocalInput(v) })}
-                  helpText="Server-enforced end."
-                />
-              </Box>
-            </InlineStack>
-          </BlockStack>
-        </Card>
+      <div className="kb-grid-2">
+        {/* ---- Main: what triggers it, what it gives ---- */}
+        <div className="kb-stack">
+          <Panel title="Campaign">
+            <Field
+              label="Campaign name"
+              help="Internal name, e.g. “Buy a camera, get a free battery”."
+            >
+              <Input value={c.title} onChange={(e) => patch({ title: e.target.value })} />
+            </Field>
+          </Panel>
 
-        <Card>
-          <BlockStack gap="300">
-            <Text as="h3" variant="headingSm">
-              Trigger — buy any of these
-            </Text>
-            <InlineStack align="space-between" blockAlign="center">
-              <Text as="span" variant="bodySm" tone="subdued">
-                Products ({c.triggerProducts.length})
-              </Text>
-              <Button
+          <Panel
+            title="Trigger — buy any of these"
+            actions={
+              <Btn
+                size="tiny"
                 onClick={() =>
                   pick("product", c.triggerProducts, (refs) =>
                     patch({ triggerProducts: refs }),
@@ -380,19 +320,22 @@ export default function GiftCampaignEditor() {
                 }
               >
                 Select products
-              </Button>
-            </InlineStack>
+              </Btn>
+            }
+          >
+            <div className="kb-overline" style={{ marginBottom: 4 }}>
+              {`Products (${c.triggerProducts.length})`}
+            </div>
             {refVariantList(
               c.triggerProducts,
               (r) => patch({ triggerProducts: r }),
               "Variants that qualify",
             )}
-            <Divider />
-            <InlineStack align="space-between" blockAlign="center">
-              <Text as="span" variant="bodySm" tone="subdued">
-                Collections ({c.triggerCollections.length})
-              </Text>
-              <Button
+            <div className="kb-divider" />
+            <div className="kb-between" style={{ marginBottom: 4 }}>
+              <span className="kb-overline">{`Collections (${c.triggerCollections.length})`}</span>
+              <Btn
+                size="tiny"
                 onClick={() =>
                   pick("collection", c.triggerCollections, (refs) =>
                     patch({ triggerCollections: refs }),
@@ -400,112 +343,132 @@ export default function GiftCampaignEditor() {
                 }
               >
                 Select collections
-              </Button>
-            </InlineStack>
-            {refList(c.triggerCollections, (id) =>
-              patch({
-                triggerCollections: c.triggerCollections.filter(
-                  (r) => r.id !== id,
-                ),
-              }),
-            )}
-          </BlockStack>
-        </Card>
+              </Btn>
+            </div>
+            {collectionList(c.triggerCollections, (r) => patch({ triggerCollections: r }))}
+          </Panel>
 
-        <Card>
-          <BlockStack gap="300">
-            <Text as="h3" variant="headingSm">
-              Gift — get free
-            </Text>
-            <InlineStack align="space-between" blockAlign="center">
-              <Text as="span" variant="bodySm" tone="subdued">
-                Gift products ({c.giftProducts.length})
-              </Text>
-              <Button
+          <Panel
+            title="Gift — get free"
+            actions={
+              <Btn
+                size="tiny"
                 onClick={() =>
-                  pick("product", c.giftProducts, (refs) =>
-                    patch({ giftProducts: refs }),
-                  )
+                  pick("product", c.giftProducts, (refs) => patch({ giftProducts: refs }))
                 }
               >
                 Select gifts
-              </Button>
-            </InlineStack>
+              </Btn>
+            }
+          >
+            <div className="kb-overline" style={{ marginBottom: 4 }}>
+              {`Gift products (${c.giftProducts.length})`}
+            </div>
             {refVariantList(
               c.giftProducts,
               (r) => patch({ giftProducts: r }),
               "Variants offered free",
             )}
-            <Divider />
-            <InlineStack gap="400" wrap={false} blockAlign="start">
-              <Box width="33%">
-                <TextField
-                  label="Free per qualifying unit"
+          </Panel>
+        </div>
+
+        {/* ---- Sidebar: status, reward rule, storefront ---- */}
+        <div className="kb-stack kb-sticky">
+          <Panel title="Status">
+            <div className="kb-stack kb-stack--tight">
+              <div className="kb-between">
+                <Switch
+                  label="Enabled"
+                  checked={c.enabled}
+                  onChange={(v) => patch({ enabled: v })}
+                />
+                <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+              </div>
+              <Field label="Starts (optional)" help="Blank = starts immediately.">
+                <Input
+                  type="datetime-local"
+                  value={toLocalInput(c.startsAt)}
+                  onChange={(e) => patch({ startsAt: fromLocalInput(e.target.value) })}
+                />
+              </Field>
+              <Field label="Ends (optional)" help="Server-enforced end.">
+                <Input
+                  type="datetime-local"
+                  value={toLocalInput(c.endsAt)}
+                  onChange={(e) => patch({ endsAt: fromLocalInput(e.target.value) })}
+                />
+              </Field>
+            </div>
+          </Panel>
+
+          <Panel title="Reward">
+            <div className="kb-stack kb-stack--tight">
+              <Field label="Reward mode">
+                <Select
+                  value={c.rewardMode}
+                  onChange={(e) =>
+                    patch({ rewardMode: e.target.value as "fixed" | "choice" | "all" })
+                  }
+                >
+                  <option value="fixed">Fixed — auto-add the first gift</option>
+                  <option value="choice">Choice — customer picks one gift</option>
+                  <option value="all">All — auto-add every gift</option>
+                </Select>
+              </Field>
+              <Field
+                label="Free per qualifying unit"
+                help={
+                  c.rewardMode === "all"
+                    ? "Not used in All mode: every gift is given once per qualifying item (buy 2 → 2 of each)."
+                    : `Buy 1 → get ${c.perQualifying} free per qualifying item.`
+                }
+              >
+                <Input
                   type="number"
                   min={1}
-                  autoComplete="off"
                   value={String(c.perQualifying)}
-                  onChange={(v) =>
-                    patch({ perQualifying: Math.max(1, Number(v) || 1) })
-                  }
                   disabled={c.rewardMode === "all"}
-                  helpText={
-                    c.rewardMode === "all"
-                      ? "Not used in All mode: every gift is given once per qualifying item (buy 2 → 2 of each)."
-                      : `Buy 1 → get ${c.perQualifying} free per qualifying item.`
+                  onChange={(e) =>
+                    patch({ perQualifying: Math.max(1, Number(e.target.value) || 1) })
                   }
                 />
-              </Box>
-              <Box width="33%">
-                <Select
-                  label="Reward mode"
-                  options={[
-                    { label: "Fixed — auto-add the first gift", value: "fixed" },
-                    {
-                      label: "Choice — customer picks one gift",
-                      value: "choice",
-                    },
-                    { label: "All — auto-add every gift", value: "all" },
-                  ]}
-                  value={c.rewardMode}
-                  onChange={(v) =>
-                    patch({ rewardMode: v as "fixed" | "choice" | "all" })
-                  }
-                />
-              </Box>
-              <Box width="33%">
-                <TextField
-                  label="Badge text"
-                  autoComplete="off"
-                  value={c.badgeText}
-                  onChange={(v) => patch({ badgeText: v })}
-                  helpText="Shown on product / search."
-                />
-              </Box>
-            </InlineStack>
-            <TextField
-              label="Picker prompt"
-              autoComplete="off"
-              value={c.subtitle}
-              onChange={(v) => patch({ subtitle: v })}
-              placeholder="Choose your free gift:"
-              helpText="Shown above the gift options on the product page. Customers can also pick “No thanks” to skip the gift."
-            />
-            <Checkbox
-              label="Hide when sold out"
-              helpText="Off by default. When on, a sold-out gift is hidden from the picker; if every gift is sold out the whole group hides."
-              checked={c.hideWhenSoldOut}
-              onChange={(v) => patch({ hideWhenSoldOut: v })}
-            />
-          </BlockStack>
-        </Card>
+              </Field>
+            </div>
+          </Panel>
 
-        <InlineStack align="end">
-          <Button variant="primary" loading={busy} onClick={save}>
-            Save campaign
-          </Button>
-        </InlineStack>
-      </BlockStack>
-    </Page>
+          <Panel title="Storefront">
+            <div className="kb-stack kb-stack--tight">
+              <Field label="Badge text" help="Shown on product / search.">
+                <Input
+                  value={c.badgeText}
+                  onChange={(e) => patch({ badgeText: e.target.value })}
+                />
+              </Field>
+              <Field
+                label="Picker prompt"
+                help="Shown above the gift options on the product page. Customers can also pick “No thanks”."
+              >
+                <Input
+                  value={c.subtitle}
+                  placeholder="Choose your free gift:"
+                  onChange={(e) => patch({ subtitle: e.target.value })}
+                />
+              </Field>
+              <div>
+                <Checkbox
+                  label="Hide when sold out"
+                  checked={c.hideWhenSoldOut}
+                  onChange={(v) => patch({ hideWhenSoldOut: v })}
+                />
+                <div className="kb-sub" style={{ marginTop: 4 }}>
+                  When on, a sold-out gift is hidden from the picker; if every gift
+                  is sold out the whole group hides.
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </GiftsShell>
   );
 }

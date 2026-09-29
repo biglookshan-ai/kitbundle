@@ -1,24 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useSearchParams } from "@remix-run/react";
 import { useMemo, useState } from "react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  InlineStack,
-  InlineGrid,
-  Text,
-  TextField,
-  Select,
-  Checkbox,
-  IndexTable,
-  Thumbnail,
-  Badge,
-  Link,
-  EmptyState,
-} from "@shopify/polaris";
-import { ImageIcon, SearchIcon } from "@shopify/polaris-icons";
-import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
   ensureCoverage,
@@ -26,11 +8,27 @@ import {
 } from "../modules/gifts/coverage.server";
 import { buildGiftViews } from "../modules/gifts/views.server";
 import {
-  GiftsNav,
-  CampaignBadges,
-  IndexBar,
+  GiftsShell,
+  CampaignPills,
+  RebuildButton,
   openProductInAdmin,
+  fmtWhen,
 } from "../modules/gifts/ui";
+import {
+  PageHead,
+  Stats,
+  Field,
+  Input,
+  Select,
+  Checkbox,
+  List,
+  Row,
+  Pager,
+  Thumb,
+  Pill,
+  Empty,
+  Btn,
+} from "../ui/kit";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -48,24 +46,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 const PAGE = 50;
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "critical" }) {
-  return (
-    <Card>
-      <BlockStack gap="100">
-        <Text as="span" variant="bodySm" tone="subdued">
-          {label}
-        </Text>
-        <Text as="span" variant="headingLg" tone={tone}>
-          {String(value)}
-        </Text>
-      </BlockStack>
-    </Card>
-  );
-}
-
 export default function GiftProducts() {
   const { products, campaigns, updatedAt } = useLoaderData<typeof loader>();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
 
   const [query, setQuery] = useState("");
   const [vendor, setVendor] = useState(params.get("vendor") ?? "all");
@@ -74,6 +57,7 @@ export default function GiftProducts() {
   const [overlapOnly, setOverlapOnly] = useState(false);
   const giftFilter = params.get("gift") ?? "";
   const [page, setPage] = useState(0);
+  const reset = () => setPage(0);
 
   const vendors = useMemo(
     () =>
@@ -99,208 +83,184 @@ export default function GiftProducts() {
       .toLowerCase()
       .includes(q);
   });
+  const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
 
-  const pageRows = filtered.slice(page * PAGE, page * PAGE + PAGE);
   const giftName =
     giftFilter &&
     products
       .flatMap((p) => p.gifts)
       .find((g) => g.productId.endsWith(`/${giftFilter}`))?.title;
-
   const activeNow = products.filter((p) => p.activeCampaigns > 0).length;
   const overlaps = products.filter((p) => p.activeCampaigns > 1).length;
 
   return (
-    <Page fullWidth>
-      <TitleBar title="Free gifts" />
-      <BlockStack gap="400">
-        <InlineStack align="space-between" blockAlign="center">
-          <GiftsNav />
-          <IndexBar updatedAt={updatedAt} />
-        </InlineStack>
+    <GiftsShell>
+      <PageHead
+        title="Products with gifts"
+        subtitle={`Every product that earns a free gift, and where it comes from · index updated ${fmtWhen(updatedAt)}`}
+        actions={<RebuildButton />}
+      />
 
-        <InlineGrid columns={{ xs: 2, md: 4 }} gap="300">
-          <Stat label="Products with gifts" value={products.length} />
-          <Stat label="Giving a gift now" value={activeNow} />
-          <Stat label="Brands" value={vendors.length} />
-          <Stat
-            label="In 2+ active campaigns"
-            value={overlaps}
-            tone={overlaps ? "critical" : undefined}
+      <Stats
+        items={[
+          { label: "Products with gifts", value: products.length },
+          { label: "Giving a gift now", value: activeNow },
+          { label: "Brands", value: vendors.length },
+          { label: "In 2+ active campaigns", value: overlaps, danger: overlaps > 0 },
+        ]}
+      />
+
+      <div
+        className="kb-filters"
+        style={{
+          ["--cols" as string]:
+            "minmax(220px,1.6fr) repeat(3,minmax(150px,1fr)) auto",
+        }}
+      >
+        <Field label="Search">
+          <Input
+            type="search"
+            placeholder="Products, brands or gifts"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              reset();
+            }}
           />
-        </InlineGrid>
+        </Field>
+        <Field label="Brand">
+          <Select
+            value={vendor}
+            onChange={(e) => {
+              setVendor(e.target.value);
+              reset();
+            }}
+          >
+            <option value="all">All brands</option>
+            {vendors.map((v) => (
+              <option key={v} value={v}>
+                {v || "(No brand)"}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Campaign">
+          <Select
+            value={campaign}
+            onChange={(e) => {
+              setCampaign(e.target.value);
+              reset();
+            }}
+          >
+            <option value="all">All campaigns</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Status">
+          <Select
+            value={state}
+            onChange={(e) => {
+              setState(e.target.value);
+              reset();
+            }}
+          >
+            <option value="any">Any</option>
+            <option value="active">Giving a gift now</option>
+            <option value="inactive">Not giving now</option>
+          </Select>
+        </Field>
+        <div style={{ height: 38, display: "flex", alignItems: "center" }}>
+          <Checkbox
+            label="Only overlaps"
+            checked={overlapOnly}
+            onChange={(v) => {
+              setOverlapOnly(v);
+              reset();
+            }}
+          />
+        </div>
+      </div>
 
-        <Card padding="0">
-          <BlockStack>
-            <div style={{ padding: 12 }}>
-              <InlineStack gap="300" wrap blockAlign="end">
-                <div style={{ minWidth: 240, flex: 1 }}>
-                  <TextField
-                    label="Search"
-                    labelHidden
-                    prefix={<SearchIcon width={16} />}
-                    placeholder="Search products, brands or gifts"
-                    value={query}
-                    onChange={(v) => {
-                      setQuery(v);
-                      setPage(0);
-                    }}
-                    autoComplete="off"
-                    clearButton
-                    onClearButtonClick={() => setQuery("")}
-                  />
-                </div>
-                <Select
-                  label="Brand"
-                  labelInline
-                  options={[
-                    { label: "All brands", value: "all" },
-                    ...vendors.map((v) => ({ label: v || "(No brand)", value: v })),
-                  ]}
-                  value={vendor}
-                  onChange={(v) => {
-                    setVendor(v);
-                    setPage(0);
-                  }}
-                />
-                <Select
-                  label="Campaign"
-                  labelInline
-                  options={[
-                    { label: "All campaigns", value: "all" },
-                    ...campaigns.map((c) => ({ label: c.title, value: c.id })),
-                  ]}
-                  value={campaign}
-                  onChange={(v) => {
-                    setCampaign(v);
-                    setPage(0);
-                  }}
-                />
-                <Select
-                  label="Status"
-                  labelInline
-                  options={[
-                    { label: "Any", value: "any" },
-                    { label: "Giving a gift now", value: "active" },
-                    { label: "Not giving now", value: "inactive" },
-                  ]}
-                  value={state}
-                  onChange={(v) => {
-                    setState(v);
-                    setPage(0);
-                  }}
-                />
-                <Checkbox
-                  label="Only overlaps"
-                  checked={overlapOnly}
-                  onChange={(v) => {
-                    setOverlapOnly(v);
-                    setPage(0);
-                  }}
-                />
-              </InlineStack>
-              {giftName ? (
-                <div style={{ marginTop: 8 }}>
-                  <Badge tone="info">{`Giving: ${giftName}`}</Badge>
-                </div>
-              ) : null}
-            </div>
+      <div className="kb-summary">
+        <span>{`${filtered.length} product${filtered.length === 1 ? "" : "s"}`}</span>
+        {giftName ? (
+          <span className="kb-inline">
+            <Pill tone="info">{`Giving: ${giftName}`}</Pill>
+            <Btn
+              variant="link"
+              size="tiny"
+              onClick={() => {
+                params.delete("gift");
+                setParams(params);
+              }}
+            >
+              Clear
+            </Btn>
+          </span>
+        ) : null}
+      </div>
 
-            {products.length === 0 ? (
-              <EmptyState
-                heading="No products give a gift yet"
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-              >
-                <p>Create a gift campaign and its trigger products will appear here.</p>
-              </EmptyState>
-            ) : (
-              <IndexTable
-                resourceName={{ singular: "product", plural: "products" }}
-                itemCount={filtered.length}
-                selectable={false}
-                headings={[
-                  { title: "Product" },
-                  { title: "Brand" },
-                  { title: "Gifts" },
-                  { title: "Campaigns" },
-                  { title: "How it's included" },
-                ]}
-                pagination={{
-                  hasPrevious: page > 0,
-                  hasNext: (page + 1) * PAGE < filtered.length,
-                  onPrevious: () => setPage((p) => p - 1),
-                  onNext: () => setPage((p) => p + 1),
-                  label: `${filtered.length ? page * PAGE + 1 : 0}–${Math.min(
-                    (page + 1) * PAGE,
-                    filtered.length,
-                  )} of ${filtered.length}`,
-                }}
-              >
-                {pageRows.map((p, i) => (
-                  <IndexTable.Row id={p.productId} key={p.productId} position={i}>
-                    <IndexTable.Cell>
-                      <InlineStack gap="300" blockAlign="center" wrap={false}>
-                        <Thumbnail source={p.image || ImageIcon} alt="" size="small" />
-                        <BlockStack gap="050">
-                          <Link
-                            removeUnderline
-                            monochrome
-                            onClick={() => openProductInAdmin(p.numericId)}
-                          >
-                            <Text as="span" fontWeight="semibold">
-                              {p.title || p.handle}
-                            </Text>
-                          </Link>
-                          <InlineStack gap="100">
-                            {p.status && p.status !== "ACTIVE" ? (
-                              <Badge tone={p.status === "DELETED" ? "critical" : "warning"}>
-                                {p.status.toLowerCase()}
-                              </Badge>
-                            ) : null}
-                            {p.activeCampaigns > 1 ? (
-                              <Badge tone="critical">
-                                {`${p.activeCampaigns} active campaigns`}
-                              </Badge>
-                            ) : null}
-                          </InlineStack>
-                        </BlockStack>
-                      </InlineStack>
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <Text as="span">{p.vendor || "—"}</Text>
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <InlineStack gap="100" blockAlign="center" wrap={false}>
-                        {p.gifts.slice(0, 4).map((g) => (
-                          <Thumbnail
-                            key={g.productId}
-                            source={g.image || ImageIcon}
-                            alt={g.title}
-                            size="extraSmall"
-                          />
-                        ))}
-                        <Text as="span" tone="subdued">
-                          {p.gifts.length > 4
-                            ? `+${p.gifts.length - 4}`
-                            : `${p.gifts.length}`}
-                        </Text>
-                      </InlineStack>
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <CampaignBadges campaigns={p.campaigns} />
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <Text as="span" variant="bodySm" tone="subdued">
-                        {p.via.join(" · ") || "—"}
-                      </Text>
-                    </IndexTable.Cell>
-                  </IndexTable.Row>
+      <List
+        cols="minmax(0,1.5fr) 150px minmax(0,1.3fr) 160px"
+        head={["Product", "Gifts", "Campaigns", "Included via"]}
+        footer={
+          <Pager page={page} pageSize={PAGE} total={filtered.length} onPage={setPage} />
+        }
+      >
+        {products.length === 0 ? (
+          <Empty title="No products give a gift yet">
+            Create a gift campaign and its trigger products will appear here.
+          </Empty>
+        ) : rows.length === 0 ? (
+          <Empty title="No products match these filters" />
+        ) : (
+          rows.map((p) => (
+            <Row key={p.productId}>
+              <div className="kb-ident">
+                <Thumb src={p.image} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="kb-overline">{p.vendor || "—"}</div>
+                  <button
+                    type="button"
+                    className="kb-title"
+                    title="Open in Shopify admin"
+                    onClick={() => openProductInAdmin(p.numericId)}
+                  >
+                    {p.title || p.handle}
+                  </button>
+                  <div className="kb-inline" style={{ marginTop: 3 }}>
+                    {p.productType ? <span className="kb-sub">{p.productType}</span> : null}
+                    {p.status && p.status !== "ACTIVE" ? (
+                      <Pill tone={p.status === "DELETED" ? "danger" : "warn"}>
+                        {p.status.toLowerCase()}
+                      </Pill>
+                    ) : null}
+                    {p.activeCampaigns > 1 ? (
+                      <Pill tone="warn">{`${p.activeCampaigns} active campaigns`}</Pill>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="kb-thumbs">
+                {p.gifts.slice(0, 4).map((g) => (
+                  <Thumb key={g.productId} src={g.image} size={28} alt={g.title} />
                 ))}
-              </IndexTable>
-            )}
-          </BlockStack>
-        </Card>
-      </BlockStack>
-    </Page>
+                <span className="kb-sub" style={{ marginLeft: 4 }}>
+                  {p.gifts.length > 4
+                    ? `+${p.gifts.length - 4}`
+                    : `${p.gifts.length} gift${p.gifts.length === 1 ? "" : "s"}`}
+                </span>
+              </div>
+              <CampaignPills campaigns={p.campaigns} />
+              <span className="kb-sub">{p.via.join(" · ") || "—"}</span>
+            </Row>
+          ))
+        )}
+      </List>
+    </GiftsShell>
   );
 }

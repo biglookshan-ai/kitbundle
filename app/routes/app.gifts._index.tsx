@@ -1,29 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
-import { useState } from "react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  InlineStack,
-  Text,
-  TextField,
-  Button,
-  ButtonGroup,
-  Badge,
-  Box,
-  Banner,
-  Thumbnail,
-  Icon,
-  EmptyState,
-} from "@shopify/polaris";
-import {
-  ImageIcon,
-  CollectionIcon,
-  ArrowRightIcon,
-  SearchIcon,
-} from "@shopify/polaris-icons";
-import { TitleBar } from "@shopify/app-bridge-react";
+import { useFetcher, useLoaderData } from "@remix-run/react";
+import { useEffect, useState } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
   listCampaigns,
@@ -36,7 +14,20 @@ import {
   dropCoverage,
   rebuildCoverage,
 } from "../modules/gifts/coverage.server";
-import { GiftsNav } from "../modules/gifts/ui";
+import { GiftsShell, STATE_TONE, STATE_LABEL } from "../modules/gifts/ui";
+import {
+  PageHead,
+  Stats,
+  Field,
+  Input,
+  Segmented,
+  List,
+  Row,
+  Pill,
+  Thumb,
+  Btn,
+  Empty,
+} from "../ui/kit";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -76,14 +67,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: false, error: "Unknown action", message: null };
 };
 
-const STATE_TONE: Record<string, "success" | "info" | "attention" | undefined> =
-  {
-    active: "success",
-    scheduled: "info",
-    ended: "attention",
-    disabled: undefined,
-  };
-
 function fmtDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -96,322 +79,241 @@ function fmtDate(iso: string) {
   });
 }
 
-/** One labelled column of product/collection chips (with thumbnails). */
-function RefColumn({
-  label,
+/** Product / collection chips for the "Buy any of → Get free" flow. */
+function RefChips({
   products,
   collections = [],
-  tone,
+  gift,
   emptyText,
 }: {
-  label: string;
   products: Ref[];
   collections?: Ref[];
-  tone?: "success";
-  emptyText?: string;
+  gift?: boolean;
+  emptyText: string;
 }) {
-  const total = products.length + collections.length;
+  if (!products.length && !collections.length) {
+    return <span className="kb-sub">{emptyText}</span>;
+  }
   return (
-    <BlockStack gap="150">
-      <Text as="span" variant="bodyXs" tone="subdued">
-        {label} ({total})
-      </Text>
-      {total === 0 ? (
-        <Text as="span" variant="bodySm" tone="subdued">
-          {emptyText || "—"}
-        </Text>
-      ) : (
-        <InlineStack gap="150" wrap>
-          {collections.map((c) => (
-            <Box
-              key={c.id}
-              background="bg-surface-secondary"
-              padding="100"
-              borderRadius="200"
-            >
-              <InlineStack gap="100" blockAlign="center" wrap={false}>
-                <Icon source={CollectionIcon} tone="subdued" />
-                <Text as="span" variant="bodySm">
-                  {c.title || "Collection"}
-                </Text>
-              </InlineStack>
-            </Box>
-          ))}
-          {products.map((p) => (
-            <Box
-              key={p.id}
-              background={tone === "success" ? "bg-surface-success" : "bg-surface-secondary"}
-              padding="100"
-              borderRadius="200"
-            >
-              <InlineStack gap="100" blockAlign="center" wrap={false}>
-                <Thumbnail
-                  source={p.image || ImageIcon}
-                  alt={p.title}
-                  size="extraSmall"
-                />
-                <Text as="span" variant="bodySm">
-                  {p.title || p.handle}
-                </Text>
-              </InlineStack>
-            </Box>
-          ))}
-        </InlineStack>
-      )}
-    </BlockStack>
+    <div>
+      {collections.map((c) => (
+        <span key={c.id} className="kb-refchip" style={{ paddingLeft: 8 }}>
+          <span className="kb-overline" style={{ fontSize: 10 }}>
+            Collection
+          </span>
+          <span>{c.title || "Untitled"}</span>
+        </span>
+      ))}
+      {products.map((p) => (
+        <span key={p.id} className={`kb-refchip${gift ? " kb-refchip--gift" : ""}`}>
+          <Thumb src={p.image} size={22} alt="" />
+          <span>{p.title || p.handle}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 
-const STATUS_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "scheduled", label: "Scheduled" },
-  { key: "ended", label: "Ended" },
-];
+type Status = "all" | "active" | "scheduled" | "ended";
 
 export default function GiftCampaigns() {
   const { campaigns, coverage } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-  const navigate = useNavigate();
+  const shopify = useAppBridge();
   const busy = fetcher.state !== "idle";
 
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState<Status>("all");
   const [mode, setMode] = useState<"simple" | "detailed">("simple");
+
+  // Report action results as admin toasts.
+  useEffect(() => {
+    const d = fetcher.data;
+    if (fetcher.state !== "idle" || !d) return;
+    if (d.error) shopify.toast.show(d.error, { isError: true });
+    else shopify.toast.show(d.message || "Done");
+  }, [fetcher.state, fetcher.data, shopify]);
 
   const q = query.trim().toLowerCase();
   const visible = campaigns.filter((c) => {
     if (status !== "all" && campaignState(c) !== status) return false;
     if (!q) return true;
-    const hay = [
+    return [
       c.title,
       ...c.triggerProducts.map((p) => p.title),
       ...c.triggerCollections.map((p) => p.title),
       ...c.giftProducts.map((p) => p.title),
     ]
       .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
+      .toLowerCase()
+      .includes(q);
   });
 
-  return (
-    <Page>
-      <TitleBar title="Free gifts" />
-      <BlockStack gap="400">
-        <GiftsNav />
-        {fetcher.data?.error && (
-          <Banner tone="critical">{fetcher.data.error}</Banner>
-        )}
-        {fetcher.data?.message && (
-          <Banner tone="success">{fetcher.data.message}</Banner>
-        )}
+  const count = (s: string) => campaigns.filter((c) => campaignState(c) === s).length;
 
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="h2" variant="headingMd">
-            Free gift offers
-          </Text>
-          <InlineStack gap="200">
-            <Button
-              loading={busy}
-              onClick={() =>
-                fetcher.submit({ intent: "resync" }, { method: "POST" })
-              }
+  return (
+    <GiftsShell>
+      <PageHead
+        title="Campaigns"
+        subtitle="Free gift offers: buy one of these products, get these gifts free."
+        actions={
+          <>
+            <Btn
+              loading={busy && fetcher.formData?.get("intent") === "resync"}
+              onClick={() => fetcher.submit({ intent: "resync" }, { method: "POST" })}
             >
               Re-sync collections
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => navigate("/app/gifts/new")}
-            >
+            </Btn>
+            <Btn variant="primary" to="/app/gifts/new">
               New campaign
-            </Button>
-          </InlineStack>
-        </InlineStack>
+            </Btn>
+          </>
+        }
+      />
 
-        {campaigns.length > 0 && (
-          <InlineStack align="space-between" blockAlign="center" gap="300" wrap>
-            <Box minWidth="260px">
-              <TextField
-                label="Search"
-                labelHidden
-                value={query}
-                onChange={setQuery}
-                autoComplete="off"
-                placeholder="Search by campaign, trigger or gift"
-                prefix={<Icon source={SearchIcon} />}
-                clearButton
-                onClearButtonClick={() => setQuery("")}
-              />
-            </Box>
-            <InlineStack gap="200" blockAlign="center">
-              <ButtonGroup variant="segmented">
-                {STATUS_FILTERS.map((f) => (
-                  <Button
-                    key={f.key}
-                    pressed={status === f.key}
-                    onClick={() => setStatus(f.key)}
-                  >
-                    {f.label}
-                  </Button>
-                ))}
-              </ButtonGroup>
-              <ButtonGroup variant="segmented">
-                <Button
-                  pressed={mode === "simple"}
-                  onClick={() => setMode("simple")}
-                >
-                  Simple
-                </Button>
-                <Button
-                  pressed={mode === "detailed"}
-                  onClick={() => setMode("detailed")}
-                >
-                  Detailed
-                </Button>
-              </ButtonGroup>
-            </InlineStack>
-          </InlineStack>
-        )}
+      <Stats
+        items={[
+          { label: "Campaigns", value: campaigns.length },
+          { label: "Active", value: count("active") },
+          { label: "Scheduled", value: count("scheduled") },
+          { label: "Ended", value: count("ended") },
+        ]}
+      />
 
+      {campaigns.length > 0 ? (
+        <div
+          className="kb-filters"
+          style={{ ["--cols" as string]: "minmax(240px,1fr) auto auto" }}
+        >
+          <Field label="Search">
+            <Input
+              type="search"
+              placeholder="Campaign, trigger or gift"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </Field>
+          <Segmented<Status>
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "all", label: "All" },
+              { value: "active", label: "Active" },
+              { value: "scheduled", label: "Scheduled" },
+              { value: "ended", label: "Ended" },
+            ]}
+          />
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "simple", label: "Simple" },
+              { value: "detailed", label: "Detailed" },
+            ]}
+          />
+        </div>
+      ) : null}
+
+      <div className="kb-summary">
+        <span>{`${visible.length} campaign${visible.length === 1 ? "" : "s"}`}</span>
+      </div>
+
+      <List cols="minmax(0,1fr) auto">
         {campaigns.length === 0 ? (
-          <Card>
-            <EmptyState
-              heading="No gift campaigns yet"
-              action={{
-                content: "New campaign",
-                onAction: () => navigate("/app/gifts/new"),
-              }}
-              image=""
-            >
-              <p>
-                Reward customers with a free gift when they buy chosen products
-                or collections — buy 2, get 2.
-              </p>
-            </EmptyState>
-          </Card>
+          <Empty
+            title="No gift campaigns yet"
+            action={
+              <Btn variant="primary" to="/app/gifts/new">
+                New campaign
+              </Btn>
+            }
+          >
+            Reward customers with a free gift when they buy chosen products or
+            collections.
+          </Empty>
         ) : visible.length === 0 ? (
-          <Card>
-            <Box padding="400">
-              <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-                No campaigns match your search.
-              </Text>
-            </Box>
-          </Card>
+          <Empty title="No campaigns match your search" />
         ) : (
-          <Card padding="0">
-            <BlockStack>
-              {visible.map((c, i) => {
-                const state = campaignState(c);
-                const covers = coverage[c.id] ?? 0;
-                const meta = [
-                  `Covers ${covers} product${covers === 1 ? "" : "s"}`,
-                  c.rewardMode === "all"
-                    ? "every gift, 1 per item bought"
-                    : `Buy 1 → get ${c.perQualifying} free`,
-                  c.rewardMode === "choice"
-                    ? "customer picks one"
-                    : c.rewardMode === "all"
-                      ? "all gifts auto-added"
-                      : "first gift auto-added",
-                  c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
-                  c.startsAt && state === "scheduled"
-                    ? `starts ${fmtDate(c.startsAt)}`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-                return (
-                  <Box
-                    key={c.id}
-                    padding="400"
-                    borderBlockEndWidth={
-                      i < visible.length - 1 ? "025" : undefined
-                    }
-                    borderColor="border"
+          visible.map((c) => {
+            const state = campaignState(c) as keyof typeof STATE_LABEL;
+            const covers = coverage[c.id] ?? 0;
+            const meta = [
+              `Covers ${covers} product${covers === 1 ? "" : "s"}`,
+              c.rewardMode === "all"
+                ? "every gift, 1 per item bought"
+                : `Buy 1 → get ${c.perQualifying} free`,
+              c.rewardMode === "choice"
+                ? "customer picks one"
+                : c.rewardMode === "all"
+                  ? "all gifts auto-added"
+                  : "first gift auto-added",
+              c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
+              c.startsAt && state === "scheduled"
+                ? `starts ${fmtDate(c.startsAt)}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const deleting =
+              busy &&
+              fetcher.formData?.get("intent") === "delete" &&
+              fetcher.formData?.get("id") === c.id;
+            return (
+              <Row key={c.id}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="kb-inline">
+                    <span className="kb-title" style={{ display: "inline" }}>
+                      {c.title || "Untitled campaign"}
+                    </span>
+                    <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+                  </div>
+                  <div className="kb-sub" style={{ marginTop: 2 }}>
+                    {meta}
+                  </div>
+                  {mode === "detailed" ? (
+                    <div className="kb-flow">
+                      <div>
+                        <h4>{`Buy any of (${c.triggerProducts.length + c.triggerCollections.length})`}</h4>
+                        <RefChips
+                          products={c.triggerProducts}
+                          collections={c.triggerCollections}
+                          emptyText="No trigger set"
+                        />
+                      </div>
+                      <div className="kb-flow__arrow">→</div>
+                      <div>
+                        <h4>{`Get free (${c.giftProducts.length})`}</h4>
+                        <RefChips products={c.giftProducts} gift emptyText="No gift set" />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="kb-inline" style={{ alignSelf: "start", paddingTop: 2 }}>
+                  <Btn size="tiny" to={`/app/gifts/${c.id}`}>
+                    Edit
+                  </Btn>
+                  <Btn
+                    size="tiny"
+                    variant="danger"
+                    loading={deleting}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Delete “${c.title || "Untitled campaign"}”? Its gifts stop immediately.`,
+                        )
+                      ) {
+                        fetcher.submit({ intent: "delete", id: c.id }, { method: "POST" });
+                      }
+                    }}
                   >
-                    <BlockStack gap="300">
-                      <InlineStack
-                        align="space-between"
-                        blockAlign="center"
-                        wrap={false}
-                      >
-                        <BlockStack gap="100">
-                          <InlineStack gap="200" blockAlign="center">
-                            <Text
-                              as="span"
-                              variant="bodyMd"
-                              fontWeight="medium"
-                            >
-                              {c.title || "Untitled campaign"}
-                            </Text>
-                            <Badge tone={STATE_TONE[state]}>{state}</Badge>
-                          </InlineStack>
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {meta}
-                          </Text>
-                        </BlockStack>
-                        <ButtonGroup>
-                          <Button onClick={() => navigate(`/app/gifts/${c.id}`)}>
-                            Edit
-                          </Button>
-                          <Button
-                            tone="critical"
-                            loading={busy}
-                            onClick={() =>
-                              fetcher.submit(
-                                { intent: "delete", id: c.id },
-                                { method: "POST" },
-                              )
-                            }
-                          >
-                            Delete
-                          </Button>
-                        </ButtonGroup>
-                      </InlineStack>
-
-                      {/* triggers → gifts (one/many-to-many) — detailed only */}
-                      {mode === "detailed" && (
-                        <Box
-                          background="bg-surface-secondary"
-                          padding="300"
-                          borderRadius="200"
-                        >
-                          <InlineStack
-                            gap="300"
-                            blockAlign="start"
-                            wrap={false}
-                            align="start"
-                          >
-                            <Box width="45%">
-                              <RefColumn
-                                label="Buy any of"
-                                products={c.triggerProducts}
-                                collections={c.triggerCollections}
-                                emptyText="No trigger set"
-                              />
-                            </Box>
-                            <Box>
-                              <Icon source={ArrowRightIcon} tone="subdued" />
-                            </Box>
-                            <Box width="45%">
-                              <RefColumn
-                                label="Get free"
-                                products={c.giftProducts}
-                                tone="success"
-                                emptyText="No gift set"
-                              />
-                            </Box>
-                          </InlineStack>
-                        </Box>
-                      )}
-                    </BlockStack>
-                  </Box>
-                );
-              })}
-            </BlockStack>
-          </Card>
+                    Delete
+                  </Btn>
+                </div>
+              </Row>
+            );
+          })
         )}
-      </BlockStack>
-    </Page>
+      </List>
+    </GiftsShell>
   );
 }

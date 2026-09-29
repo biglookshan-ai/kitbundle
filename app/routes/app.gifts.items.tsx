@@ -1,22 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
-import {
-  Page,
-  Card,
-  BlockStack,
-  InlineStack,
-  Text,
-  TextField,
-  Select,
-  IndexTable,
-  Thumbnail,
-  Badge,
-  Link,
-  EmptyState,
-} from "@shopify/polaris";
-import { ImageIcon, SearchIcon } from "@shopify/polaris-icons";
-import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
   ensureCoverage,
@@ -24,11 +8,24 @@ import {
 } from "../modules/gifts/coverage.server";
 import { buildGiftViews } from "../modules/gifts/views.server";
 import {
-  GiftsNav,
-  CampaignBadges,
-  IndexBar,
+  GiftsShell,
+  CampaignPills,
+  RebuildButton,
   openProductInAdmin,
+  fmtWhen,
 } from "../modules/gifts/ui";
+import {
+  PageHead,
+  Stats,
+  Field,
+  Input,
+  Select,
+  List,
+  Row,
+  Thumb,
+  Pill,
+  Empty,
+} from "../ui/kit";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -40,143 +37,125 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { gifts: views.gifts, updatedAt };
 };
 
-/** Stock chip: out of stock / low / count / not tracked. */
-function StockBadge({ qty }: { qty: number | null }) {
-  if (qty === null) return <Badge>Not tracked</Badge>;
-  if (qty <= 0) return <Badge tone="critical">Out of stock</Badge>;
-  if (qty <= 5) return <Badge tone="warning">{`Low · ${qty}`}</Badge>;
-  return <Badge tone="success">{`${qty} in stock`}</Badge>;
+/** Stock pill: out of stock / low / count / not tracked. */
+function StockPill({ qty }: { qty: number | null }) {
+  if (qty === null) return <Pill>Not tracked</Pill>;
+  if (qty <= 0) return <Pill tone="danger">Out of stock</Pill>;
+  if (qty <= 5) return <Pill tone="warn">{`Low · ${qty}`}</Pill>;
+  return <Pill tone="ok">{`${qty} in stock`}</Pill>;
 }
 
 export default function GiftItems() {
   const { gifts, updatedAt } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [stock, setStock] = useState("all");
+  const [show, setShow] = useState("all");
 
   const q = query.trim().toLowerCase();
   const visible = gifts.filter((g) => {
-    if (stock === "risk" && !(g.totalInventory !== null && g.totalInventory <= 5))
+    if (show === "risk" && !(g.totalInventory !== null && g.totalInventory <= 5))
       return false;
-    if (stock === "active" && g.activeTriggerCount === 0) return false;
+    if (show === "active" && g.activeTriggerCount === 0) return false;
     if (!q) return true;
     return [g.title, g.vendor].join(" ").toLowerCase().includes(q);
   });
 
+  const beingGiven = gifts.filter((g) => g.activeTriggerCount > 0).length;
+  const atRisk = gifts.filter(
+    (g) => g.totalInventory !== null && g.totalInventory <= 5,
+  ).length;
+
   return (
-    <Page fullWidth>
-      <TitleBar title="Free gifts" />
-      <BlockStack gap="400">
-        <InlineStack align="space-between" blockAlign="center">
-          <GiftsNav />
-          <IndexBar updatedAt={updatedAt} />
-        </InlineStack>
+    <GiftsShell>
+      <PageHead
+        title="Gifts"
+        subtitle={`Every gift product, how many products give it, and whether stock can keep up · index updated ${fmtWhen(updatedAt)}`}
+        actions={<RebuildButton />}
+      />
 
-        <Card padding="0">
-          <BlockStack>
-            <div style={{ padding: 12 }}>
-              <InlineStack gap="300" wrap blockAlign="end">
-                <div style={{ minWidth: 240, flex: 1 }}>
-                  <TextField
-                    label="Search"
-                    labelHidden
-                    prefix={<SearchIcon width={16} />}
-                    placeholder="Search gifts"
-                    value={query}
-                    onChange={setQuery}
-                    autoComplete="off"
-                    clearButton
-                    onClearButtonClick={() => setQuery("")}
-                  />
+      <Stats
+        items={[
+          { label: "Gift products", value: gifts.length },
+          { label: "Being given now", value: beingGiven },
+          { label: "Low or out of stock", value: atRisk, danger: atRisk > 0 },
+        ]}
+      />
+
+      <div
+        className="kb-filters"
+        style={{ ["--cols" as string]: "minmax(240px,2fr) minmax(180px,1fr)" }}
+      >
+        <Field label="Search">
+          <Input
+            type="search"
+            placeholder="Gift name or brand"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </Field>
+        <Field label="Show">
+          <Select value={show} onChange={(e) => setShow(e.target.value)}>
+            <option value="all">All gifts</option>
+            <option value="active">Being given now</option>
+            <option value="risk">Low / out of stock</option>
+          </Select>
+        </Field>
+      </div>
+
+      <div className="kb-summary">
+        <span>{`${visible.length} gift${visible.length === 1 ? "" : "s"}`}</span>
+      </div>
+
+      <List
+        cols="minmax(0,1.6fr) 140px 160px minmax(0,1.3fr)"
+        head={["Gift", "Stock", "Given by", "Campaigns"]}
+      >
+        {gifts.length === 0 ? (
+          <Empty title="No gifts configured yet">
+            Gift products from your campaigns will appear here.
+          </Empty>
+        ) : visible.length === 0 ? (
+          <Empty title="No gifts match these filters" />
+        ) : (
+          visible.map((g) => (
+            <Row key={g.productId}>
+              <div className="kb-ident">
+                <Thumb src={g.image} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="kb-overline">{g.vendor || "—"}</div>
+                  <button
+                    type="button"
+                    className="kb-title"
+                    title="Open in Shopify admin"
+                    onClick={() => openProductInAdmin(g.numericId)}
+                  >
+                    {g.title}
+                  </button>
+                  {g.status && g.status !== "ACTIVE" ? (
+                    <div style={{ marginTop: 3 }}>
+                      <Pill tone={g.status === "DELETED" ? "danger" : "warn"}>
+                        {g.status.toLowerCase()}
+                      </Pill>
+                    </div>
+                  ) : null}
                 </div>
-                <Select
-                  label="Show"
-                  labelInline
-                  options={[
-                    { label: "All gifts", value: "all" },
-                    { label: "Being given now", value: "active" },
-                    { label: "Low / out of stock", value: "risk" },
-                  ]}
-                  value={stock}
-                  onChange={setStock}
-                />
-              </InlineStack>
-            </div>
-
-            {gifts.length === 0 ? (
-              <EmptyState
-                heading="No gifts configured yet"
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-              >
-                <p>Gift products from your campaigns will appear here.</p>
-              </EmptyState>
-            ) : (
-              <IndexTable
-                resourceName={{ singular: "gift", plural: "gifts" }}
-                itemCount={visible.length}
-                selectable={false}
-                headings={[
-                  { title: "Gift" },
-                  { title: "Stock" },
-                  { title: "Given by" },
-                  { title: "Campaigns" },
-                ]}
-              >
-                {visible.map((g, i) => (
-                  <IndexTable.Row id={g.productId} key={g.productId} position={i}>
-                    <IndexTable.Cell>
-                      <InlineStack gap="300" blockAlign="center" wrap={false}>
-                        <Thumbnail source={g.image || ImageIcon} alt="" size="small" />
-                        <BlockStack gap="050">
-                          <Link
-                            removeUnderline
-                            monochrome
-                            onClick={() => openProductInAdmin(g.numericId)}
-                          >
-                            <Text as="span" fontWeight="semibold">
-                              {g.title}
-                            </Text>
-                          </Link>
-                          <InlineStack gap="100">
-                            <Text as="span" variant="bodySm" tone="subdued">
-                              {g.vendor || ""}
-                            </Text>
-                            {g.status && g.status !== "ACTIVE" ? (
-                              <Badge tone={g.status === "DELETED" ? "critical" : "warning"}>
-                                {g.status.toLowerCase()}
-                              </Badge>
-                            ) : null}
-                          </InlineStack>
-                        </BlockStack>
-                      </InlineStack>
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <StockBadge qty={g.totalInventory} />
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <BlockStack gap="050">
-                        <Link
-                          onClick={() =>
-                            navigate(`/app/gifts/products?gift=${g.numericId}`)
-                          }
-                        >
-                          {`${g.triggerCount} product${g.triggerCount === 1 ? "" : "s"}`}
-                        </Link>
-                        <Text as="span" variant="bodySm" tone="subdued">
-                          {`${g.activeTriggerCount} giving it now`}
-                        </Text>
-                      </BlockStack>
-                    </IndexTable.Cell>
-                    <IndexTable.Cell>
-                      <CampaignBadges campaigns={g.campaigns} />
-                    </IndexTable.Cell>
-                  </IndexTable.Row>
-                ))}
-              </IndexTable>
-            )}
-          </BlockStack>
-        </Card>
-      </BlockStack>
-    </Page>
+              </div>
+              <StockPill qty={g.totalInventory} />
+              <div>
+                <Link
+                  to={`/app/gifts/products?gift=${g.numericId}`}
+                  prefetch="intent"
+                  className="kb-title"
+                  style={{ fontWeight: 600, color: "var(--link)" }}
+                >
+                  {`${g.triggerCount} product${g.triggerCount === 1 ? "" : "s"}`}
+                </Link>
+                <div className="kb-sub">{`${g.activeTriggerCount} giving it now`}</div>
+              </div>
+              <CampaignPills campaigns={g.campaigns} />
+            </Row>
+          ))
+        )}
+      </List>
+    </GiftsShell>
   );
 }
