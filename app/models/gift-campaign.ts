@@ -36,7 +36,7 @@ export type GiftCampaign = {
    */
   perQualifying: number;
   /**
-   * "fixed"  = auto-add the single (first) gift.
+   * "fixed"  = (retired in the editor) only the first gift is offered.
    * "choice" = customer picks `chooseCount` gifts from the set.
    * "all"    = every gift is auto-added; a multi-variant gift still lets the
    *            customer choose its variant, and one "No thanks" declines the set.
@@ -135,7 +135,7 @@ export function emptyCampaign(): GiftCampaign {
     startsAt: "",
     endsAt: "",
     perQualifying: 1,
-    rewardMode: "fixed",
+    rewardMode: "choice",
     chooseCount: 1,
     badgeText: "🎁 Free gift",
     subtitle: "Choose your free gift:",

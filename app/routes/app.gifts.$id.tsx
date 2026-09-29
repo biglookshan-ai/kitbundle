@@ -561,7 +561,7 @@ export default function GiftCampaignEditor() {
           </Panel>
 
           <Panel title="Reward">
-            <RewardSettings c={c} patch={patch} />
+            <RewardSettings c={c} patch={patch} legacyFixed={initial.rewardMode === "fixed"} />
           </Panel>
 
           <Panel title="Storefront">
@@ -605,9 +605,12 @@ export default function GiftCampaignEditor() {
 function RewardSettings({
   c,
   patch,
+  legacyFixed,
 }: {
   c: GiftCampaign;
   patch: (p: Partial<GiftCampaign>) => void;
+  /** Saved with the retired "first gift only" mode — keep showing it. */
+  legacyFixed: boolean;
 }) {
   const n = c.giftProducts.length;
   const { k, q } = rewardRule(c);
@@ -626,12 +629,15 @@ function RewardSettings({
       title: "Customer chooses",
       desc: "They pick which gift(s) they want.",
     },
-    {
-      value: "fixed",
-      title: "First gift only",
-      desc: "Only the first gift in the list is given.",
-    },
   ];
+  // "First gift only" is retired (it just hid every gift but the first — the
+  // same as a campaign with one gift). Campaigns already saved with it keep it.
+  if (legacyFixed)
+    modes.push({
+      value: "fixed",
+      title: "First gift only (old mode)",
+      desc: "Only the first gift is shown. Switch to another option to retire it.",
+    });
   const buyer = c.triggerProducts[0]?.title || "a qualifying product";
   const name = (i: number) => c.giftProducts[i]?.title || `Gift ${i + 1}`;
   const example = (units: number) => {
