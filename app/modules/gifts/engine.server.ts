@@ -796,3 +796,66 @@ export async function lastSync(shop: string) {
     ? { at: r.createdAt.toISOString(), kind: r.kind, changed: r.changed, errors: r.errors }
     : null;
 }
+
+/* ------------------------------------------------------------------ */
+/* Preview (editor, before saving)                                     */
+/* ------------------------------------------------------------------ */
+
+export type PreviewProduct = {
+  productId: string;
+  title: string;
+  vendor: string;
+  image: string | null;
+  status: string;
+  via: string[];
+  isNew: boolean;
+};
+
+/**
+ * Resolve an UNSAVED campaign exactly like a sync would (same expansion and
+ * matching code), and compare with what the saved campaign covers now.
+ * Read-only: nothing is written.
+ */
+export async function previewCoverage(
+  admin: AdminGraphql,
+  shop: string,
+  c: GiftCampaign,
+  limit = 100,
+): Promise<{
+  total: number;
+  added: number;
+  removed: number;
+  products: PreviewProduct[];
+  removedTitles: string[];
+}> {
+  const ctx = newCtx(admin);
+  const members = await resolveCampaign(ctx, c);
+  await ctx.fill(c.triggerProducts.map((p) => p.id));
+  const saved = await prisma.giftCoverage.findMany({
+    where: { shop, campaignId: c.id, role: "trigger" },
+    select: { productId: true, title: true },
+  });
+  const savedIds = new Set(saved.map((r) => r.productId));
+  const all: PreviewProduct[] = [...members].map(([id, m]) => {
+    const f = ctx.facts.get(id);
+    return {
+      productId: id,
+      title: f?.title || c.triggerProducts.find((x) => x.id === id)?.title || id,
+      vendor: f?.vendor ?? "",
+      image: f?.image ?? null,
+      status: f ? f.status : "DELETED",
+      via: m.via,
+      isNew: !savedIds.has(id),
+    };
+  });
+  // New ones first, then by title.
+  all.sort((a, b) => Number(b.isNew) - Number(a.isNew) || a.title.localeCompare(b.title));
+  const removed = saved.filter((r) => !members.has(r.productId));
+  return {
+    total: all.length,
+    added: all.filter((p) => p.isNew).length,
+    removed: removed.length,
+    products: all.slice(0, limit),
+    removedTitles: removed.slice(0, 30).map((r) => r.title || r.productId),
+  };
+}

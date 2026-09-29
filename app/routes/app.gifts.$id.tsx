@@ -1,7 +1,13 @@
 import { useState } from "react";
+import type { PreviewProduct } from "../modules/gifts/engine.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { Link, useLoaderData, useFetcher } from "@remix-run/react";
+import {
+  Link,
+  useLoaderData,
+  useFetcher,
+  type ShouldRevalidateFunction,
+} from "@remix-run/react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -20,6 +26,7 @@ import {
   type Ref,
 } from "../models/gift-campaign";
 import { GiftsShell, STATE_TONE, STATE_LABEL } from "../modules/gifts/ui";
+import { previewCoverage } from "../modules/gifts/engine.server";
 import {
   PageHead,
   Panel,
@@ -146,6 +153,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } catch {
     return { ok: false, error: "Invalid payload" };
   }
+  // Read-only coverage preview of the unsaved campaign.
+  if (form.get("intent") === "preview") {
+    if (!hasTrigger(campaign)) {
+      return { ok: false, error: "Add a trigger first.", preview: null };
+    }
+    try {
+      const preview = await previewCoverage(admin, session.shop, campaign);
+      return { ok: true, error: null, preview };
+    } catch (e) {
+      return { ok: false, error: `Preview failed: ${(e as Error)?.message || e}`, preview: null };
+    }
+  }
   // Gate NEW campaigns only — editing an existing one is always allowed.
   const exists = campaign.id
     ? await prisma.giftCampaign.findFirst({
@@ -172,6 +191,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!r.ok) return { ok: false, error: r.errors.join("; ") };
   return redirect("/app/gifts");
 };
+
+// A coverage preview is read-only — don't reload the loader after it.
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  formData,
+  defaultShouldRevalidate,
+}) =>
+  formData?.get("intent") === "preview" ? false : defaultShouldRevalidate;
 
 function toLocalInput(iso?: string) {
   if (!iso) return "";
@@ -542,6 +568,8 @@ export default function GiftCampaignEditor() {
             </div>
           </Panel>
 
+          <CoveragePreview c={c} isNew={isNew} />
+
           <Panel
             title="Gift — get free"
             actions={
@@ -864,5 +892,118 @@ function OverlapSettings({
         <div className="kb-sub">No other campaign shares products with this one.</div>
       )}
     </div>
+  );
+}
+
+/** Trigger fields only — a change here makes a preview stale. */
+const triggerKey = (c: GiftCampaign) =>
+  JSON.stringify([
+    c.triggerProducts.map((p) => p.id),
+    c.triggerCollections.map((p) => p.id),
+    c.triggerTags,
+    c.triggerVendors,
+    c.triggerTypes,
+    c.allProducts,
+    c.excludeTags,
+    c.excludeProducts.map((p) => p.id),
+  ]);
+
+type PreviewResult = {
+  total: number;
+  added: number;
+  removed: number;
+  products: PreviewProduct[];
+  removedTitles: string[];
+};
+
+/** "Which products will this cover?" — resolved server-side before saving. */
+function CoveragePreview({ c, isNew }: { c: GiftCampaign; isNew: boolean }) {
+  const fetcher = useFetcher<{ ok: boolean; error: string | null; preview?: PreviewResult | null }>();
+  const [checkedKey, setCheckedKey] = useState<string | null>(null);
+  const busy = fetcher.state !== "idle";
+  const data = fetcher.data;
+  const p = data?.preview ?? null;
+  const stale = p && checkedKey !== triggerKey(c);
+  const run = () => {
+    setCheckedKey(triggerKey(c));
+    fetcher.submit(
+      { intent: "preview", campaign: JSON.stringify(c) },
+      { method: "POST" },
+    );
+  };
+  return (
+    <Panel
+      title="Coverage preview"
+      actions={
+        <Btn size="tiny" variant={p && !stale ? "default" : "primary"} loading={busy} onClick={run}>
+          {p ? "Preview again" : "Preview products"}
+        </Btn>
+      }
+    >
+      {!p && !data?.error ? (
+        <p className="kb-sub" style={{ margin: 0 }}>
+          See exactly which products these triggers cover — before you save.
+          Nothing changes until you click Save campaign.
+        </p>
+      ) : null}
+      {data?.error ? <Banner tone="danger">{data.error}</Banner> : null}
+      {p ? (
+        <div className="kb-stack kb-stack--tight">
+          {stale ? (
+            <Banner tone="warn">Triggers changed since this preview — preview again.</Banner>
+          ) : null}
+          <div className="kb-inline" style={{ gap: 8 }}>
+            <b style={{ fontSize: 15 }}>{`${p.total} product${p.total === 1 ? "" : "s"}`}</b>
+            {!isNew ? (
+              <>
+                {p.added ? <Pill tone="ok">{`+${p.added} new`}</Pill> : null}
+                {p.removed ? <Pill tone="danger">{`−${p.removed} removed`}</Pill> : null}
+                {!p.added && !p.removed ? <Pill>No change from saved</Pill> : null}
+              </>
+            ) : null}
+          </div>
+          {p.removed ? (
+            <div className="kb-box kb-small">
+              <b>Will stop giving the gift:</b>{" "}
+              {p.removedTitles.join(", ")}
+              {p.removed > p.removedTitles.length
+                ? ` and ${p.removed - p.removedTitles.length} more`
+                : ""}
+            </div>
+          ) : null}
+          {p.products.length ? (
+            <div className="kb-refs" style={{ maxHeight: 420, overflowY: "auto" }}>
+              {p.products.map((x) => (
+                <div className="kb-ref" key={x.productId}>
+                  <Thumb src={x.image} size={36} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="kb-inline" style={{ gap: 6, flexWrap: "nowrap" }}>
+                      <span className="kb-title" style={{ fontWeight: 500 }}>
+                        {x.title}
+                      </span>
+                      {x.isNew && !isNew ? <Pill tone="ok">New</Pill> : null}
+                      {x.status && x.status !== "ACTIVE" ? (
+                        <Pill tone="warn">{x.status.toLowerCase()}</Pill>
+                      ) : null}
+                    </div>
+                    <div className="kb-sub">
+                      {[x.vendor, x.via.join(" · ")].filter(Boolean).join(" — ")}
+                    </div>
+                  </div>
+                  <span />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="kb-sub" style={{ margin: 0 }}>
+              No products match these triggers.
+            </p>
+          )}
+          {p.total > p.products.length ? (
+            <div className="kb-sub">{`Showing ${p.products.length} of ${p.total}.`}</div>
+          ) : null}
+        </div>
+      ) : null}
+    </Panel>
   );
 }

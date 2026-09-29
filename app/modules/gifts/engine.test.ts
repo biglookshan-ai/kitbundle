@@ -53,7 +53,8 @@ vi.mock("../../db.server", () => ({
 }));
 vi.mock("../../shopify.server", () => ({ unauthenticated: { admin: vi.fn() } }));
 
-import { syncAll, syncProduct } from "./engine.server";
+import { previewCoverage, syncAll, syncProduct } from "./engine.server";
+import { rowToCampaign } from "../../models/gift-campaign";
 
 /* ---------------- fake store ---------------- */
 const P = (n: number) => `gid://shopify/Product/${n}`;
@@ -227,5 +228,20 @@ describe("gift sync engine", () => {
     db.giftCoverage = [{ shop: "s", campaignId: "OLD", productId: P(2), role: "trigger" }];
     await syncAll(admin, "s");
     expect(ids(P(2))).toEqual([]);
+  });
+
+  it("previews an unsaved campaign against its saved coverage, read-only", async () => {
+    await syncAll(admin, "s");
+    writes = [];
+    // Edit campaign B (brand DZOFILM → P1, P3) to brand Tilta (→ P2) without saving.
+    const edited = { ...rowToCampaign(db.giftCampaign.find((c) => c.id === "B")!), triggerVendors: ["Tilta"] };
+    const p = await previewCoverage(admin, "s", edited);
+    expect(p.total).toBe(1);
+    expect(p.products[0].productId).toBe(P(2));
+    expect(p.products[0].isNew).toBe(true);
+    expect(p.products[0].via).toEqual(["Brand: Tilta"]);
+    expect(p.added).toBe(1);
+    expect(p.removed).toBe(2);
+    expect(writes).toEqual([]); // nothing written
   });
 });
