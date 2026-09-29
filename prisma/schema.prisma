@@ -70,6 +70,10 @@ model GiftCampaign {
   endsAt        DateTime?
   perQualifying Int       @default(1) // free gifts per qualifying unit (buy 2 -> 2)
   rewardMode    String    @default("fixed") // "fixed" (auto-add) | "choice" (picker)
+  chooseCount   Int       @default(1) // choice mode: how many different gifts
+  // 1 = legacy rows (All mode ignored perQualifying); 2 = perQualifying is the
+  // per-gift quantity in every mode. Saving from the current editor writes 2.
+  rulesVersion  Int       @default(1)
   badgeText     String    @default("")
   subtitle      String    @default("") // storefront prompt above the gift picker
   hideWhenSoldOut Boolean @default(false) // hide sold-out gifts / the group

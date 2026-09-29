@@ -18,6 +18,11 @@ query RunInput {
     lines {
       id
       quantity
+      cost {
+        amountPerQuantity {
+          amount
+        }
+      }
       cgpGrp: attribute(key: "_cgp_grp") {
         value
       }

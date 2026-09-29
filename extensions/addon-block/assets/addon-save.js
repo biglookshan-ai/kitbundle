@@ -3293,23 +3293,14 @@
           // selected one isn't among them (matches the hidden promo + the Function).
           var tv = c.triggerVariants || [];
           if (tv.length && tv.map(String).indexOf(curGiftVid) < 0) return;
-          var qty = Number(c.perQualifying) || 1;
-          if (c.rewardMode === "all") {
-            if (giftChoice[c.id] === GIFT_DECLINE) return; // declined the whole set
-            // One of EVERY gift per qualifying unit being added (perQualifying is
-            // not used in this mode — it would multiply each gift).
-            var eachQty = addUnitsOf(plan);
-            (c.giftHandles || []).forEach(function (h) {
-              items.push({ handle: h, quantity: eachQty, _giftCampId: c.id });
+          // One set per qualifying unit being added: q of each chosen gift.
+          var eachQty = c.qtyPerGift * Math.max(1, addUnitsOf(plan));
+          chosenGifts(c).forEach(function (h) {
+            items.push({
+              handle: h,
+              quantity: eachQty,
+              _giftCampId: c.id, // resolved to a variant id + tag below
             });
-            return;
-          }
-          var desired = chosenGift(c);
-          if (!desired) return;
-          items.push({
-            handle: desired,
-            quantity: qty,
-            _giftCampId: c.id, // resolved to a variant id + tag below
           });
         });
 
@@ -3627,9 +3618,31 @@
     return handles[0];
   }
 
+  // Multi-pick ("choice" with chooseCount > 1): giftChoice holds an ARRAY.
+  function isMulti(c) {
+    return c.rewardMode === "choice" && c.chooseCount > 1;
+  }
+  // Every gift handle the customer currently gets from a campaign.
+  function chosenGifts(c) {
+    var handles = c.giftHandles || [];
+    var sel = giftChoice[c.id];
+    if (sel === GIFT_DECLINE) return [];
+    if (c.rewardMode === "all") return handles.slice();
+    if (isMulti(c)) {
+      var arr = Array.isArray(sel) ? sel : handles.slice(0, c.chooseCount);
+      return arr
+        .filter(function (h) {
+          return handles.indexOf(h) >= 0;
+        })
+        .slice(0, c.chooseCount);
+    }
+    var one = chosenGift(c);
+    return one ? [one] : [];
+  }
+
   // How many gift units the current choices would add to the cart — mirrors the
-  // commit logic (trigger-variant gate, reward mode, "No thanks"). `units` =
-  // qualifying units being added; "all" mode gives one of every gift per unit.
+  // commit logic (trigger-variant gate, chosen gifts, "No thanks"). `units` =
+  // qualifying units being added; each chosen gift comes q times per unit.
   function campaignGiftUnits(units) {
     var n = 0;
     var u = units > 0 ? units : 1;
@@ -3638,12 +3651,7 @@
       if (!giftActive(c)) return;
       var tv = c.triggerVariants || [];
       if (tv.length && tv.map(String).indexOf(cur) < 0) return;
-      if (c.rewardMode === "all") {
-        if (giftChoice[c.id] === GIFT_DECLINE) return;
-        n += (c.giftHandles || []).length * u;
-      } else if (chosenGift(c)) {
-        n += Number(c.perQualifying) || 1;
-      }
+      n += chosenGifts(c).length * c.qtyPerGift * u;
     });
     return n;
   }
@@ -3718,17 +3726,51 @@
         section.appendChild(list);
         // "all" mode: the per-gift included-checks, so "No thanks" can grey them.
         var giftCheckEls = [];
+        // Multi-pick: ticking a gift un-ticks "No thanks" (set once it exists).
+        var declineInputRef = null;
 
         // Default = first shown gift. If the prior choice is now hidden, reset.
         var shownHandles = idx.map(function (i) {
           return handles[i];
         });
-        if (giftChoice[c.id] === undefined) giftChoice[c.id] = shownHandles[0];
-        if (
-          giftChoice[c.id] !== GIFT_DECLINE &&
-          shownHandles.indexOf(giftChoice[c.id]) < 0
-        ) {
-          giftChoice[c.id] = shownHandles[0];
+        var multi = isMulti(c);
+        var limit = Math.min(c.chooseCount, shownHandles.length);
+        if (multi) {
+          // Default = the first k shown gifts; drop any that are now hidden.
+          if (giftChoice[c.id] === undefined) {
+            giftChoice[c.id] = shownHandles.slice(0, limit);
+          } else if (Array.isArray(giftChoice[c.id])) {
+            giftChoice[c.id] = giftChoice[c.id].filter(function (h) {
+              return shownHandles.indexOf(h) >= 0;
+            });
+          }
+        } else {
+          if (giftChoice[c.id] === undefined) giftChoice[c.id] = shownHandles[0];
+          if (
+            giftChoice[c.id] !== GIFT_DECLINE &&
+            shownHandles.indexOf(giftChoice[c.id]) < 0
+          ) {
+            giftChoice[c.id] = shownHandles[0];
+          }
+        }
+        // Multi-pick: "Choose 2 · 1 selected", and grey out the rest at the limit.
+        var multiInputs = [];
+        var limitEl = null;
+        var syncMulti = function () {
+          if (!multi) return;
+          var sel = Array.isArray(giftChoice[c.id]) ? giftChoice[c.id] : [];
+          multiInputs.forEach(function (m) {
+            m.input.checked = sel.indexOf(m.h) >= 0;
+            m.input.disabled = !m.input.checked && sel.length >= limit;
+          });
+          if (limitEl) {
+            limitEl.textContent =
+              "Choose " + limit + " · " + sel.length + " selected";
+          }
+        };
+        if (multi) {
+          limitEl = el("div", "cgp-free__limit", "");
+          section.insertBefore(limitEl, list);
         }
 
         idx.forEach(function (i) {
@@ -3745,6 +3787,21 @@
             selector = el("span", "cgp-check" + (includedNow ? " is-on" : ""));
             selector.setAttribute("aria-label", "Included free");
             giftCheckEls.push(selector);
+          } else if (multi) {
+            selector = el("input", "cgp-free__radio");
+            selector.type = "checkbox";
+            multiInputs.push({ input: selector, h: h });
+            selector.addEventListener("change", function () {
+              var sel = Array.isArray(giftChoice[c.id]) ? giftChoice[c.id].slice() : [];
+              var at = sel.indexOf(h);
+              if (selector.checked && at < 0 && sel.length < limit) sel.push(h);
+              if (!selector.checked && at >= 0) sel.splice(at, 1);
+              giftChoice[c.id] = sel;
+              if (declineInputRef) declineInputRef.checked = false;
+              list.classList.remove("is-declined");
+              syncMulti();
+              notifyGiftChange();
+            });
           } else {
             selector = el("input", "cgp-free__radio");
             selector.type = "radio";
@@ -3802,7 +3859,13 @@
           info.appendChild(nameRow);
           // Second line: FREE tag first, then the struck value at the same size.
           var metaRow = el("div", "cgp-free__meta-row");
-          metaRow.appendChild(el("span", "cgp-free__badge", "FREE"));
+          metaRow.appendChild(
+            el(
+              "span",
+              "cgp-free__badge",
+              c.qtyPerGift > 1 ? "FREE ×" + c.qtyPerGift : "FREE",
+            ),
+          );
           metaRow.appendChild(giftPriceSpan);
           info.appendChild(metaRow);
 
@@ -3857,7 +3920,17 @@
               paintGiftValue(picked);
               // Choosing a variant implies choosing this gift (radio modes only;
               // in "all" mode every gift is already included).
-              if (c.rewardMode !== "all") {
+              if (multi) {
+                var sel = Array.isArray(giftChoice[c.id]) ? giftChoice[c.id].slice() : [];
+                if (sel.indexOf(h) < 0 && sel.length < limit) {
+                  sel.push(h);
+                  giftChoice[c.id] = sel;
+                  if (declineInputRef) declineInputRef.checked = false;
+                  list.classList.remove("is-declined");
+                  syncMulti();
+                  notifyGiftChange();
+                }
+              } else if (c.rewardMode !== "all") {
                 selector.checked = true;
                 giftChoice[c.id] = h;
               }
@@ -3871,7 +3944,21 @@
         var declineRow = el("label", "cgp-free__row cgp-free__row--decline");
         list.appendChild(declineRow);
         var declineInput = el("input", "cgp-free__radio");
-        if (c.rewardMode === "all") {
+        declineInputRef = declineInput;
+        if (multi) {
+          // Declines every pick; unticking restores the default picks.
+          declineInput.type = "checkbox";
+          declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
+          list.classList.toggle("is-declined", declineInput.checked);
+          declineInput.addEventListener("change", function () {
+            giftChoice[c.id] = declineInput.checked
+              ? GIFT_DECLINE
+              : shownHandles.slice(0, limit);
+            list.classList.toggle("is-declined", declineInput.checked);
+            syncMulti();
+            notifyGiftChange();
+          });
+        } else if (c.rewardMode === "all") {
           // A single checkbox that declines the whole set (gifts are otherwise
           // all included — there's no per-gift radio to opt out of).
           declineInput.type = "checkbox";
@@ -3905,12 +3992,13 @@
           el(
             "span",
             "cgp-free__decline",
-            c.rewardMode === "all"
+            c.rewardMode === "all" || multi
               ? "No thanks — I don't want the free gifts"
               : "No thanks — I don't want the free gift",
           ),
         );
 
+        syncMulti();
         host.appendChild(section);
       });
       host.hidden = !any;
@@ -3936,6 +4024,21 @@
         id: e.id,
         rewardMode: e.rewardMode || "fixed",
         perQualifying: Number(e.perQualifying) || 1,
+        // Unified rule (same fallbacks as the discount Function): k different
+        // gifts in choice mode; q of each gift per qualifying unit. Older stamps:
+        // "all" gave one of each; fixed/choice gave perQualifying of one gift.
+        chooseCount:
+          e.rewardMode === "choice"
+            ? Math.max(1, Math.floor(Number(e.chooseCount)) || 1)
+            : 1,
+        qtyPerGift: Math.max(
+          1,
+          Math.floor(
+            Number(e.qtyPerGift) ||
+              (e.rewardMode === "all" ? 1 : Number(e.perQualifying)) ||
+              1,
+          ),
+        ),
         startsAt: e.startsAt || "",
         endsAt: e.endsAt || "",
         badge: e.badge || "🎁 Free gift",

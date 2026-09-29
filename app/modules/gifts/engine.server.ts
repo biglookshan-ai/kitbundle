@@ -21,6 +21,7 @@ import {
   GIFT_TRIGGER_NAMESPACE,
   GIFT_TRIGGER_KEY,
   rowToCampaign,
+  rewardRule,
   type GiftCampaign,
 } from "../../models/gift-campaign";
 
@@ -135,6 +136,7 @@ function campaignWindow(
  * campaign; it's gone.)
  */
 function campaignEntry(c: GiftCampaign, tz: string) {
+  const rule = rewardRule(c);
   const giftVariants: Record<string, string[]> = {};
   for (const g of c.giftProducts) {
     const t = gidTail(g.id);
@@ -150,7 +152,10 @@ function campaignEntry(c: GiftCampaign, tz: string) {
     giftIds: c.giftProducts.map((g) => gidTail(g.id)).filter(Boolean),
     // { productIdTail: [variantIdTail] } for gifts that restrict variants.
     giftVariants,
-    perQualifying: Math.max(1, c.perQualifying || 1),
+    perQualifying: rule.q,
+    // Unified reward rule: k different gifts, q of each, per qualifying unit.
+    chooseCount: rule.k,
+    qtyPerGift: rule.q,
     badge: c.badgeText || "",
     subtitle: c.subtitle || "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,

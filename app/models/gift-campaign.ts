@@ -30,15 +30,20 @@ export type GiftCampaign = {
   enabled: boolean;
   startsAt: string; // ISO-8601 or ""
   endsAt: string; // ISO-8601 or ""
-  /** Free gifts granted per qualifying unit (buy 2 -> 2). */
+  /**
+   * Free units of EACH gift per qualifying unit (q). Buy 2 mains with q = 1 →
+   * 2 of each chosen gift.
+   */
   perQualifying: number;
   /**
    * "fixed"  = auto-add the single (first) gift.
-   * "choice" = customer picks one gift from the set.
+   * "choice" = customer picks `chooseCount` gifts from the set.
    * "all"    = every gift is auto-added; a multi-variant gift still lets the
    *            customer choose its variant, and one "No thanks" declines the set.
    */
   rewardMode: "fixed" | "choice" | "all";
+  /** Choice mode: how many different gifts the customer picks (k). */
+  chooseCount: number;
   badgeText: string;
   /** Storefront prompt shown above the gift picker (customizable per campaign). */
   subtitle: string;
@@ -96,6 +101,28 @@ export type ProductGiftInfo = {
   gifts: { title: string; image: string | null }[];
 };
 
+/** The effective reward rule: k different gifts, q of each, per qualifying unit. */
+export function rewardRule(c: GiftCampaign): { k: number; q: number; n: number } {
+  const n = c.giftProducts.length;
+  const k =
+    c.rewardMode === "all"
+      ? Math.max(1, n)
+      : c.rewardMode === "choice"
+        ? Math.max(1, Math.min(c.chooseCount || 1, Math.max(1, n)))
+        : 1;
+  return { k, q: Math.max(1, c.perQualifying || 1), n };
+}
+
+/** Plain-English reward summary ("Pick 2 of 5 gifts · 1 of each per item"). */
+export function rewardSummary(c: GiftCampaign): string {
+  const { k, q, n } = rewardRule(c);
+  const each = `${q} of each per item bought`;
+  if (c.rewardMode === "all") return `Every gift (${n}) · ${each}`;
+  if (c.rewardMode === "choice")
+    return k > 1 ? `Pick ${k} of ${n} gifts · ${each}` : `Pick 1 of ${n} gifts · ${q} per item bought`;
+  return `First gift auto-added · ${q} per item bought`;
+}
+
 export function newCampaignId() {
   return `camp_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -109,6 +136,7 @@ export function emptyCampaign(): GiftCampaign {
     endsAt: "",
     perQualifying: 1,
     rewardMode: "fixed",
+    chooseCount: 1,
     badgeText: "🎁 Free gift",
     subtitle: "Choose your free gift:",
     hideWhenSoldOut: false,
@@ -189,7 +217,12 @@ export function rowToCampaign(row: any): GiftCampaign {
     enabled: !!row.enabled,
     startsAt: row.startsAt ? new Date(row.startsAt).toISOString() : "",
     endsAt: row.endsAt ? new Date(row.endsAt).toISOString() : "",
-    perQualifying: Math.max(1, Number(row.perQualifying) || 1),
+    // Legacy All-mode rows ignored perQualifying (one of each gift per unit).
+    perQualifying:
+      row.rewardMode === "all" && (Number(row.rulesVersion) || 1) < 2
+        ? 1
+        : Math.max(1, Number(row.perQualifying) || 1),
+    chooseCount: Math.max(1, Number(row.chooseCount) || 1),
     rewardMode:
       row.rewardMode === "choice"
         ? "choice"

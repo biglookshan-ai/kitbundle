@@ -132,6 +132,8 @@ export async function saveCampaign(
         : c.rewardMode === "all"
           ? "all"
           : "fixed",
+    chooseCount: Math.max(1, Math.floor(Number(c.chooseCount)) || 1),
+    rulesVersion: 2,
     badgeText: c.badgeText,
     subtitle: c.subtitle ?? "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,

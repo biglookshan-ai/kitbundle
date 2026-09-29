@@ -2465,3 +2465,15 @@ a.cgp-modal__cname:hover {
   color: var(--cgp-ink);
   cursor: pointer;
 }
+
+/* Multi-pick gifts: "Choose 2 · 1 selected"; unticked boxes grey at the limit. */
+.cgp-free__limit {
+  margin: -6px 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cgp-ink);
+}
+.cgp-free__radio:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

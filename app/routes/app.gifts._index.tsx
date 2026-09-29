@@ -10,6 +10,7 @@ import {
 } from "../models/gift-campaign.server";
 import {
   campaignState,
+  rewardSummary,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -267,14 +268,7 @@ export default function GiftCampaigns() {
             const covers = coverage[c.id] ?? 0;
             const meta = [
               `Covers ${covers} product${covers === 1 ? "" : "s"}`,
-              c.rewardMode === "all"
-                ? "every gift, 1 per item bought"
-                : `Buy 1 → get ${c.perQualifying} free`,
-              c.rewardMode === "choice"
-                ? "customer picks one"
-                : c.rewardMode === "all"
-                  ? "all gifts auto-added"
-                  : "first gift auto-added",
+              rewardSummary(c),
               c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
               c.startsAt && state === "scheduled"
                 ? `starts ${fmtDate(c.startsAt)}`

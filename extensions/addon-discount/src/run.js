@@ -40,6 +40,33 @@ function clampPercent(value) {
   return Math.min(100, Math.max(0, n));
 }
 
+/**
+ * A gift campaign's reward rule from its stamp: k = how many DIFFERENT gifts
+ * may be free, q = free units of each gift per qualifying unit. Stamps written
+ * before `chooseCount`/`qtyPerGift` existed: "all" gave one of every gift per
+ * unit (perQualifying was ignored); "fixed"/"choice" gave perQualifying units of
+ * one gift.
+ */
+function giftRuleOf(e) {
+  const mode = e && e.rewardMode;
+  const nGifts = Array.isArray(e && e.giftIds) ? e.giftIds.length : 0;
+  const k =
+    mode === "all"
+      ? Math.max(1, nGifts)
+      : mode === "choice"
+        ? Math.max(1, Math.floor(Number(e.chooseCount)) || 1)
+        : 1;
+  const q = Math.max(
+    1,
+    Math.floor(
+      Number(e && e.qtyPerGift) ||
+        (mode === "all" ? 1 : Number(e && e.perQualifying)) ||
+        1,
+    ),
+  );
+  return { k, q };
+}
+
 /** Numeric tail of a gid, for tolerant variant id comparison. */
 function gidTail(id) {
   return String(id ?? "").split("/").pop();
@@ -418,23 +445,26 @@ export function run(input) {
 
   // 2c. GIFT-CAMPAIGN eligibility, handled by the MAIN node (not a separate gift
   //     node — a 3rd product-discount would be dropped when a limited-bundle node
-  //     is also active). Read each trigger product's `gift_trigger` stamp:
-  //       allowance[campId] += (qualifying line qty) × perQualifying
-  //     A "qualifying" line is a real purchase unit: a plain/shared/bundle MAIN.
+  //     is also active). Read each trigger product's `gift_trigger` stamp.
+  //     One rule for every reward mode ("pick k of N gifts, q of each, per
+  //     qualifying unit"):
+  //       - each gift PRODUCT may take up to (qualifying units × q) free units;
+  //       - at most k DIFFERENT gift products are free (fixed = 1, choice =
+  //         chooseCount, all = every gift). With more in the cart, the CHEAPEST
+  //         k win, so stuffing in pricier extras gains nothing.
+  //     A "qualifying" unit is a real purchase: a plain/shared/bundle MAIN.
   //     Bundle & add-on COMPONENTS (`_addon_for`) do NOT count — otherwise one
   //     bundle (with several trigger components) would inflate the gift count.
-  /** @type {Map<string, number>} */
-  const giftAllow = new Map();
+  /** @type {Map<string, number>} */ // campaign -> qualifying units
+  const giftQual = new Map();
+  /** @type {Map<string, {k: number, q: number}>} */
+  const giftRule = new Map();
   /** @type {Map<string, Set<string>>} */
   const giftIdsByCamp = new Map();
   // Per campaign: product-id-tail -> Set of offered variant-id-tails. A product
   // absent here (or with an empty set) offers ALL its variants free.
   /** @type {Map<string, Map<string, Set<string>>>} */
   const giftVariantsByCamp = new Map();
-  // "all" mode only: how many free units EACH gift product may take (= number of
-  // qualifying units). Absent = the campaign uses the shared pool in giftAllow.
-  /** @type {Map<string, number>} */
-  const giftPerProductCap = new Map();
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
@@ -464,20 +494,8 @@ export function run(input) {
         !e.triggerVariants.map(String).includes(gidTail(triggerVid))
       )
         continue;
-      const perQ = Number(e.perQualifying) || 1;
-      // "all" mode = ONE of EVERY gift per qualifying unit, capped PER GIFT
-      // PRODUCT (see the distribution below) rather than as one shared pool —
-      // a shared pool let a shopper delete the cheap gift and take an extra of
-      // an expensive one instead. perQualifying deliberately doesn't apply here.
-      const isAll =
-        e.rewardMode === "all" &&
-        Array.isArray(e.giftIds) &&
-        e.giftIds.length > 0;
-      if (isAll) {
-        giftPerProductCap.set(cid, (giftPerProductCap.get(cid) ?? 0) + q);
-      } else {
-        giftAllow.set(cid, (giftAllow.get(cid) ?? 0) + q * perQ);
-      }
+      giftQual.set(cid, (giftQual.get(cid) ?? 0) + q);
+      if (!giftRule.has(cid)) giftRule.set(cid, giftRuleOf(e));
       if (!giftIdsByCamp.has(cid))
         giftIdsByCamp.set(
           cid,
@@ -498,63 +516,50 @@ export function run(input) {
     }
   }
 
-  // Distribute each campaign's allowance across its gift lines ROUND-ROBIN (one
-  // free unit per gift line per pass), so several different gifts each stay free
-  // and a manually-bumped quantity on one gift doesn't starve the others — the
-  // extra units just fall outside the allowance and stay full price.
   /** @type {Map<string, number>} */ // cart line id -> free quantity
   const giftFreeQty = new Map();
   {
-    /** @type {Map<string, Array<{id: string, pid: string, qty: number}>>} */
+    // campaign -> gift product tail -> { cost, lines[] }
+    /** @type {Map<string, Map<string, {cost: number, lines: Array<{id: string, qty: number}>}>>} */
     const byCamp = new Map();
     for (const line of lines) {
       const cid = /** @type {any} */ (line)?.cgpGift?.value;
-      if (!cid) continue;
+      if (!cid || !giftQual.get(cid)) continue;
       const pid = /** @type {any} */ (line?.merchandise)?.product?.id;
+      const tail = gidTail(pid);
       const set = giftIdsByCamp.get(cid);
-      if (set && set.size > 0 && !set.has(gidTail(pid))) continue; // not a valid gift
+      if (set && set.size > 0 && !set.has(tail)) continue; // not a valid gift
       // Variant enforcement: if this gift product restricts variants, the line's
       // variant must be one of them — otherwise it isn't a free gift.
       const vmap = giftVariantsByCamp.get(cid);
       if (vmap && vmap.size > 0) {
-        const allowed = vmap.get(gidTail(pid));
+        const allowed = vmap.get(tail);
         if (allowed && allowed.size > 0) {
           const vid = /** @type {any} */ (line?.merchandise)?.id;
           if (!vid || !allowed.has(gidTail(vid))) continue; // off-list variant
         }
       }
-      const arr = byCamp.get(cid) ?? [];
-      arr.push({ id: line.id, pid, qty: Number(line?.quantity) || 0 });
-      byCamp.set(cid, arr);
+      const cost =
+        Number(/** @type {any} */ (line)?.cost?.amountPerQuantity?.amount) || 0;
+      const prods = byCamp.get(cid) ?? new Map();
+      const cur = prods.get(tail) ?? { cost, lines: [] };
+      cur.cost = Math.min(cur.cost, cost);
+      cur.lines.push({ id: line.id, qty: Number(line?.quantity) || 0 });
+      prods.set(tail, cur);
+      byCamp.set(cid, prods);
     }
-    for (const [cid, glines] of byCamp) {
-      const perProduct = giftPerProductCap.get(cid);
-      if (perProduct !== undefined) {
-        // "all" mode: each gift PRODUCT gets its own cap, so removing one gift
-        // never frees up allowance for extra units of another (pricier) one.
-        /** @type {Map<string, number>} */
-        const usedByProduct = new Map();
-        for (const g of glines) {
-          const key = gidTail(g.pid);
-          const used = usedByProduct.get(key) ?? 0;
-          const take = Math.min(Math.max(0, perProduct - used), g.qty);
-          if (take <= 0) continue;
-          usedByProduct.set(key, used + take);
-          giftFreeQty.set(g.id, (giftFreeQty.get(g.id) ?? 0) + take);
-        }
-        continue;
-      }
-      let rem = giftAllow.get(cid) ?? 0;
-      let progressed = true;
-      while (rem > 0 && progressed) {
-        progressed = false;
-        for (const g of glines) {
-          if (rem <= 0) break;
-          if ((giftFreeQty.get(g.id) ?? 0) < g.qty) {
-            giftFreeQty.set(g.id, (giftFreeQty.get(g.id) ?? 0) + 1);
-            rem -= 1;
-            progressed = true;
-          }
+    for (const [cid, prods] of byCamp) {
+      const rule = giftRule.get(cid) ?? { k: 1, q: 1 };
+      const cap = (giftQual.get(cid) ?? 0) * rule.q;
+      // Cheapest gift products first; only the first k are free.
+      const ranked = [...prods.values()].sort((a, b) => a.cost - b.cost);
+      for (const p of ranked.slice(0, rule.k)) {
+        let left = cap;
+        for (const l of p.lines) {
+          if (left <= 0) break;
+          const take = Math.min(left, l.qty);
+          giftFreeQty.set(l.id, (giftFreeQty.get(l.id) ?? 0) + take);
+          left -= take;
         }
       }
     }

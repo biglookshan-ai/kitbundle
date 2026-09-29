@@ -13,6 +13,7 @@ import {
   campaignState,
   hasTrigger,
   triggerSummary,
+  rewardSummary,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -535,28 +536,45 @@ export default function GiftCampaignEditor() {
                   }
                 >
                   <option value="fixed">Fixed — auto-add the first gift</option>
-                  <option value="choice">Choice — customer picks one gift</option>
+                  <option value="choice">Choice — customer picks gifts</option>
                   <option value="all">All — auto-add every gift</option>
                 </Select>
               </Field>
+              {c.rewardMode === "choice" ? (
+                <Field
+                  label="Customer picks"
+                  help={`How many different gifts they choose, out of ${c.giftProducts.length || "the"} gift${c.giftProducts.length === 1 ? "" : "s"}. 1 = pick one.`}
+                >
+                  <Input
+                    type="number"
+                    min={1}
+                    max={Math.max(1, c.giftProducts.length)}
+                    value={String(c.chooseCount)}
+                    onChange={(e) =>
+                      patch({ chooseCount: Math.max(1, Math.floor(Number(e.target.value)) || 1) })
+                    }
+                  />
+                </Field>
+              ) : null}
               <Field
-                label="Free per qualifying unit"
-                help={
-                  c.rewardMode === "all"
-                    ? "Not used in All mode: every gift is given once per qualifying item (buy 2 → 2 of each)."
-                    : `Buy 1 → get ${c.perQualifying} free per qualifying item.`
-                }
+                label="Quantity of each gift per item bought"
+                help="Buy 2 → 2 sets. Set 2 to give two of each gift per item."
               >
                 <Input
                   type="number"
                   min={1}
                   value={String(c.perQualifying)}
-                  disabled={c.rewardMode === "all"}
                   onChange={(e) =>
-                    patch({ perQualifying: Math.max(1, Number(e.target.value) || 1) })
+                    patch({ perQualifying: Math.max(1, Math.floor(Number(e.target.value)) || 1) })
                   }
                 />
               </Field>
+              <div className="kb-box kb-small">{rewardSummary(c)}</div>
+              {c.rewardMode === "choice" && c.chooseCount > Math.max(1, c.giftProducts.length) ? (
+                <div className="kb-field__error">
+                  {`Only ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"} — customers can pick at most that many.`}
+                </div>
+              ) : null}
             </div>
           </Panel>
 
