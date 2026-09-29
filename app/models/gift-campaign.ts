@@ -44,6 +44,10 @@ export type GiftCampaign = {
   rewardMode: "fixed" | "choice" | "all";
   /** Choice mode: how many different gifts the customer picks (k). */
   chooseCount: number;
+  /** Overlaps: higher wins when campaigns don't combine. */
+  priority: number;
+  /** Never combines with other campaigns on the same product. */
+  exclusive: boolean;
   badgeText: string;
   /** Storefront prompt shown above the gift picker (customizable per campaign). */
   subtitle: string;
@@ -101,6 +105,25 @@ export type ProductGiftInfo = {
   gifts: { title: string; image: string | null }[];
 };
 
+/**
+ * Which of the campaigns on ONE product are actually given (same rule in the
+ * discount Function and the storefront, which apply it to the campaigns live
+ * today). Highest priority first (ties keep the given order):
+ * - the top campaign is exclusive → only it;
+ * - otherwise → every non-exclusive campaign (exclusive ones don't combine).
+ */
+export function overlapWinners<T extends { priority?: number; exclusive?: boolean }>(
+  list: T[],
+): T[] {
+  if (list.length <= 1) return list.slice();
+  const sorted = list
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => (Number(b.c.priority) || 0) - (Number(a.c.priority) || 0) || a.i - b.i)
+    .map((x) => x.c);
+  if (sorted[0].exclusive) return [sorted[0]];
+  return sorted.filter((c) => !c.exclusive);
+}
+
 /** The effective reward rule: k different gifts, q of each, per qualifying unit. */
 export function rewardRule(c: GiftCampaign): { k: number; q: number; n: number } {
   const n = c.giftProducts.length;
@@ -137,6 +160,8 @@ export function emptyCampaign(): GiftCampaign {
     perQualifying: 1,
     rewardMode: "choice",
     chooseCount: 1,
+    priority: 0,
+    exclusive: false,
     badgeText: "🎁 Free gift",
     subtitle: "Choose your free gift:",
     hideWhenSoldOut: false,
@@ -223,6 +248,8 @@ export function rowToCampaign(row: any): GiftCampaign {
         ? 1
         : Math.max(1, Number(row.perQualifying) || 1),
     chooseCount: Math.max(1, Number(row.chooseCount) || 1),
+    priority: Math.trunc(Number(row.priority) || 0),
+    exclusive: !!row.exclusive,
     rewardMode:
       row.rewardMode === "choice"
         ? "choice"

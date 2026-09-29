@@ -240,7 +240,11 @@ export default function GiftProducts() {
                       </Pill>
                     ) : null}
                     {p.activeCampaigns > 1 ? (
-                      <Pill tone="warn">{`${p.activeCampaigns} active campaigns`}</Pill>
+                      <Pill tone="warn">
+                        {p.blockedCampaigns
+                          ? `${p.activeCampaigns} campaigns overlap · ${p.blockedCampaigns} not given`
+                          : `${p.activeCampaigns} campaigns stack`}
+                      </Pill>
                     ) : null}
                   </div>
                 </div>

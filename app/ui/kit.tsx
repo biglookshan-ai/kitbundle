@@ -369,18 +369,22 @@ export function Pill({
   tone,
   children,
   to,
+  title,
 }: {
   tone?: "ok" | "warn" | "info" | "danger";
   children: ReactNode;
   to?: string;
+  title?: string;
 }) {
   const cls = cx("kb-pill", tone && `kb-pill--${tone}`);
   return to ? (
-    <Link to={to} prefetch="intent" className={cls}>
+    <Link to={to} prefetch="intent" className={cls} title={title}>
       {children}
     </Link>
   ) : (
-    <span className={cls}>{children}</span>
+    <span className={cls} title={title}>
+      {children}
+    </span>
   );
 }
 

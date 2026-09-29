@@ -74,6 +74,10 @@ model GiftCampaign {
   // 1 = legacy rows (All mode ignored perQualifying); 2 = perQualifying is the
   // per-gift quantity in every mode. Saving from the current editor writes 2.
   rulesVersion  Int       @default(1)
+  // Overlaps (a product in several campaigns): higher priority wins; an
+  // exclusive campaign never combines with others.
+  priority      Int       @default(0)
+  exclusive     Boolean   @default(false)
   badgeText     String    @default("")
   subtitle      String    @default("") // storefront prompt above the gift picker
   hideWhenSoldOut Boolean @default(false) // hide sold-out gifts / the group

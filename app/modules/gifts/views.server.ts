@@ -4,7 +4,7 @@
  */
 import prisma from "../../db.server";
 import { listCampaigns } from "../../models/gift-campaign.server";
-import { campaignState } from "../../models/gift-campaign";
+import { campaignState, overlapWinners } from "../../models/gift-campaign";
 
 export type CampaignState = "active" | "scheduled" | "ended" | "disabled";
 
@@ -12,6 +12,10 @@ export type CampaignMeta = {
   id: string;
   title: string;
   state: CampaignState;
+  priority: number;
+  exclusive: boolean;
+  /** Products view: active here, but another campaign wins the overlap. */
+  blocked?: boolean;
 };
 
 export type MiniProduct = {
@@ -32,8 +36,10 @@ export type ProductRow = {
   via: string[];
   campaigns: CampaignMeta[];
   gifts: MiniProduct[];
-  /** Campaigns giving this product a gift right now. >1 = overlap to check. */
+  /** Active campaigns on this product. >1 = overlap to check. */
   activeCampaigns: number;
+  /** Active campaigns that lose the overlap (priority / exclusive). */
+  blockedCampaigns: number;
 };
 
 export type GiftRow = {
@@ -62,10 +68,17 @@ export type BrandRow = {
 const tail = (gid: string) => String(gid).split("/").pop() || "";
 
 export async function buildGiftViews(shop: string) {
-  const [campaigns, rows] = await Promise.all([
+  const [campaigns, rows, order] = await Promise.all([
     listCampaigns(shop),
     prisma.giftCoverage.findMany({ where: { shop } }),
+    // Same order the stamps use, so overlap ties resolve like checkout.
+    prisma.giftCampaign.findMany({
+      where: { shop },
+      select: { id: true },
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+    }),
   ]);
+  const rank = new Map(order.map((r, i) => [r.id, i]));
 
   const meta = new Map<string, CampaignMeta>();
   for (const c of campaigns) {
@@ -73,6 +86,8 @@ export async function buildGiftViews(shop: string) {
       id: c.id,
       title: c.title || "Untitled campaign",
       state: campaignState(c) as CampaignState,
+      priority: c.priority,
+      exclusive: c.exclusive,
     });
   }
 
@@ -113,6 +128,7 @@ export async function buildGiftViews(shop: string) {
         campaigns: [],
         gifts: [],
         activeCampaigns: 0,
+        blockedCampaigns: 0,
       };
       byProduct.set(t.productId, row);
     }
@@ -124,6 +140,18 @@ export async function buildGiftViews(shop: string) {
     for (const g of giftsByCampaign.get(t.campaignId) ?? []) {
       if (!row.gifts.some((x) => x.productId === g.productId)) row.gifts.push(g);
     }
+  }
+  // Overlaps: mark active campaigns that lose on this product.
+  for (const row of byProduct.values()) {
+    const active = row.campaigns
+      .filter((c) => c.state === "active")
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+    if (active.length < 2) continue;
+    const win = new Set(overlapWinners(active).map((c) => c.id));
+    row.campaigns = row.campaigns.map((c) =>
+      c.state === "active" && !win.has(c.id) ? { ...c, blocked: true } : c,
+    );
+    row.blockedCampaigns = active.length - win.size;
   }
   const products = [...byProduct.values()].sort((a, b) =>
     a.title.localeCompare(b.title),

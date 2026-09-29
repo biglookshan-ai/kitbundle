@@ -156,6 +156,10 @@ function campaignEntry(c: GiftCampaign, tz: string) {
     // Unified reward rule: k different gifts, q of each, per qualifying unit.
     chooseCount: rule.k,
     qtyPerGift: rule.q,
+    // Overlaps are resolved at checkout / on the page among campaigns live that
+    // day (so a future exclusive campaign doesn't block today's).
+    priority: c.priority || 0,
+    exclusive: !!c.exclusive,
     badge: c.badgeText || "",
     subtitle: c.subtitle || "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,
@@ -499,7 +503,10 @@ export function syncAll(
   kind = "full",
 ): Promise<SyncResult> {
   return serial(shop, async () => {
-    const campaigns = (await prisma.giftCampaign.findMany({ where: { shop } })).map(
+    const campaigns = (await prisma.giftCampaign.findMany({
+        where: { shop },
+        orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      })).map(
       rowToCampaign,
     );
     const enabled = campaigns.filter((c) => c.enabled);
@@ -611,7 +618,10 @@ export function syncProduct(
   productId: string,
 ): Promise<SyncResult> {
   return serial(shop, async () => {
-    const campaigns = (await prisma.giftCampaign.findMany({ where: { shop } })).map(
+    const campaigns = (await prisma.giftCampaign.findMany({
+        where: { shop },
+        orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      })).map(
       rowToCampaign,
     );
     if (!campaigns.length) return { scanned: 0, changed: 0, errors: [] };

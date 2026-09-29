@@ -13,6 +13,8 @@ import {
   campaignState,
   hasTrigger,
   triggerSummary,
+  overlapWinners,
+  rowToCampaign,
   rewardRule,
   type GiftCampaign,
   type Ref,
@@ -91,7 +93,48 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
         where: { shop: session.shop, campaignId: campaign.id, role: "trigger" },
       })
     : 0;
-  return { campaign: c, isNew: !campaign, variantMap, suggest, covers };
+  // Other campaigns sharing trigger products with this one (overlaps).
+  let overlaps: {
+    id: string;
+    title: string;
+    state: string;
+    priority: number;
+    exclusive: boolean;
+    products: number;
+  }[] = [];
+  if (campaign && covers) {
+    const mine = await prisma.giftCoverage.findMany({
+      where: { shop: session.shop, campaignId: campaign.id, role: "trigger" },
+      select: { productId: true },
+    });
+    const shared = await prisma.giftCoverage.groupBy({
+      by: ["campaignId"],
+      where: {
+        shop: session.shop,
+        role: "trigger",
+        campaignId: { not: campaign.id },
+        productId: { in: mine.map((m) => m.productId) },
+      },
+      _count: { _all: true },
+    });
+    if (shared.length) {
+      const others = await prisma.giftCampaign.findMany({
+        where: { shop: session.shop, id: { in: shared.map((x) => x.campaignId) } },
+      });
+      overlaps = others.map((row) => {
+        const o = rowToCampaign(row);
+        return {
+          id: o.id,
+          title: o.title || "Untitled campaign",
+          state: campaignState(o),
+          priority: o.priority,
+          exclusive: o.exclusive,
+          products: shared.find((x) => x.campaignId === o.id)?._count._all ?? 0,
+        };
+      });
+    }
+  }
+  return { campaign: c, isNew: !campaign, variantMap, suggest, covers, overlaps };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -152,6 +195,7 @@ export default function GiftCampaignEditor() {
     variantMap: loadedVariants,
     suggest,
     covers,
+    overlaps,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -525,7 +569,7 @@ export default function GiftCampaignEditor() {
         </div>
 
         {/* ---- Sidebar: status, reward rule, storefront ---- */}
-        <div className="kb-stack kb-sticky">
+        <div className="kb-stack">
           <Panel title="Status">
             <div className="kb-stack kb-stack--tight">
               <div className="kb-between">
@@ -562,6 +606,10 @@ export default function GiftCampaignEditor() {
 
           <Panel title="Reward">
             <RewardSettings c={c} patch={patch} legacyFixed={initial.rewardMode === "fixed"} />
+          </Panel>
+
+          <Panel title="If a product is in several campaigns">
+            <OverlapSettings c={c} patch={patch} overlaps={overlaps} />
           </Panel>
 
           <Panel title="Storefront">
@@ -737,6 +785,84 @@ function RewardSettings({
           Buys 2 → gets <b>{example(2)}</b> free
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Overlap settings: combine switch, priority, and who wins against whom. */
+function OverlapSettings({
+  c,
+  patch,
+  overlaps,
+}: {
+  c: GiftCampaign;
+  patch: (p: Partial<GiftCampaign>) => void;
+  overlaps: {
+    id: string;
+    title: string;
+    state: string;
+    priority: number;
+    exclusive: boolean;
+    products: number;
+  }[];
+}) {
+  // Pairwise outcome with the edits on screen (ties: the older campaign ranks
+  // first at checkout; here we only know it's a tie).
+  const outcome = (o: (typeof overlaps)[number]) => {
+    const me = { id: "me", priority: c.priority, exclusive: c.exclusive };
+    const them = { id: "them", priority: o.priority, exclusive: o.exclusive };
+    if (!me.exclusive && !them.exclusive) return "Both gifts are given";
+    if (me.priority === them.priority) return "Same priority — the older campaign wins";
+    const win = overlapWinners([me, them]);
+    if (win.length === 2) return "Both gifts are given";
+    return win[0].id === "me" ? "This campaign wins" : `“${o.title}” wins`;
+  };
+  return (
+    <div className="kb-stack kb-stack--tight">
+      <Switch
+        label="Combine with other gift campaigns"
+        checked={!c.exclusive}
+        onChange={(v) => patch({ exclusive: !v })}
+      />
+      <div className="kb-sub">
+        {c.exclusive
+          ? "Exclusive: on a product that's also in other campaigns, customers get either this campaign's gift or the other one — never both. Priority decides which."
+          : "On a product that's also in other campaigns, customers get every campaign's gifts (unless one of them is exclusive)."}
+      </div>
+      <Field label="Priority" help="Higher number wins when campaigns don't combine.">
+        <Input
+          type="number"
+          style={{ width: 100 }}
+          value={String(c.priority)}
+          onChange={(e) => patch({ priority: Math.trunc(Number(e.target.value) || 0) })}
+        />
+      </Field>
+      {overlaps.length ? (
+        <div className="kb-box kb-small">
+          <div className="kb-overline" style={{ marginBottom: 6 }}>
+            Shares products with
+          </div>
+          {overlaps.map((o) => (
+            <div key={o.id} style={{ marginBottom: 6 }}>
+              <Link
+                to={`/app/gifts/${o.id}`}
+                prefetch="intent"
+                style={{ color: "var(--link)", fontWeight: 600 }}
+              >
+                {o.title}
+              </Link>
+              <span className="kb-muted">
+                {` · ${o.products} product${o.products === 1 ? "" : "s"} · ${o.state}${
+                  o.exclusive ? " · exclusive" : ""
+                } · priority ${o.priority}`}
+              </span>
+              <div>{outcome(o)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="kb-sub">No other campaign shares products with this one.</div>
+      )}
     </div>
   );
 }

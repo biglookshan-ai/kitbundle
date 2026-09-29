@@ -101,4 +101,42 @@ describe("gift rules", () => {
     ];
     expect(freeOf(lines)).toEqual({});
   });
+
+  it("exclusive top-priority campaign blocks the others on that product", () => {
+    reset();
+    const lines = [
+      main(1, [
+        { id: "c1", rewardMode: "all", giftIds: ["11"] },
+        { id: "c2", rewardMode: "all", giftIds: ["12"], exclusive: true, priority: 5 },
+      ]),
+      gift(11, 1, 50, "c1"),
+      gift(12, 1, 10, "c2"),
+    ];
+    expect(freeOf(lines)).toEqual({ L3: 1 });
+  });
+  it("a lower-priority exclusive campaign doesn't combine; the others stack", () => {
+    reset();
+    const lines = [
+      main(1, [
+        { id: "c1", rewardMode: "all", giftIds: ["11"], priority: 2 },
+        { id: "c2", rewardMode: "all", giftIds: ["12"], exclusive: true },
+        { id: "c3", rewardMode: "all", giftIds: ["13"] },
+      ]),
+      gift(11, 1, 50, "c1"),
+      gift(12, 1, 10, "c2"),
+      gift(13, 1, 30, "c3"),
+    ];
+    expect(freeOf(lines)).toEqual({ L2: 1, L4: 1 });
+  });
+  it("an exclusive campaign that ended no longer blocks anything", () => {
+    reset();
+    const lines = [
+      main(1, [
+        { id: "c1", rewardMode: "all", giftIds: ["11"] },
+        { id: "c2", rewardMode: "all", giftIds: ["12"], exclusive: true, priority: 9, endDate: "2026-09-01" },
+      ]),
+      gift(11, 1, 50, "c1"),
+    ];
+    expect(freeOf(lines)).toEqual({ L2: 1 });
+  });
 });

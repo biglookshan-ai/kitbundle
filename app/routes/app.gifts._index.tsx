@@ -288,6 +288,8 @@ export default function GiftCampaigns() {
                       {c.title || "Untitled campaign"}
                     </span>
                     <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+                    {c.exclusive ? <Pill tone="warn">Exclusive</Pill> : null}
+                    {c.priority ? <Pill>{`Priority ${c.priority}`}</Pill> : null}
                   </div>
                   <div className="kb-sub" style={{ marginTop: 2 }}>
                     {meta}

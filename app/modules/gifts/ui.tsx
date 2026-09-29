@@ -47,9 +47,22 @@ export function CampaignPills({ campaigns }: { campaigns: CampaignMeta[] }) {
   return (
     <div className="kb-pills">
       {campaigns.map((c) => (
-        <Pill key={c.id} tone={STATE_TONE[c.state]} to={`/app/gifts/${c.id}`}>
+        <Pill
+          key={c.id}
+          tone={c.blocked ? undefined : STATE_TONE[c.state]}
+          to={`/app/gifts/${c.id}`}
+          title={
+            c.blocked
+              ? "Not given on this product — another campaign wins the overlap (priority / exclusive)."
+              : undefined
+          }
+        >
           {c.title}
-          {c.state !== "active" ? ` · ${STATE_LABEL[c.state]}` : ""}
+          {c.blocked
+            ? " · Not given"
+            : c.state !== "active"
+              ? ` · ${STATE_LABEL[c.state]}`
+              : ""}
         </Pill>
       ))}
     </div>

@@ -41,6 +41,25 @@ function clampPercent(value) {
 }
 
 /**
+ * Which campaigns on ONE product are given (same rule as the admin and the
+ * storefront). Highest priority first (ties keep stamp order): the top one is
+ * exclusive → only it; otherwise every non-exclusive campaign.
+ * @param {any[]} list
+ */
+function overlapWinners(list) {
+  if (list.length <= 1) return list;
+  const sorted = list
+    .map((c, i) => ({ c, i }))
+    .sort(
+      (a, b) =>
+        (Number(b.c.priority) || 0) - (Number(a.c.priority) || 0) || a.i - b.i,
+    )
+    .map((x) => x.c);
+  if (sorted[0].exclusive) return [sorted[0]];
+  return sorted.filter((c) => !c.exclusive);
+}
+
+/**
  * A gift campaign's reward rule from its stamp: k = how many DIFFERENT gifts
  * may be free, q = free units of each gift per qualifying unit. Stamps written
  * before `chooseCount`/`qtyPerGift` existed: "all" gave one of every gift per
@@ -480,20 +499,25 @@ export function run(input) {
     if (!Array.isArray(entries)) continue;
     const q = Number(line?.quantity) || 0;
     const triggerVid = /** @type {any} */ (line?.merchandise)?.id;
-    for (const e of entries) {
-      const cid = e && e.id;
-      if (!cid) continue;
-      // Date gate: an ended (or not-yet-started) campaign grants no allowance,
-      // so its gift lines stay at full price at checkout.
-      if (!campaignDateOk(e, today)) continue;
-      // Trigger-variant gate: when a campaign restricts which variants of this
-      // product qualify, a line on an off-list variant grants no gift allowance.
-      if (
-        Array.isArray(e.triggerVariants) &&
-        e.triggerVariants.length &&
-        !e.triggerVariants.map(String).includes(gidTail(triggerVid))
-      )
-        continue;
+    const valid = entries.filter(
+      (e) =>
+        e &&
+        e.id &&
+        // Date gate: an ended (or not-yet-started) campaign grants no
+        // allowance, so its gift lines stay at full price at checkout.
+        campaignDateOk(e, today) &&
+        // Trigger-variant gate: an off-list variant of this product doesn't
+        // qualify for a campaign that restricts variants.
+        !(
+          Array.isArray(e.triggerVariants) &&
+          e.triggerVariants.length &&
+          !e.triggerVariants.map(String).includes(gidTail(triggerVid))
+        ),
+    );
+    // Several campaigns on this product: priority / exclusive decide which
+    // are given (among the campaigns live today).
+    for (const e of overlapWinners(valid)) {
+      const cid = e.id;
       giftQual.set(cid, (giftQual.get(cid) ?? 0) + q);
       if (!giftRule.has(cid)) giftRule.set(cid, giftRuleOf(e));
       if (!giftIdsByCamp.has(cid))

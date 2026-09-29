@@ -3286,13 +3286,9 @@
         // background reconcile touches it afterwards — the customer deletes what
         // they don't want, and the Function prices only up to the main count
         // (extra gifts revert to full price on their own).
-        var curGiftVid = String(readMainVariantId());
-        (giftCampaigns || []).forEach(function (c) {
-          if (!giftActive(c)) return;
-          // Skip when the campaign only triggers for certain main variants and the
-          // selected one isn't among them (matches the hidden promo + the Function).
-          var tv = c.triggerVariants || [];
-          if (tv.length && tv.map(String).indexOf(curGiftVid) < 0) return;
+        // Live campaigns for the selected variant, after overlap rules (same as
+        // the promo + the Function).
+        liveCampaigns().forEach(function (c) {
           // One set per qualifying unit being added: q of each chosen gift.
           var eachQty = c.qtyPerGift * Math.max(1, addUnitsOf(plan));
           chosenGifts(c).forEach(function (h) {
@@ -3646,14 +3642,38 @@
   function campaignGiftUnits(units) {
     var n = 0;
     var u = units > 0 ? units : 1;
-    var cur = String(readMainVariantId());
-    (giftCampaigns || []).forEach(function (c) {
-      if (!giftActive(c)) return;
-      var tv = c.triggerVariants || [];
-      if (tv.length && tv.map(String).indexOf(cur) < 0) return;
+    liveCampaigns().forEach(function (c) {
       n += chosenGifts(c).length * c.qtyPerGift * u;
     });
     return n;
+  }
+
+  // Campaigns that give a gift right now for the selected main variant: in
+  // their time window, trigger-variant gate passed, then the overlap rule —
+  // highest priority first; an exclusive top campaign stands alone, otherwise
+  // every non-exclusive campaign is given (same as the discount Function).
+  function liveCampaigns() {
+    var cur = String(readMainVariantId());
+    var list = (giftCampaigns || []).filter(function (c) {
+      if (!giftActive(c) || !(c.giftHandles || []).length) return false;
+      var tv = c.triggerVariants || [];
+      return !(tv.length && tv.map(String).indexOf(cur) < 0);
+    });
+    if (list.length <= 1) return list;
+    var sorted = list
+      .map(function (c, i) {
+        return { c: c, i: i };
+      })
+      .sort(function (a, b) {
+        return b.c.priority - a.c.priority || a.i - b.i;
+      })
+      .map(function (x) {
+        return x.c;
+      });
+    if (sorted[0].exclusive) return [sorted[0]];
+    return sorted.filter(function (c) {
+      return !c.exclusive;
+    });
   }
 
   // On a trigger product page: show the "free gift" badge, and for choice mode a
@@ -3662,16 +3682,9 @@
     var host = root.querySelector("[data-cgp-giftpromo]");
     if (!host || !giftCampaigns || !giftCampaigns.length) return;
     var currency = root.getAttribute("data-currency") || "USD";
-    var curMainVid = String(readMainVariantId());
-    var active = giftCampaigns.filter(function (c) {
-      if (!giftActive(c) || !(c.giftHandles || []).length) return false;
-      // Trigger-variant gate: when the campaign only triggers for specific
-      // variants of this product, hide the gift unless a qualifying variant is
-      // selected (the Function enforces the same rule at checkout).
-      var tv = c.triggerVariants || [];
-      if (tv.length && tv.map(String).indexOf(curMainVid) < 0) return false;
-      return true;
-    });
+    // Time window, trigger-variant gate (hidden unless a qualifying variant is
+    // selected) and overlap rules — the Function enforces the same at checkout.
+    var active = liveCampaigns();
     if (!active.length) {
       host.hidden = true;
       return;
@@ -4039,6 +4052,8 @@
               1,
           ),
         ),
+        priority: Number(e.priority) || 0,
+        exclusive: !!e.exclusive,
         startsAt: e.startsAt || "",
         endsAt: e.endsAt || "",
         badge: e.badge || "🎁 Free gift",
