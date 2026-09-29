@@ -13,7 +13,7 @@ import {
   campaignState,
   hasTrigger,
   triggerSummary,
-  rewardSummary,
+  rewardRule,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -117,7 +117,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!hasTrigger(campaign)) {
     return {
       ok: false,
-      error: "Add at least one trigger: products, collections, tags, brands, types or all products.",
+      error:
+        "Add at least one trigger: products, collections, tags, brands, types or all products.",
     };
   }
   if (campaign.giftProducts.length === 0) {
@@ -261,7 +262,9 @@ export default function GiftCampaignEditor() {
               : [...offeredIds, vid];
             if (next.length === 0) return; // keep at least one
             const variantIds = next.length === vs.length ? undefined : next;
-            onChange(refs.map((x) => (x.id === r.id ? { ...x, variantIds } : x)));
+            onChange(
+              refs.map((x) => (x.id === r.id ? { ...x, variantIds } : x)),
+            );
           };
           return (
             <div className="kb-ref" key={r.id}>
@@ -345,7 +348,9 @@ export default function GiftCampaignEditor() {
         }
       />
 
-      {fetcher.data?.error ? <Banner tone="danger">{fetcher.data.error}</Banner> : null}
+      {fetcher.data?.error ? (
+        <Banner tone="danger">{fetcher.data.error}</Banner>
+      ) : null}
 
       <div className="kb-grid-2">
         {/* ---- Main: what triggers it, what it gives ---- */}
@@ -355,7 +360,10 @@ export default function GiftCampaignEditor() {
               label="Campaign name"
               help="Internal name, e.g. “Buy a camera, get a free battery”."
             >
-              <Input value={c.title} onChange={(e) => patch({ title: e.target.value })} />
+              <Input
+                value={c.title}
+                onChange={(e) => patch({ title: e.target.value })}
+              />
             </Field>
           </Panel>
 
@@ -396,7 +404,9 @@ export default function GiftCampaignEditor() {
                 Select collections
               </Btn>
             </div>
-            {collectionList(c.triggerCollections, (r) => patch({ triggerCollections: r }))}
+            {collectionList(c.triggerCollections, (r) =>
+              patch({ triggerCollections: r }),
+            )}
 
             <div className="kb-divider" />
             <div className="kb-overline" style={{ marginBottom: 8 }}>
@@ -410,7 +420,10 @@ export default function GiftCampaignEditor() {
               />
               {!c.allProducts ? (
                 <>
-                  <Field label="Product tags" help="Products with any of these tags.">
+                  <Field
+                    label="Product tags"
+                    help="Products with any of these tags."
+                  >
                     <TokenInput
                       id="trig-tags"
                       values={c.triggerTags}
@@ -419,7 +432,10 @@ export default function GiftCampaignEditor() {
                       suggestions={suggest.tags}
                     />
                   </Field>
-                  <Field label="Brands (vendor)" help="Products from any of these brands.">
+                  <Field
+                    label="Brands (vendor)"
+                    help="Products from any of these brands."
+                  >
                     <TokenInput
                       id="trig-vendors"
                       values={c.triggerVendors}
@@ -428,7 +444,10 @@ export default function GiftCampaignEditor() {
                       suggestions={suggest.vendors}
                     />
                   </Field>
-                  <Field label="Product types" help="Products of any of these types.">
+                  <Field
+                    label="Product types"
+                    help="Products of any of these types."
+                  >
                     <TokenInput
                       id="trig-types"
                       values={c.triggerTypes}
@@ -448,7 +467,11 @@ export default function GiftCampaignEditor() {
                 size="tiny"
                 onClick={() =>
                   pick("product", c.excludeProducts, (refs) =>
-                    patch({ excludeProducts: refs.map(({ variantIds: _v, ...r }) => r) }),
+                    patch({
+                      excludeProducts: refs.map(
+                        ({ variantIds: _v, ...r }) => r,
+                      ),
+                    }),
                   )
                 }
               >
@@ -469,7 +492,9 @@ export default function GiftCampaignEditor() {
                   suggestions={suggest.tags}
                 />
               </Field>
-              {collectionList(c.excludeProducts, (r) => patch({ excludeProducts: r }))}
+              {collectionList(c.excludeProducts, (r) =>
+                patch({ excludeProducts: r }),
+              )}
             </div>
           </Panel>
 
@@ -479,7 +504,9 @@ export default function GiftCampaignEditor() {
               <Btn
                 size="tiny"
                 onClick={() =>
-                  pick("product", c.giftProducts, (refs) => patch({ giftProducts: refs }))
+                  pick("product", c.giftProducts, (refs) =>
+                    patch({ giftProducts: refs }),
+                  )
                 }
               >
                 Select gifts
@@ -509,73 +536,32 @@ export default function GiftCampaignEditor() {
                 />
                 <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
               </div>
-              <Field label="Starts (optional)" help="Blank = starts immediately.">
+              <Field
+                label="Starts (optional)"
+                help="Blank = starts immediately."
+              >
                 <Input
                   type="datetime-local"
                   value={toLocalInput(c.startsAt)}
-                  onChange={(e) => patch({ startsAt: fromLocalInput(e.target.value) })}
+                  onChange={(e) =>
+                    patch({ startsAt: fromLocalInput(e.target.value) })
+                  }
                 />
               </Field>
               <Field label="Ends (optional)" help="Server-enforced end.">
                 <Input
                   type="datetime-local"
                   value={toLocalInput(c.endsAt)}
-                  onChange={(e) => patch({ endsAt: fromLocalInput(e.target.value) })}
+                  onChange={(e) =>
+                    patch({ endsAt: fromLocalInput(e.target.value) })
+                  }
                 />
               </Field>
             </div>
           </Panel>
 
           <Panel title="Reward">
-            <div className="kb-stack kb-stack--tight">
-              <Field label="Reward mode">
-                <Select
-                  value={c.rewardMode}
-                  onChange={(e) =>
-                    patch({ rewardMode: e.target.value as "fixed" | "choice" | "all" })
-                  }
-                >
-                  <option value="fixed">Fixed — auto-add the first gift</option>
-                  <option value="choice">Choice — customer picks gifts</option>
-                  <option value="all">All — auto-add every gift</option>
-                </Select>
-              </Field>
-              {c.rewardMode === "choice" ? (
-                <Field
-                  label="Customer picks"
-                  help={`How many different gifts they choose, out of ${c.giftProducts.length || "the"} gift${c.giftProducts.length === 1 ? "" : "s"}. 1 = pick one.`}
-                >
-                  <Input
-                    type="number"
-                    min={1}
-                    max={Math.max(1, c.giftProducts.length)}
-                    value={String(c.chooseCount)}
-                    onChange={(e) =>
-                      patch({ chooseCount: Math.max(1, Math.floor(Number(e.target.value)) || 1) })
-                    }
-                  />
-                </Field>
-              ) : null}
-              <Field
-                label="Quantity of each gift per item bought"
-                help="Buy 2 → 2 sets. Set 2 to give two of each gift per item."
-              >
-                <Input
-                  type="number"
-                  min={1}
-                  value={String(c.perQualifying)}
-                  onChange={(e) =>
-                    patch({ perQualifying: Math.max(1, Math.floor(Number(e.target.value)) || 1) })
-                  }
-                />
-              </Field>
-              <div className="kb-box kb-small">{rewardSummary(c)}</div>
-              {c.rewardMode === "choice" && c.chooseCount > Math.max(1, c.giftProducts.length) ? (
-                <div className="kb-field__error">
-                  {`Only ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"} — customers can pick at most that many.`}
-                </div>
-              ) : null}
-            </div>
+            <RewardSettings c={c} patch={patch} />
           </Panel>
 
           <Panel title="Storefront">
@@ -603,8 +589,8 @@ export default function GiftCampaignEditor() {
                   onChange={(v) => patch({ hideWhenSoldOut: v })}
                 />
                 <div className="kb-sub" style={{ marginTop: 4 }}>
-                  When on, a sold-out gift is hidden from the picker; if every gift
-                  is sold out the whole group hides.
+                  When on, a sold-out gift is hidden from the picker; if every
+                  gift is sold out the whole group hides.
                 </div>
               </div>
             </div>
@@ -612,5 +598,139 @@ export default function GiftCampaignEditor() {
         </div>
       </div>
     </GiftsShell>
+  );
+}
+
+/** Reward panel: how customers get gifts, how many, with a worked example. */
+function RewardSettings({
+  c,
+  patch,
+}: {
+  c: GiftCampaign;
+  patch: (p: Partial<GiftCampaign>) => void;
+}) {
+  const n = c.giftProducts.length;
+  const { k, q } = rewardRule(c);
+  const modes: {
+    value: GiftCampaign["rewardMode"];
+    title: string;
+    desc: string;
+  }[] = [
+    {
+      value: "all",
+      title: "Give every gift",
+      desc: "All gifts are added automatically.",
+    },
+    {
+      value: "choice",
+      title: "Customer chooses",
+      desc: "They pick which gift(s) they want.",
+    },
+    {
+      value: "fixed",
+      title: "First gift only",
+      desc: "Only the first gift in the list is given.",
+    },
+  ];
+  const buyer = c.triggerProducts[0]?.title || "a qualifying product";
+  const name = (i: number) => c.giftProducts[i]?.title || `Gift ${i + 1}`;
+  const example = (units: number) => {
+    const each = q * units;
+    if (n === 0) return "Add a gift product first.";
+    if (c.rewardMode === "all" || n === 1) {
+      return c.giftProducts.map((_, i) => `${each} × ${name(i)}`).join(" + ");
+    }
+    if (c.rewardMode === "fixed") return `${each} × ${name(0)}`;
+    return k === 1
+      ? `${each} × one gift they choose from ${n}`
+      : `${each} of each of ${k} gifts they choose from ${n}`;
+  };
+
+  return (
+    <div className="kb-stack kb-stack--tight">
+      <div className="kb-lfield__label">How do customers get gifts?</div>
+      {n <= 1 ? (
+        <div className="kb-box kb-small">
+          {n === 0
+            ? "Add gift products first — then choose how they're given."
+            : "One gift: the customer gets it with every product bought. Add more gifts to let customers choose, or give them all."}
+        </div>
+      ) : (
+        <div className="kb-radios">
+          {modes.map((m) => (
+            <label
+              key={m.value}
+              className={`kb-radio${c.rewardMode === m.value ? " is-on" : ""}`}
+            >
+              <input
+                type="radio"
+                name="rewardMode"
+                checked={c.rewardMode === m.value}
+                onChange={() => patch({ rewardMode: m.value })}
+              />
+              <span>
+                <b>{m.title}</b>
+                <span className="kb-sub">{m.desc}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {c.rewardMode === "choice" && n > 1 ? (
+        <Field label="How many can they choose?">
+          <div className="kb-inline" style={{ flexWrap: "nowrap" }}>
+            <Input
+              type="number"
+              min={1}
+              max={n}
+              style={{ width: 80 }}
+              value={String(c.chooseCount)}
+              onChange={(e) =>
+                patch({
+                  chooseCount: Math.min(
+                    n,
+                    Math.max(1, Math.floor(Number(e.target.value)) || 1),
+                  ),
+                })
+              }
+            />
+            <span className="kb-sub">{`of ${n} gifts`}</span>
+          </div>
+        </Field>
+      ) : null}
+
+      <Field label="Gift quantity">
+        <div className="kb-inline" style={{ flexWrap: "nowrap" }}>
+          <Input
+            type="number"
+            min={1}
+            style={{ width: 80 }}
+            value={String(c.perQualifying)}
+            onChange={(e) =>
+              patch({
+                perQualifying: Math.max(
+                  1,
+                  Math.floor(Number(e.target.value)) || 1,
+                ),
+              })
+            }
+          />
+          <span className="kb-sub">of each gift, for every product bought</span>
+        </div>
+      </Field>
+
+      <div className="kb-box kb-small">
+        <div className="kb-overline" style={{ marginBottom: 6 }}>
+          Example
+        </div>
+        <div>
+          Buys 1 × {buyer} → gets <b>{example(1)}</b> free
+        </div>
+        <div style={{ marginTop: 4 }}>
+          Buys 2 → gets <b>{example(2)}</b> free
+        </div>
+      </div>
+    </div>
   );
 }
