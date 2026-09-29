@@ -15,10 +15,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (e instanceof Response) return e;
     return new Response("Unauthorized", { status: 401 });
   }
-  const { shop, payload } = auth;
+  const { shop, payload, topic } = auth;
   const c = payload as { admin_graphql_api_id?: string; id?: number | string };
   const collectionId =
     c?.admin_graphql_api_id || (c?.id ? `gid://shopify/Collection/${c.id}` : "");
+  console.log(`[gifts] ${topic} ${shop} ${collectionId}`);
   if (collectionId) {
     void queueCollectionSync(shop, collectionId).catch((e) =>
       console.error("[gifts] queue collection sync failed", e),
