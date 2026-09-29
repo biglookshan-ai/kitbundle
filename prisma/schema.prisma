@@ -84,6 +84,33 @@ model GiftCampaign {
   @@index([shop])
 }
 
+// Gifts module — coverage index: which product plays which role in which
+// campaign (trigger = "buy this", gift = "get this"), with the product facts the
+// management views filter on. Derived data: rebuilt from GiftCampaign + Shopify
+// on campaign save/delete and on demand; campaigns stay the source of truth.
+model GiftCoverage {
+  id             String   @id @default(cuid())
+  shop           String
+  campaignId     String
+  productId      String   // gid://shopify/Product/...
+  role           String   // "trigger" | "gift"
+  // How a trigger product got in: JSON array of labels, e.g.
+  // ["Direct","Collection: Lenses"]. Empty for gifts.
+  viaJson        String   @default("[]")
+  title          String   @default("")
+  handle         String   @default("")
+  image          String?
+  vendor         String   @default("")
+  productType    String   @default("")
+  status         String   @default("") // ACTIVE | DRAFT | ARCHIVED
+  totalInventory Int?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([shop, campaignId, productId, role])
+  @@index([shop, role])
+  @@index([shop, productId])
+}
+
 // Per-shop app settings (opt-in behaviors). One row per shop.
 model ShopSettings {
   shop      String  @id

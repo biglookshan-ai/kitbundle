@@ -31,11 +31,27 @@ import {
   resyncAll,
 } from "../models/gift-campaign.server";
 import { campaignState, type Ref } from "../models/gift-campaign";
+import prisma from "../db.server";
+import {
+  dropCoverage,
+  rebuildCoverage,
+} from "../modules/gifts/coverage.server";
+import { GiftsNav } from "../modules/gifts/ui";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const campaigns = await listCampaigns(session.shop);
-  return { campaigns };
+  const [campaigns, counts] = await Promise.all([
+    listCampaigns(session.shop),
+    prisma.giftCoverage.groupBy({
+      by: ["campaignId"],
+      where: { shop: session.shop, role: "trigger" },
+      _count: { _all: true },
+    }),
+  ]);
+  // How many products each campaign currently covers (from the gifts index).
+  const coverage: Record<string, number> = {};
+  for (const r of counts) coverage[r.campaignId] = r._count._all;
+  return { campaigns, coverage };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -45,10 +61,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "delete") {
     const id = String(form.get("id") || "");
     const r = await deleteCampaign(admin, session.shop, id);
+    await dropCoverage(session.shop, id).catch(() => {});
     return { ok: r.ok, error: r.errors.join("; ") || null, message: null };
   }
   if (intent === "resync") {
     const r = await resyncAll(admin, session.shop);
+    await rebuildCoverage(admin, session.shop).catch(() => {});
     return {
       ok: r.ok,
       error: r.errors.join("; ") || null,
@@ -152,7 +170,7 @@ const STATUS_FILTERS = [
 ];
 
 export default function GiftCampaigns() {
-  const { campaigns } = useLoaderData<typeof loader>();
+  const { campaigns, coverage } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const busy = fetcher.state !== "idle";
@@ -180,6 +198,7 @@ export default function GiftCampaigns() {
     <Page>
       <TitleBar title="Free gifts" />
       <BlockStack gap="400">
+        <GiftsNav />
         {fetcher.data?.error && (
           <Banner tone="critical">{fetcher.data.error}</Banner>
         )}
@@ -283,11 +302,17 @@ export default function GiftCampaigns() {
             <BlockStack>
               {visible.map((c, i) => {
                 const state = campaignState(c);
+                const covers = coverage[c.id] ?? 0;
                 const meta = [
-                  `Buy 1 → get ${c.perQualifying} free`,
+                  `Covers ${covers} product${covers === 1 ? "" : "s"}`,
+                  c.rewardMode === "all"
+                    ? "every gift, 1 per item bought"
+                    : `Buy 1 → get ${c.perQualifying} free`,
                   c.rewardMode === "choice"
-                    ? "customer picks a gift"
-                    : "gift auto-added",
+                    ? "customer picks one"
+                    : c.rewardMode === "all"
+                      ? "all gifts auto-added"
+                      : "first gift auto-added",
                   c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
                   c.startsAt && state === "scheduled"
                     ? `starts ${fmtDate(c.startsAt)}`

@@ -31,24 +31,39 @@ async function findFunctionId(admin: AdminGraphql): Promise<string | null> {
   return fn?.id ?? null;
 }
 
-/** Resolve a collection's product gids (capped — large collections need resync). */
-async function collectionProductIds(
+/**
+ * All of a collection's product gids, paged. (Was a single `first: 250` page —
+ * products past the 250th silently never got the gift.) Safety cap at 50
+ * pages (12,500 products) so a runaway loop can't hang a request.
+ */
+export async function collectionProductIds(
   admin: AdminGraphql,
   collectionId: string,
 ): Promise<string[]> {
-  const resp = await admin.graphql(
-    `#graphql
-      query CollProducts($id: ID!) {
-        collection(id: $id) {
-          products(first: 250) { nodes { id } }
-        }
-      }`,
-    { variables: { id: collectionId } },
-  );
-  const json = await resp.json();
-  return (json?.data?.collection?.products?.nodes ?? [])
-    .map((n: any) => n?.id)
-    .filter((x: any) => typeof x === "string");
+  const out: string[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const resp = await admin.graphql(
+      `#graphql
+        query CollProducts($id: ID!, $after: String) {
+          collection(id: $id) {
+            products(first: 250, after: $after) {
+              nodes { id }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }`,
+      { variables: { id: collectionId, after } },
+    );
+    const json: any = await resp.json();
+    const conn = json?.data?.collection?.products;
+    for (const n of conn?.nodes ?? []) {
+      if (typeof n?.id === "string") out.push(n.id);
+    }
+    if (!conn?.pageInfo?.hasNextPage || !conn?.pageInfo?.endCursor) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return out;
 }
 
 /** All product gids a campaign triggers = manual list + expanded collections. */

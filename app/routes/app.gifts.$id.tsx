@@ -26,6 +26,7 @@ import prisma from "../db.server";
 import { canCreateCampaign } from "../models/plan.server";
 import { getCampaign, saveCampaign } from "../models/gift-campaign.server";
 import { fetchProductPrices } from "../models/addon-config.server";
+import { rebuildCoverage } from "../modules/gifts/coverage.server";
 import {
   emptyCampaign,
   campaignState,
@@ -86,6 +87,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: false, error: "Add at least one gift product." };
   }
   const r = await saveCampaign(admin, session.shop, campaign);
+  // Keep the gifts index (products / gifts / brands views) in step. Best
+  // effort — a failure here must never block saving the campaign itself.
+  await rebuildCoverage(admin, session.shop, [campaign.id]).catch(() => {});
   if (!r.ok) return { ok: false, error: r.errors.join("; ") };
   return redirect("/app/gifts");
 };
