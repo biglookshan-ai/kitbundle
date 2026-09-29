@@ -2,16 +2,17 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { rebuildCoverage } from "../modules/gifts/coverage.server";
 
-/** Rebuild the whole gifts coverage index (used by the views' Rebuild button). */
+/** Full re-sync of gift stamps + the coverage index (the views' Re-sync button). */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   try {
     const r = await rebuildCoverage(admin, session.shop);
+    if (r.errors.length) return { ok: false, error: r.errors.join("; ") };
     return {
       ok: true,
-      message: `Index rebuilt · ${r.triggers} product links and ${r.gifts} gifts across ${r.campaigns} campaigns`,
+      message: `Synced · ${r.scanned} products checked, ${r.changed} updated`,
     };
   } catch (e: any) {
-    return { ok: false, error: `Rebuild failed: ${e?.message || e}` };
+    return { ok: false, error: `Sync failed: ${e?.message || e}` };
   }
 };

@@ -8,10 +8,11 @@ import prisma from "../db.server";
 import { canCreateCampaign } from "../models/plan.server";
 import { getCampaign, saveCampaign } from "../models/gift-campaign.server";
 import { fetchProductPrices } from "../models/addon-config.server";
-import { rebuildCoverage } from "../modules/gifts/coverage.server";
 import {
   emptyCampaign,
   campaignState,
+  hasTrigger,
+  triggerSummary,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -28,7 +29,36 @@ import {
   Pill,
   Thumb,
   Banner,
+  TokenInput,
 } from "../ui/kit";
+
+/** Existing brands / types / tags in the store, for the rule inputs. */
+async function ruleSuggestions(admin: {
+  graphql: (q: string) => Promise<Response>;
+}): Promise<{ vendors: string[]; types: string[]; tags: string[] }> {
+  try {
+    const resp = await admin.graphql(`#graphql
+      query GiftRuleSuggest {
+        shop {
+          productVendors(first: 250) { nodes }
+          productTypes(first: 250) { nodes }
+          productTags(first: 250) { nodes }
+        }
+      }`);
+    const json: any = await resp.json();
+    const list = (x: any) =>
+      (Array.isArray(x?.nodes) ? x.nodes : []).filter(
+        (v: unknown) => typeof v === "string" && v,
+      );
+    return {
+      vendors: list(json?.data?.shop?.productVendors),
+      types: list(json?.data?.shop?.productTypes),
+      tags: list(json?.data?.shop?.productTags),
+    };
+  } catch {
+    return { vendors: [], types: [], tags: [] };
+  }
+}
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -45,12 +75,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     ...c.giftProducts.map((g) => g.id),
     ...c.triggerProducts.map((t) => t.id),
   ].filter(Boolean);
-  let variantMap: Record<string, { id: string; title: string }[]> = {};
-  if (productIds.length) {
-    const { variants } = await fetchProductPrices(admin, productIds);
-    variantMap = variants as Record<string, { id: string; title: string }[]>;
-  }
-  return { campaign: c, isNew: !campaign, variantMap };
+  const [variantMap, suggest] = await Promise.all([
+    productIds.length
+      ? fetchProductPrices(admin, productIds).then(
+          (r) => r.variants as Record<string, { id: string; title: string }[]>,
+        )
+      : Promise.resolve({} as Record<string, { id: string; title: string }[]>),
+    ruleSuggestions(admin),
+  ]);
+  return { campaign: c, isNew: !campaign, variantMap, suggest };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -73,19 +106,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const gate = await canCreateCampaign(billing, session.shop);
     if (!gate.ok) return { ok: false, error: gate.error };
   }
-  if (
-    campaign.triggerProducts.length === 0 &&
-    campaign.triggerCollections.length === 0
-  ) {
-    return { ok: false, error: "Add at least one trigger product or collection." };
+  if (!hasTrigger(campaign)) {
+    return {
+      ok: false,
+      error: "Add at least one trigger: products, collections, tags, brands, types or all products.",
+    };
   }
   if (campaign.giftProducts.length === 0) {
     return { ok: false, error: "Add at least one gift product." };
   }
+  // Saving also re-syncs product stamps and the gifts index.
   const r = await saveCampaign(admin, session.shop, campaign);
-  // Keep the gifts index (products / gifts / brands views) in step. Best
-  // effort — a failure here must never block saving the campaign itself.
-  await rebuildCoverage(admin, session.shop, [campaign.id]).catch(() => {});
   if (!r.ok) return { ok: false, error: r.errors.join("; ") };
   return redirect("/app/gifts");
 };
@@ -106,8 +137,12 @@ function fromLocalInput(v: string) {
 }
 
 export default function GiftCampaignEditor() {
-  const { campaign: initial, isNew, variantMap: loadedVariants } =
-    useLoaderData<typeof loader>();
+  const {
+    campaign: initial,
+    isNew,
+    variantMap: loadedVariants,
+    suggest,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
   const [c, setC] = useState<GiftCampaign>(initial);
@@ -278,9 +313,7 @@ export default function GiftCampaignEditor() {
           <span className="kb-inline">
             <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
             <span>
-              {`${c.triggerProducts.length + c.triggerCollections.length} trigger${
-                c.triggerProducts.length + c.triggerCollections.length === 1 ? "" : "s"
-              } → ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
+              {`${triggerSummary(c)} → ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
             </span>
           </span>
         }
@@ -346,6 +379,80 @@ export default function GiftCampaignEditor() {
               </Btn>
             </div>
             {collectionList(c.triggerCollections, (r) => patch({ triggerCollections: r }))}
+
+            <div className="kb-divider" />
+            <div className="kb-overline" style={{ marginBottom: 8 }}>
+              Rules
+            </div>
+            <div className="kb-stack kb-stack--tight">
+              <Switch
+                label="All products — every product in the store"
+                checked={c.allProducts}
+                onChange={(v) => patch({ allProducts: v })}
+              />
+              {!c.allProducts ? (
+                <>
+                  <Field label="Product tags" help="Products with any of these tags.">
+                    <TokenInput
+                      id="trig-tags"
+                      values={c.triggerTags}
+                      onChange={(v) => patch({ triggerTags: v })}
+                      placeholder="Type a tag and press Enter"
+                      suggestions={suggest.tags}
+                    />
+                  </Field>
+                  <Field label="Brands (vendor)" help="Products from any of these brands.">
+                    <TokenInput
+                      id="trig-vendors"
+                      values={c.triggerVendors}
+                      onChange={(v) => patch({ triggerVendors: v })}
+                      placeholder="e.g. DZOFILM"
+                      suggestions={suggest.vendors}
+                    />
+                  </Field>
+                  <Field label="Product types" help="Products of any of these types.">
+                    <TokenInput
+                      id="trig-types"
+                      values={c.triggerTypes}
+                      onChange={(v) => patch({ triggerTypes: v })}
+                      placeholder="e.g. Cine Lens"
+                      suggestions={suggest.types}
+                    />
+                  </Field>
+                </>
+              ) : null}
+            </div>
+
+            <div className="kb-divider" />
+            <div className="kb-between" style={{ marginBottom: 4 }}>
+              <span className="kb-overline">Exclude</span>
+              <Btn
+                size="tiny"
+                onClick={() =>
+                  pick("product", c.excludeProducts, (refs) =>
+                    patch({ excludeProducts: refs.map(({ variantIds: _v, ...r }) => r) }),
+                  )
+                }
+              >
+                Select products
+              </Btn>
+            </div>
+            <p className="kb-sub" style={{ margin: "0 0 8px" }}>
+              Carves products out of collections, tags, brands, types and All
+              products. Products listed directly above always qualify.
+            </p>
+            <div className="kb-stack kb-stack--tight">
+              <Field label="Exclude products with these tags">
+                <TokenInput
+                  id="ex-tags"
+                  values={c.excludeTags}
+                  onChange={(v) => patch({ excludeTags: v })}
+                  placeholder="e.g. clearance"
+                  suggestions={suggest.tags}
+                />
+              </Field>
+              {collectionList(c.excludeProducts, (r) => patch({ excludeProducts: r }))}
+            </div>
           </Panel>
 
           <Panel

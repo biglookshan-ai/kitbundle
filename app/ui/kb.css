@@ -1040,3 +1040,49 @@ button.kb-title:hover {
 @media (max-width: 640px) {
   .kb-indent { padding-left: 0; }
 }
+
+/* ---- Token input (tags / brands / types) ---- */
+.kb-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: text;
+}
+.kb-tokens:focus-within {
+  border-color: #9fb1dc;
+  outline: 2px solid #d5def3;
+}
+.kb-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 9px;
+  border-radius: 6px;
+  background: #eef0f2;
+  font-size: 12px;
+}
+.kb-token button {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.kb-token button:hover {
+  color: var(--danger);
+}
+.kb-tokens__input {
+  flex: 1 1 120px;
+  min-width: 80px;
+  border: 0;
+  outline: 0;
+  font: inherit;
+}

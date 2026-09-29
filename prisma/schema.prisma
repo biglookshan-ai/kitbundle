@@ -77,6 +77,14 @@ model GiftCampaign {
   triggerProductsJson    String @default("[]")
   triggerCollectionsJson String @default("[]")
   giftProductsJson       String @default("[]")
+  // Rule-based triggers (step 2): JSON string arrays, matched case-insensitively.
+  triggerTagsJson        String  @default("[]")
+  triggerVendorsJson     String  @default("[]")
+  triggerTypesJson       String  @default("[]")
+  allProducts            Boolean @default(false) // every product in the store
+  // Carve-outs from the rule-based triggers (not from directly listed products).
+  excludeTagsJson        String  @default("[]")
+  excludeProductsJson    String  @default("[]") // refs like triggerProductsJson
   nodeId        String? // gid://shopify/DiscountAutomaticNode/<n>
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -109,6 +117,33 @@ model GiftCoverage {
   @@unique([shop, campaignId, productId, role])
   @@index([shop, role])
   @@index([shop, productId])
+}
+
+// Gifts module — one row per sync run (full re-sync, or a product/collection
+// webhook), so the admin can show when stamps were last reconciled.
+model GiftSyncLog {
+  id        String   @id @default(cuid())
+  shop      String
+  kind      String   // "full" | "product" | "collection"
+  scanned   Int      @default(0) // products compared
+  changed   Int      @default(0) // stamps actually written
+  errors    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+}
+
+// Gifts module — hash of the gift_trigger stamp last written to each product,
+// so a full sync writes only products whose stamp actually changes without
+// re-reading every product's metafield. Webhook syncs read the live value and
+// refresh this, so drift self-corrects.
+model GiftStamp {
+  shop      String
+  productId String   // gid://shopify/Product/...
+  hash      String
+  updatedAt DateTime @updatedAt
+
+  @@id([shop, productId])
 }
 
 // Per-shop app settings (opt-in behaviors). One row per shop.

@@ -8,13 +8,14 @@ import {
   deleteCampaign,
   resyncAll,
 } from "../models/gift-campaign.server";
-import { campaignState, type Ref } from "../models/gift-campaign";
-import prisma from "../db.server";
 import {
-  dropCoverage,
-  rebuildCoverage,
-} from "../modules/gifts/coverage.server";
-import { GiftsShell, STATE_TONE, STATE_LABEL } from "../modules/gifts/ui";
+  campaignState,
+  type GiftCampaign,
+  type Ref,
+} from "../models/gift-campaign";
+import prisma from "../db.server";
+import { lastSync } from "../modules/gifts/engine.server";
+import { GiftsShell, STATE_TONE, STATE_LABEL, fmtWhen } from "../modules/gifts/ui";
 import {
   PageHead,
   Stats,
@@ -31,18 +32,19 @@ import {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const [campaigns, counts] = await Promise.all([
+  const [campaigns, counts, sync] = await Promise.all([
     listCampaigns(session.shop),
     prisma.giftCoverage.groupBy({
       by: ["campaignId"],
       where: { shop: session.shop, role: "trigger" },
       _count: { _all: true },
     }),
+    lastSync(session.shop),
   ]);
   // How many products each campaign currently covers (from the gifts index).
   const coverage: Record<string, number> = {};
   for (const r of counts) coverage[r.campaignId] = r._count._all;
-  return { campaigns, coverage };
+  return { campaigns, coverage, sync };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -52,16 +54,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "delete") {
     const id = String(form.get("id") || "");
     const r = await deleteCampaign(admin, session.shop, id);
-    await dropCoverage(session.shop, id).catch(() => {});
     return { ok: r.ok, error: r.errors.join("; ") || null, message: null };
   }
   if (intent === "resync") {
     const r = await resyncAll(admin, session.shop);
-    await rebuildCoverage(admin, session.shop).catch(() => {});
     return {
       ok: r.ok,
       error: r.errors.join("; ") || null,
-      message: r.ok ? "Trigger products re-synced." : null,
+      message: r.ok ? `Re-synced · ${r.changed} product${r.changed === 1 ? "" : "s"} updated` : null,
     };
   }
   return { ok: false, error: "Unknown action", message: null };
@@ -80,22 +80,39 @@ function fmtDate(iso: string) {
 }
 
 /** Product / collection chips for the "Buy any of → Get free" flow. */
+/** Rule-based trigger labels ("Tag: sale", "Brand: DZOFILM", "All products"). */
+function ruleLabels(c: GiftCampaign): string[] {
+  if (c.allProducts) return ["All products"];
+  return [
+    ...c.triggerTags.map((t) => `Tag: ${t}`),
+    ...c.triggerVendors.map((v) => `Brand: ${v}`),
+    ...c.triggerTypes.map((t) => `Type: ${t}`),
+  ];
+}
+
 function RefChips({
   products,
   collections = [],
+  rules = [],
   gift,
   emptyText,
 }: {
   products: Ref[];
   collections?: Ref[];
+  rules?: string[];
   gift?: boolean;
   emptyText: string;
 }) {
-  if (!products.length && !collections.length) {
+  if (!products.length && !collections.length && !rules.length) {
     return <span className="kb-sub">{emptyText}</span>;
   }
   return (
     <div>
+      {rules.map((r) => (
+        <span key={r} className="kb-refchip" style={{ paddingLeft: 8 }}>
+          <span>{r}</span>
+        </span>
+      ))}
       {collections.map((c) => (
         <span key={c.id} className="kb-refchip" style={{ paddingLeft: 8 }}>
           <span className="kb-overline" style={{ fontSize: 10 }}>
@@ -117,7 +134,7 @@ function RefChips({
 type Status = "all" | "active" | "scheduled" | "ended";
 
 export default function GiftCampaigns() {
-  const { campaigns, coverage } = useLoaderData<typeof loader>();
+  const { campaigns, coverage, sync } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
   const busy = fetcher.state !== "idle";
@@ -142,6 +159,7 @@ export default function GiftCampaigns() {
       c.title,
       ...c.triggerProducts.map((p) => p.title),
       ...c.triggerCollections.map((p) => p.title),
+      ...ruleLabels(c),
       ...c.giftProducts.map((p) => p.title),
     ]
       .join(" ")
@@ -162,7 +180,7 @@ export default function GiftCampaigns() {
               loading={busy && fetcher.formData?.get("intent") === "resync"}
               onClick={() => fetcher.submit({ intent: "resync" }, { method: "POST" })}
             >
-              Re-sync collections
+              Re-sync
             </Btn>
             <Btn variant="primary" to="/app/gifts/new">
               New campaign
@@ -216,6 +234,16 @@ export default function GiftCampaigns() {
 
       <div className="kb-summary">
         <span>{`${visible.length} campaign${visible.length === 1 ? "" : "s"}`}</span>
+        {sync ? (
+          <span
+            title={sync.errors || undefined}
+            style={sync.errors ? { color: "var(--danger)" } : undefined}
+          >
+            {`Last sync ${fmtWhen(sync.at)} · ${sync.changed} product${sync.changed === 1 ? "" : "s"} updated${
+              sync.errors ? " · with errors" : ""
+            }`}
+          </span>
+        ) : null}
       </div>
 
       <List cols="minmax(0,1fr) auto">
@@ -273,12 +301,23 @@ export default function GiftCampaigns() {
                   {mode === "detailed" ? (
                     <div className="kb-flow">
                       <div>
-                        <h4>{`Buy any of (${c.triggerProducts.length + c.triggerCollections.length})`}</h4>
+                        <h4>Buy any of</h4>
                         <RefChips
                           products={c.triggerProducts}
                           collections={c.triggerCollections}
+                          rules={ruleLabels(c)}
                           emptyText="No trigger set"
                         />
+                        {c.excludeTags.length || c.excludeProducts.length ? (
+                          <div className="kb-sub" style={{ marginTop: 4 }}>
+                            {`Excluding ${[
+                              ...c.excludeTags.map((t) => `tag “${t}”`),
+                              ...(c.excludeProducts.length
+                                ? [`${c.excludeProducts.length} product${c.excludeProducts.length === 1 ? "" : "s"}`]
+                                : []),
+                            ].join(", ")}`}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="kb-flow__arrow">→</div>
                       <div>

@@ -1,426 +1,18 @@
 import prisma from "../db.server";
 import {
-  GIFT_NODE_NAMESPACE,
-  GIFT_NODE_KEY,
   GIFT_TRIGGER_NAMESPACE,
   GIFT_TRIGGER_KEY,
   rowToCampaign,
   campaignState,
+  cleanStrings,
   type GiftCampaign,
   type ProductGiftInfo,
 } from "./gift-campaign";
+import { syncAll } from "../modules/gifts/engine.server";
 
 type AdminGraphql = {
   graphql: (query: string, options?: { variables?: any }) => Promise<Response>;
 };
-
-const PRODUCT_DISCOUNT_API_TYPE = "product_discounts";
-const NODE_TITLE_PREFIX = "KitBundle gift ";
-
-async function findFunctionId(admin: AdminGraphql): Promise<string | null> {
-  const resp = await admin.graphql(
-    `#graphql
-      query DiscountFunctions {
-        shopifyFunctions(first: 50) { nodes { id apiType } }
-      }`,
-  );
-  const json = await resp.json();
-  const fn = (json?.data?.shopifyFunctions?.nodes ?? []).find(
-    (n: any) => n.apiType === PRODUCT_DISCOUNT_API_TYPE,
-  );
-  return fn?.id ?? null;
-}
-
-/**
- * All of a collection's product gids, paged. (Was a single `first: 250` page —
- * products past the 250th silently never got the gift.) Safety cap at 50
- * pages (12,500 products) so a runaway loop can't hang a request.
- */
-export async function collectionProductIds(
-  admin: AdminGraphql,
-  collectionId: string,
-): Promise<string[]> {
-  const out: string[] = [];
-  let after: string | null = null;
-  for (let page = 0; page < 50; page++) {
-    const resp = await admin.graphql(
-      `#graphql
-        query CollProducts($id: ID!, $after: String) {
-          collection(id: $id) {
-            products(first: 250, after: $after) {
-              nodes { id }
-              pageInfo { hasNextPage endCursor }
-            }
-          }
-        }`,
-      { variables: { id: collectionId, after } },
-    );
-    const json: any = await resp.json();
-    const conn = json?.data?.collection?.products;
-    for (const n of conn?.nodes ?? []) {
-      if (typeof n?.id === "string") out.push(n.id);
-    }
-    if (!conn?.pageInfo?.hasNextPage || !conn?.pageInfo?.endCursor) break;
-    after = conn.pageInfo.endCursor;
-  }
-  return out;
-}
-
-/** All product gids a campaign triggers = manual list + expanded collections. */
-async function expandTriggerProducts(
-  admin: AdminGraphql,
-  c: GiftCampaign,
-): Promise<string[]> {
-  const ids = new Set<string>(c.triggerProducts.map((p) => p.id));
-  for (const coll of c.triggerCollections) {
-    for (const pid of await collectionProductIds(admin, coll.id)) ids.add(pid);
-  }
-  return [...ids];
-}
-
-/** Set `custom.gift_trigger` on each product to the given campaign entries. */
-async function writeTriggerStamps(
-  admin: AdminGraphql,
-  map: Map<string, any[]>,
-): Promise<string[]> {
-  const errors: string[] = [];
-  const entries = [...map.entries()];
-  for (let i = 0; i < entries.length; i += 25) {
-    const chunk = entries.slice(i, i + 25);
-    const metafields = chunk.map(([ownerId, campIds]) => ({
-      ownerId,
-      namespace: GIFT_TRIGGER_NAMESPACE,
-      key: GIFT_TRIGGER_KEY,
-      type: "json",
-      value: JSON.stringify(campIds),
-    }));
-    const resp = await admin.graphql(
-      `#graphql
-        mutation StampTriggers($metafields: [MetafieldsSetInput!]!) {
-          metafieldsSet(metafields: $metafields) {
-            userErrors { message }
-          }
-        }`,
-      { variables: { metafields } },
-    );
-    const json = await resp.json();
-    for (const e of json?.data?.metafieldsSet?.userErrors ?? [])
-      errors.push(e.message);
-  }
-  return errors;
-}
-
-/** The store's IANA timezone (e.g. "Europe/London"); "UTC" if unavailable. */
-async function shopTimezone(admin: AdminGraphql): Promise<string> {
-  try {
-    const resp = await admin.graphql(`#graphql
-      query ShopTz { shop { ianaTimezone } }`);
-    const json = await resp.json();
-    return json?.data?.shop?.ianaTimezone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-/** Store-local "YYYY-MM-DD" and "HH:MM" for an instant. */
-function localParts(ms: number, tz: string): { date: string; hm: string } {
-  const f = new Intl.DateTimeFormat("en-GB", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
-  const p: Record<string, string> = {};
-  for (const x of f.formatToParts(new Date(ms))) p[x.type] = x.value;
-  return { date: `${p.year}-${p.month}-${p.day}`, hm: `${p.hour}:${p.minute}` };
-}
-
-/**
- * Store-local date window + a shopper-facing end label for a campaign. The
- * Function compares `startDate`/`endDate` against the store's local date, and
- * the storefront shows `endsLabel` ("12 Oct 2026" / "12 Oct 2026, 14:00"). An
- * end exactly at 00:00 means "through the previous day".
- */
-function campaignWindow(
-  c: { startsAt?: string; endsAt?: string },
-  tz: string,
-): { startDate: string; endDate: string; endsLabel: string } {
-  const out = { startDate: "", endDate: "", endsLabel: "" };
-  const startMs = c.startsAt ? Date.parse(c.startsAt) : NaN;
-  if (!Number.isNaN(startMs)) out.startDate = localParts(startMs, tz).date;
-  const endMs = c.endsAt ? Date.parse(c.endsAt) : NaN;
-  if (!Number.isNaN(endMs)) {
-    const hm = localParts(endMs, tz).hm;
-    const dayMs = hm === "00:00" ? endMs - 1 : endMs;
-    out.endDate = localParts(dayMs, tz).date;
-    const day = new Intl.DateTimeFormat("en-GB", {
-      timeZone: tz,
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(dayMs));
-    out.endsLabel = hm === "00:00" || hm === "23:59" ? day : `${day}, ${hm}`;
-  }
-  return out;
-}
-
-/**
- * Recompute `custom.gift_trigger` for the given products from ALL enabled
- * campaigns. The stamp is SELF-CONTAINED per product — the theme reads only the
- * product's own metafield (guaranteed readable in Liquid via write_products) to
- * auto-add gifts, no shop-level metafield needed. Each entry:
- *   { id, triggers:[numericIds], gifts:[handles], perQualifying, badge }
- * Products no longer triggered by anything are set to [].
- */
-async function restampProducts(
-  admin: AdminGraphql,
-  shop: string,
-  affected: Set<string>,
-): Promise<string[]> {
-  if (affected.size === 0) return [];
-  const rows = await prisma.giftCampaign.findMany({
-    where: { shop, enabled: true },
-  });
-  const map = new Map<string, any[]>();
-  for (const pid of affected) map.set(pid, []);
-  const tz = await shopTimezone(admin);
-  for (const row of rows) {
-    const c = rowToCampaign(row);
-    const triggerGids = await expandTriggerProducts(admin, c);
-    const entry = {
-      // Store-local window (enforced by the Function) + display label.
-      ...campaignWindow(c, tz),
-      id: c.id,
-      triggers: triggerGids.map(gidTail),
-      gifts: c.giftProducts.map((g) => g.handle).filter(Boolean),
-      // Numeric gift product ids — the discount Function matches gift lines by id.
-      giftIds: c.giftProducts.map((g) => gidTail(g.id)).filter(Boolean),
-      // Per-gift offered variants { productIdTail: [variantIdTail,...] }. Only
-      // products that restrict variants appear; absent = all variants eligible.
-      // Read by the storefront (to list only these) and the Function (to enforce).
-      giftVariants: (() => {
-        const m: Record<string, string[]> = {};
-        for (const g of c.giftProducts) {
-          const t = gidTail(g.id);
-          const vs = Array.isArray(g.variantIds)
-            ? g.variantIds.map(gidTail).filter(Boolean)
-            : [];
-          if (t && vs.length) m[t] = vs;
-        }
-        return m;
-      })(),
-      perQualifying: Math.max(1, c.perQualifying || 1),
-      badge: c.badgeText || "",
-      subtitle: c.subtitle || "",
-      hideWhenSoldOut: !!c.hideWhenSoldOut,
-      rewardMode: c.rewardMode,
-      startsAt: c.startsAt || "",
-      endsAt: c.endsAt || "",
-    };
-    // Which variants of each manually-listed trigger product qualify (empty = all).
-    // Collection-expanded products aren't restricted.
-    const triggerVarsById = new Map<string, string[]>();
-    for (const t of c.triggerProducts) {
-      const vs = Array.isArray(t.variantIds)
-        ? t.variantIds.map(gidTail).filter(Boolean)
-        : [];
-      if (vs.length) triggerVarsById.set(t.id, vs);
-    }
-    for (const pid of triggerGids) {
-      if (!affected.has(pid)) continue; // only rewrite the affected set
-      const tv = triggerVarsById.get(pid);
-      // Per-product stamp: attach this product's qualifying variants when limited.
-      map.get(pid)!.push(tv && tv.length ? { ...entry, triggerVariants: tv } : entry);
-    }
-  }
-  const errors = await writeTriggerStamps(admin, map);
-  return errors;
-}
-
-/** Create or update the campaign's automatic discount node + its rules metafield. */
-async function reconcileNode(
-  admin: AdminGraphql,
-  c: GiftCampaign,
-  existingNodeId: string | null,
-): Promise<{ nodeId: string | null; errors: string[] }> {
-  const errors: string[] = [];
-  const startsAt = c.startsAt
-    ? new Date(c.startsAt).toISOString()
-    : new Date().toISOString();
-  const endsAt = c.endsAt ? new Date(c.endsAt).toISOString() : null;
-  const base = {
-    title: `${NODE_TITLE_PREFIX}${c.id}`,
-    startsAt,
-    endsAt,
-    combinesWith: {
-      productDiscounts: true,
-      orderDiscounts: true,
-      shippingDiscounts: true,
-    },
-  };
-
-  if (existingNodeId) {
-    const resp = await admin.graphql(
-      `#graphql
-        mutation UpdateGift($id: ID!, $d: DiscountAutomaticAppInput!) {
-          discountAutomaticAppUpdate(id: $id, automaticAppDiscount: $d) {
-            userErrors { message }
-          }
-        }`,
-      { variables: { id: existingNodeId, d: base } },
-    );
-    const json = await resp.json();
-    for (const e of json?.data?.discountAutomaticAppUpdate?.userErrors ?? [])
-      errors.push(e.message);
-    return { nodeId: existingNodeId, errors };
-  }
-
-  const functionId = await findFunctionId(admin);
-  if (!functionId) {
-    return {
-      nodeId: null,
-      errors: ["Discount function not deployed — run `shopify app deploy`."],
-    };
-  }
-  const resp = await admin.graphql(
-    `#graphql
-      mutation CreateGift($d: DiscountAutomaticAppInput!) {
-        discountAutomaticAppCreate(automaticAppDiscount: $d) {
-          automaticAppDiscount { discountId }
-          userErrors { message }
-        }
-      }`,
-    {
-      variables: {
-        d: {
-          ...base,
-          functionId,
-          metafields: [
-            {
-              namespace: GIFT_NODE_NAMESPACE,
-              key: GIFT_NODE_KEY,
-              type: "json",
-              value: JSON.stringify({
-                id: c.id,
-                giftProducts: c.giftProducts.map((g) => g.id),
-                perQualifying: Math.max(1, c.perQualifying || 1),
-              }),
-            },
-          ],
-        },
-      },
-    },
-  );
-  const json = await resp.json();
-  for (const e of json?.data?.discountAutomaticAppCreate?.userErrors ?? [])
-    errors.push(e.message);
-  const discountId =
-    json?.data?.discountAutomaticAppCreate?.automaticAppDiscount?.discountId ??
-    null;
-  return { nodeId: discountId, errors };
-}
-
-/** Update the node's rules metafield (gift set / perQualifying changed). */
-async function writeNodeRules(
-  admin: AdminGraphql,
-  nodeId: string,
-  c: GiftCampaign,
-): Promise<string[]> {
-  const resp = await admin.graphql(
-    `#graphql
-      mutation NodeRules($metafields: [MetafieldsSetInput!]!) {
-        metafieldsSet(metafields: $metafields) { userErrors { message } }
-      }`,
-    {
-      variables: {
-        metafields: [
-          {
-            ownerId: nodeId,
-            namespace: GIFT_NODE_NAMESPACE,
-            key: GIFT_NODE_KEY,
-            type: "json",
-            value: JSON.stringify({
-              id: c.id,
-              giftProducts: c.giftProducts.map((g) => g.id),
-              perQualifying: Math.max(1, c.perQualifying || 1),
-            }),
-          },
-        ],
-      },
-    },
-  );
-  const json = await resp.json();
-  return (json?.data?.metafieldsSet?.userErrors ?? []).map((e: any) => e.message);
-}
-
-function gidTail(id: string) {
-  return String(id).split("/").pop() || "";
-}
-
-async function shopGid(admin: AdminGraphql): Promise<string | null> {
-  const resp = await admin.graphql(`#graphql
-    query { shop { id } }`);
-  const json = await resp.json();
-  return json?.data?.shop?.id ?? null;
-}
-
-/**
- * Publish a compact, theme-readable snapshot of all enabled campaigns to a SHOP
- * metafield (custom.gift_campaigns) so the storefront can auto-add gifts and show
- * badges. Trigger ids are numeric + collection-expanded so the theme can match
- * cart line product_ids without reading per-line metafields.
- */
-export async function writeShopCampaigns(
-  admin: AdminGraphql,
-  shop: string,
-): Promise<string[]> {
-  const rows = await prisma.giftCampaign.findMany({
-    where: { shop, enabled: true },
-  });
-  const list = [];
-  for (const row of rows) {
-    const c = rowToCampaign(row);
-    const triggerIds = (await expandTriggerProducts(admin, c)).map(gidTail);
-    list.push({
-      id: c.id,
-      perQualifying: Math.max(1, c.perQualifying || 1),
-      rewardMode: c.rewardMode,
-      badge: c.badgeText || "",
-      startsAt: c.startsAt || "",
-      endsAt: c.endsAt || "",
-      triggerProductIds: triggerIds,
-      giftHandles: c.giftProducts.map((g) => g.handle).filter(Boolean),
-    });
-  }
-  const owner = await shopGid(admin);
-  if (!owner) return ["Could not resolve shop id."];
-  const resp = await admin.graphql(
-    `#graphql
-      mutation ShopCampaigns($metafields: [MetafieldsSetInput!]!) {
-        metafieldsSet(metafields: $metafields) { userErrors { message } }
-      }`,
-    {
-      variables: {
-        metafields: [
-          {
-            ownerId: owner,
-            namespace: "custom",
-            key: "gift_campaigns",
-            type: "json",
-            value: JSON.stringify(list),
-          },
-        ],
-      },
-    },
-  );
-  const json = await resp.json();
-  return (json?.data?.metafieldsSet?.userErrors ?? []).map(
-    (e: any) => e.message,
-  );
-}
 
 /**
  * Which enabled gift campaigns give a free gift when THIS product is bought. Reads
@@ -508,11 +100,10 @@ export async function saveCampaign(
 ): Promise<{ ok: boolean; errors: string[] }> {
   const prev = await prisma.giftCampaign.findFirst({ where: { shop, id: c.id } });
 
-  // 1. Gifts are now priced by the MAIN discount node (which reads each trigger
-  //    product's gift_trigger stamp), so this campaign needs NO separate
-  //    automatic-discount node. A separate node would be a 3rd product-discount
-  //    that Shopify drops when a limited-bundle node is also active. Delete any
-  //    node left from older versions.
+  // 1. Gifts are priced by the MAIN discount node (which reads each trigger
+  //    product's gift_trigger stamp), so a campaign needs NO automatic-discount
+  //    node of its own — a separate one would be a 3rd product discount that
+  //    Shopify drops next to a limited-bundle node. Delete any legacy node.
   const errors: string[] = [];
   if (prev?.nodeId) {
     const resp = await admin.graphql(
@@ -546,6 +137,12 @@ export async function saveCampaign(
     hideWhenSoldOut: !!c.hideWhenSoldOut,
     triggerProductsJson: JSON.stringify(c.triggerProducts),
     triggerCollectionsJson: JSON.stringify(c.triggerCollections),
+    triggerTagsJson: JSON.stringify(cleanStrings(c.triggerTags)),
+    triggerVendorsJson: JSON.stringify(cleanStrings(c.triggerVendors)),
+    triggerTypesJson: JSON.stringify(cleanStrings(c.triggerTypes)),
+    allProducts: !!c.allProducts,
+    excludeTagsJson: JSON.stringify(cleanStrings(c.excludeTags)),
+    excludeProductsJson: JSON.stringify(c.excludeProducts ?? []),
     giftProductsJson: JSON.stringify(c.giftProducts),
     nodeId: null, // no separate gift node any more
   };
@@ -555,16 +152,10 @@ export async function saveCampaign(
     update: data,
   });
 
-  // 3. Restamp trigger products (old set ∪ new set), recomputed from all
-  //    enabled campaigns so every product's gift_trigger stays correct.
-  const affected = new Set<string>(await expandTriggerProducts(admin, c));
-  if (prev) {
-    const prevCampaign = rowToCampaign(prev);
-    for (const pid of await expandTriggerProducts(admin, prevCampaign))
-      affected.add(pid);
-  }
-  errors.push(...(await restampProducts(admin, shop, affected)));
-
+  // 3. Re-sync stamps + the coverage index (only changed products are written;
+  //    products that dropped out of this campaign are cleared).
+  const r = await syncAll(admin, shop, "save");
+  errors.push(...r.errors);
   return { ok: errors.length === 0, errors };
 }
 
@@ -575,7 +166,6 @@ export async function deleteCampaign(
 ): Promise<{ ok: boolean; errors: string[] }> {
   const row = await prisma.giftCampaign.findFirst({ where: { shop, id } });
   if (!row) return { ok: true, errors: [] };
-  const c = rowToCampaign(row);
   const errors: string[] = [];
 
   if (row.nodeId) {
@@ -591,25 +181,18 @@ export async function deleteCampaign(
       errors.push(e.message);
   }
 
-  // Forget the row first so restamp recomputes WITHOUT this campaign.
-  const affected = new Set<string>(await expandTriggerProducts(admin, c));
+  // Forget the row first so the sync recomputes WITHOUT this campaign.
   await prisma.giftCampaign.delete({ where: { id } });
-  errors.push(...(await restampProducts(admin, shop, affected)));
-
+  const r = await syncAll(admin, shop, "delete");
+  errors.push(...r.errors);
   return { ok: errors.length === 0, errors };
 }
 
-/** Re-expand collections and rewrite stamps for every campaign (manual sync). */
+/** Re-resolve every campaign and rewrite changed stamps (manual sync). */
 export async function resyncAll(
   admin: AdminGraphql,
   shop: string,
-): Promise<{ ok: boolean; errors: string[] }> {
-  const rows = await prisma.giftCampaign.findMany({ where: { shop } });
-  const affected = new Set<string>();
-  for (const row of rows) {
-    for (const pid of await expandTriggerProducts(admin, rowToCampaign(row)))
-      affected.add(pid);
-  }
-  const errors = await restampProducts(admin, shop, affected);
-  return { ok: errors.length === 0, errors };
+): Promise<{ ok: boolean; errors: string[]; changed: number }> {
+  const r = await syncAll(admin, shop, "full");
+  return { ok: r.errors.length === 0, errors: r.errors, changed: r.changed };
 }

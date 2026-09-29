@@ -499,3 +499,87 @@ export function AffixInput({
     </span>
   );
 }
+
+/**
+ * Free-text chips (tags, brands, types): type and press Enter or comma to add,
+ * × to remove. Optional suggestions via a native datalist.
+ */
+export function TokenInput({
+  values,
+  onChange,
+  placeholder,
+  suggestions,
+  id,
+}: {
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  suggestions?: string[];
+  id: string;
+}) {
+  const add = (raw: string) => {
+    const parts = raw
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    if (!parts.length) return;
+    const seen = new Set(values.map((v) => v.toLowerCase()));
+    const next = [...values];
+    for (const p of parts) {
+      if (seen.has(p.toLowerCase())) continue;
+      seen.add(p.toLowerCase());
+      next.push(p);
+    }
+    onChange(next);
+  };
+  return (
+    <div className="kb-tokens">
+      {values.map((v) => (
+        <span key={v} className="kb-token">
+          {v}
+          <button
+            type="button"
+            aria-label={`Remove ${v}`}
+            onClick={() => onChange(values.filter((x) => x !== v))}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        className="kb-tokens__input"
+        list={suggestions?.length ? `${id}-list` : undefined}
+        placeholder={values.length ? "" : placeholder}
+        onKeyDown={(e) => {
+          const el = e.currentTarget;
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            add(el.value);
+            el.value = "";
+          } else if (e.key === "Backspace" && !el.value && values.length) {
+            onChange(values.slice(0, -1));
+          }
+        }}
+        onBlur={(e) => {
+          add(e.currentTarget.value);
+          e.currentTarget.value = "";
+        }}
+        onChange={(e) => {
+          // Picking a datalist suggestion fills the whole value at once.
+          const v = e.currentTarget.value;
+          if (suggestions?.includes(v)) {
+            add(v);
+            e.currentTarget.value = "";
+          }
+        }}
+      />
+      {suggestions?.length ? (
+        <datalist id={`${id}-list`}>
+          {suggestions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+      ) : null}
+    </div>
+  );
+}

@@ -45,9 +45,46 @@ export type GiftCampaign = {
   /** Hide sold-out gifts (and the whole group when all are sold out). */
   hideWhenSoldOut: boolean;
   triggerProducts: Ref[]; // manual product list
-  triggerCollections: Ref[]; // Shopify collections (expanded at save time)
+  triggerCollections: Ref[]; // Shopify collections (kept in sync by webhooks)
+  /** Rule-based triggers, matched case-insensitively. */
+  triggerTags: string[];
+  triggerVendors: string[];
+  triggerTypes: string[];
+  /** Every product in the store triggers. */
+  allProducts: boolean;
+  /**
+   * Carve-outs from the rule-based triggers (collections / tags / brands /
+   * types / all). Directly listed trigger products are never excluded.
+   */
+  excludeTags: string[];
+  excludeProducts: Ref[];
   giftProducts: Ref[]; // the gift set
 };
+
+/** True when the campaign has at least one way to trigger. */
+export function hasTrigger(c: GiftCampaign): boolean {
+  return (
+    c.allProducts ||
+    c.triggerProducts.length > 0 ||
+    c.triggerCollections.length > 0 ||
+    c.triggerTags.length > 0 ||
+    c.triggerVendors.length > 0 ||
+    c.triggerTypes.length > 0
+  );
+}
+
+/** Short human summary of what triggers a campaign ("2 products, tag: sale"). */
+export function triggerSummary(c: GiftCampaign): string {
+  if (c.allProducts) return "All products";
+  const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
+  const parts: string[] = [];
+  if (c.triggerProducts.length) parts.push(n(c.triggerProducts.length, "product"));
+  if (c.triggerCollections.length) parts.push(n(c.triggerCollections.length, "collection"));
+  if (c.triggerTags.length) parts.push(n(c.triggerTags.length, "tag"));
+  if (c.triggerVendors.length) parts.push(n(c.triggerVendors.length, "brand"));
+  if (c.triggerTypes.length) parts.push(n(c.triggerTypes.length, "type"));
+  return parts.join(", ") || "No trigger";
+}
 
 /** Compact read-only view of a gift a product triggers, for the product editor. */
 export type ProductGiftInfo = {
@@ -77,6 +114,12 @@ export function emptyCampaign(): GiftCampaign {
     hideWhenSoldOut: false,
     triggerProducts: [],
     triggerCollections: [],
+    triggerTags: [],
+    triggerVendors: [],
+    triggerTypes: [],
+    allProducts: false,
+    excludeTags: [],
+    excludeProducts: [],
     giftProducts: [],
   };
 }
@@ -116,6 +159,28 @@ function parseRefs(json: string | null | undefined): Ref[] {
   }
 }
 
+/** A JSON array of non-empty, trimmed, de-duplicated (case-insensitive) strings. */
+export function cleanStrings(v: unknown): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of Array.isArray(v) ? v : []) {
+    if (typeof x !== "string") continue;
+    const t = x.trim();
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+  }
+  return out;
+}
+
+function parseStrings(json: string | null | undefined): string[] {
+  try {
+    return cleanStrings(JSON.parse(json || "[]"));
+  } catch {
+    return [];
+  }
+}
+
 /** Build a GiftCampaign from a Prisma row (shape-compatible). */
 export function rowToCampaign(row: any): GiftCampaign {
   return {
@@ -136,6 +201,12 @@ export function rowToCampaign(row: any): GiftCampaign {
     hideWhenSoldOut: !!row.hideWhenSoldOut,
     triggerProducts: parseRefs(row.triggerProductsJson),
     triggerCollections: parseRefs(row.triggerCollectionsJson),
+    triggerTags: parseStrings(row.triggerTagsJson),
+    triggerVendors: parseStrings(row.triggerVendorsJson),
+    triggerTypes: parseStrings(row.triggerTypesJson),
+    allProducts: !!row.allProducts,
+    excludeTags: parseStrings(row.excludeTagsJson),
+    excludeProducts: parseRefs(row.excludeProductsJson),
     giftProducts: parseRefs(row.giftProductsJson),
   };
 }

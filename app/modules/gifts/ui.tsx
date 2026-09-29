@@ -73,14 +73,14 @@ export function fmtWhen(iso: string | null | undefined) {
   });
 }
 
-/** "Rebuild index" button; reports the result as an admin toast. */
+/** "Re-sync" button (full gift sync); reports the result as an admin toast. */
 export function RebuildButton() {
   const fetcher = useFetcher<{ ok: boolean; message?: string; error?: string }>();
   const shopify = useAppBridge();
   useEffect(() => {
     const d = fetcher.data;
     if (fetcher.state !== "idle" || !d) return;
-    shopify.toast.show(d.ok ? d.message || "Index rebuilt" : d.error || "Rebuild failed", {
+    shopify.toast.show(d.ok ? d.message || "Synced" : d.error || "Sync failed", {
       isError: !d.ok,
     });
   }, [fetcher.state, fetcher.data, shopify]);
@@ -91,7 +91,7 @@ export function RebuildButton() {
         fetcher.submit({}, { method: "POST", action: "/app/gifts/rebuild" })
       }
     >
-      Rebuild index
+      Re-sync
     </Btn>
   );
 }
