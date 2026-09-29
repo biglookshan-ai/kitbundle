@@ -1,15 +1,15 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { Page } from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { buildOffersOverview } from "../models/addon-config.server";
 import {
   OfferBrowser,
   OfferEmpty,
+  OffersShell,
   useConfigureProduct,
   type OfferSection,
 } from "../components/OfferList";
+import { PageHead, Btn } from "../ui/kit";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -34,12 +34,16 @@ export default function Bundles() {
     });
 
   return (
-    <Page>
-      <TitleBar title="Bundles">
-        <button variant="primary" onClick={configure}>
-          Configure a product
-        </button>
-      </TitleBar>
+    <OffersShell>
+      <PageHead
+        title="Bundles"
+        subtitle="Main products sold together with accessories at a set discount, including limited-time sale bundles."
+        actions={
+          <Btn variant="primary" onClick={configure}>
+            Configure a product
+          </Btn>
+        }
+      />
       {empty ? (
         <OfferEmpty
           heading="No bundles yet"
@@ -49,6 +53,6 @@ export default function Bundles() {
       ) : (
         <OfferBrowser sections={sections} currency={currency} showTypeFilter />
       )}
-    </Page>
+    </OffersShell>
   );
 }

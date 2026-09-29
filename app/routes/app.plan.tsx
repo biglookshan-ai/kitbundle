@@ -2,20 +2,6 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
 import {
-  Page,
-  Layout,
-  Card,
-  BlockStack,
-  InlineStack,
-  Text,
-  Button,
-  Badge,
-  List,
-  Banner,
-  Box,
-} from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
-import {
   authenticate,
   PRO_PLAN,
   BILLING_TEST,
@@ -23,6 +9,7 @@ import {
 } from "../shopify.server";
 import { FREE_PRODUCT_LIMIT, FREE_CAMPAIGN_LIMIT } from "../models/plan";
 import { isFreeShop } from "../models/plan.server";
+import { Shell, PageHead, Panel, Pill, Banner, Btn } from "../ui/kit";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { billing, session } = await authenticate.admin(request);
@@ -77,103 +64,65 @@ export default function Plan() {
   const busy = fetcher.state !== "idle";
 
   return (
-    <Page>
-      <TitleBar title="Plan" />
-      <Layout>
-        <Layout.Section>
-          {comped && (
-            <Box paddingBlockEnd="400">
-              <Banner tone="success" title="Complimentary access">
-                This store has full access to all features at no charge. No
-                subscription needed.
-              </Banner>
-            </Box>
-          )}
-          {test && (
-            <Box paddingBlockEnd="400">
-              <Banner tone="info">
-                Billing is in TEST mode — no real charges. (Disable
-                SHOPIFY_BILLING_TEST before launch.)
-              </Banner>
-            </Box>
-          )}
-          <InlineStack gap="400" align="start" blockAlign="stretch" wrap>
-            <Box width="320px">
-              <Card>
-                <BlockStack gap="300">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h2" variant="headingMd">
-                      Free
-                    </Text>
-                    {!pro && <Badge tone="success">Current plan</Badge>}
-                  </InlineStack>
-                  <Text as="p" variant="heading2xl">
-                    $0
-                  </Text>
-                  <List>
-                    <List.Item>
-                      {FREE_PRODUCT_LIMIT} product with bundles &amp; add-ons
-                    </List.Item>
-                    <List.Item>
-                      {FREE_CAMPAIGN_LIMIT} gift campaign
-                    </List.Item>
-                    <List.Item>All offer types included</List.Item>
-                    <List.Item>Automatic Function-based discounts</List.Item>
-                  </List>
-                </BlockStack>
-              </Card>
-            </Box>
-            <Box width="320px">
-              <Card>
-                <BlockStack gap="300">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h2" variant="headingMd">
-                      Pro
-                    </Text>
-                    {pro && <Badge tone="success">Current plan</Badge>}
-                  </InlineStack>
-                  <InlineStack gap="100" blockAlign="end">
-                    <Text as="p" variant="heading2xl">
-                      $29
-                    </Text>
-                    <Text as="p" variant="bodyMd" tone="subdued">
-                      / month
-                    </Text>
-                  </InlineStack>
-                  <List>
-                    <List.Item>Unlimited products</List.Item>
-                    <List.Item>Unlimited gift campaigns</List.Item>
-                    <List.Item>Limited-time offers &amp; countdowns</List.Item>
-                    <List.Item>Priority support</List.Item>
-                  </List>
-                  {pro ? (
-                    <Button
-                      tone="critical"
-                      variant="secondary"
-                      loading={busy}
-                      onClick={() =>
-                        fetcher.submit({ intent: "cancel" }, { method: "POST" })
-                      }
-                    >
-                      Cancel subscription
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      loading={busy}
-                      onClick={() =>
-                        fetcher.submit({ intent: "upgrade" }, { method: "POST" })
-                      }
-                    >
-                      Start 7-day free trial
-                    </Button>
-                  )}
-                </BlockStack>
-              </Card>
-            </Box>
-          </InlineStack>
-        </Layout.Section>
-      </Layout>
-    </Page>
+    <Shell section="Plan">
+      <PageHead title="Plan" subtitle="Your KitBundle subscription." />
+
+      {comped ? (
+        <Banner tone="ok">
+          <b>Complimentary access.</b> This store has full access to all features
+          at no charge. No subscription needed.
+        </Banner>
+      ) : null}
+      {test ? (
+        <Banner>
+          Billing is in TEST mode — no real charges. (Disable
+          SHOPIFY_BILLING_TEST before launch.)
+        </Banner>
+      ) : null}
+
+      <div className="kb-plans">
+        <div className="kb-plan">
+          <Panel title="Free" actions={!pro ? <Pill tone="ok">Current plan</Pill> : null}>
+            <div className="kb-plan__price">$0</div>
+            <ul>
+              <li>{FREE_PRODUCT_LIMIT} product with bundles &amp; add-ons</li>
+              <li>{FREE_CAMPAIGN_LIMIT} gift campaign</li>
+              <li>All offer types included</li>
+              <li>Automatic Function-based discounts</li>
+            </ul>
+          </Panel>
+        </div>
+        <div className="kb-plan">
+          <Panel title="Pro" actions={pro ? <Pill tone="ok">Current plan</Pill> : null}>
+            <div className="kb-plan__price">
+              $29<small>/ month</small>
+            </div>
+            <ul>
+              <li>Unlimited products</li>
+              <li>Unlimited gift campaigns</li>
+              <li>Limited-time offers &amp; countdowns</li>
+              <li>Priority support</li>
+            </ul>
+            {pro ? (
+              <Btn
+                variant="danger"
+                loading={busy}
+                onClick={() => fetcher.submit({ intent: "cancel" }, { method: "POST" })}
+              >
+                Cancel subscription
+              </Btn>
+            ) : (
+              <Btn
+                variant="primary"
+                loading={busy}
+                onClick={() => fetcher.submit({ intent: "upgrade" }, { method: "POST" })}
+              >
+                Start 7-day free trial
+              </Btn>
+            )}
+          </Panel>
+        </div>
+      </div>
+    </Shell>
   );
 }

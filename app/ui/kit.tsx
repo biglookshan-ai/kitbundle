@@ -204,18 +204,29 @@ export function Panel({
 export function Stats({
   items,
 }: {
-  items: { label: string; value: ReactNode; danger?: boolean }[];
+  items: { label: string; value: ReactNode; danger?: boolean; to?: string }[];
 }) {
   return (
     <div className="kb-stats" style={vars({ "--cols": items.length })}>
-      {items.map((s) => (
-        <div className="kb-stat" key={s.label}>
-          <div className={cx("kb-stat__n", s.danger && "is-danger")}>
-            {s.value}
+      {items.map((s) => {
+        const body = (
+          <>
+            <div className={cx("kb-stat__n", s.danger && "is-danger")}>
+              {s.value}
+            </div>
+            <div className="kb-stat__l">{s.label}</div>
+          </>
+        );
+        return s.to ? (
+          <Link key={s.label} to={s.to} prefetch="intent" className="kb-stat kb-stat--link">
+            {body}
+          </Link>
+        ) : (
+          <div className="kb-stat" key={s.label}>
+            {body}
           </div>
-          <div className="kb-stat__l">{s.label}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -224,7 +235,7 @@ export function Banner({
   tone,
   children,
 }: {
-  tone?: "danger" | "ok";
+  tone?: "danger" | "warn" | "ok";
   children: ReactNode;
 }) {
   return <div className={cx("kb-banner", tone && `kb-banner--${tone}`)}>{children}</div>;
@@ -253,17 +264,20 @@ export function Empty({
 /** A list whose header and rows share one CSS grid (`cols` = template). */
 export function List({
   cols,
+  title,
   head,
   children,
   footer,
 }: {
   cols: string;
+  title?: ReactNode;
   head?: ReactNode[];
   children: ReactNode;
   footer?: ReactNode;
 }) {
   return (
     <div className="kb-list" style={vars({ "--cols": cols })}>
+      {title ? <div className="kb-list__title">{title}</div> : null}
       {head ? (
         <div className="kb-list__head">
           {head.map((h, i) => (
@@ -277,8 +291,15 @@ export function List({
   );
 }
 
-export function Row({ children }: { children: ReactNode }) {
-  return <div className="kb-row">{children}</div>;
+/** A list row; with `to` the whole row is a link. */
+export function Row({ children, to }: { children: ReactNode; to?: string }) {
+  return to ? (
+    <Link to={to} prefetch="intent" className="kb-row kb-row--link">
+      {children}
+    </Link>
+  ) : (
+    <div className="kb-row">{children}</div>
+  );
 }
 
 export function Pager({

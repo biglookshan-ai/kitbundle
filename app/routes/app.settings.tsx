@@ -1,24 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import {
-  Page,
-  Layout,
-  Card,
-  BlockStack,
-  InlineStack,
-  Text,
-  Button,
-  Banner,
-  Badge,
-  List,
-  Icon,
-  Checkbox,
-  TextField,
-  Box,
-} from "@shopify/polaris";
-import { CheckCircleIcon, AlertTriangleIcon } from "@shopify/polaris-icons";
-import { TitleBar } from "@shopify/app-bridge-react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import {
   ensureFunctionDiscount,
@@ -29,6 +12,17 @@ import {
   getShopSettings,
   saveShopSettings,
 } from "../models/shop-settings.server";
+import {
+  Shell,
+  PageHead,
+  Panel,
+  Pill,
+  Banner,
+  Btn,
+  Field,
+  Input,
+  Checkbox,
+} from "../ui/kit";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -65,179 +59,157 @@ export default function Settings() {
     useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const settingsFetcher = useFetcher<typeof action>();
+  const shopify = useAppBridge();
   const busy = fetcher.state !== "idle";
   const active = activated || fetcher.data?.ok;
+  const activateError = (fetcher.data as { error?: string } | undefined)?.error;
 
   const [tagOffers, setTagOffers] = useState(settings.tagOffers);
   const [offerTag, setOfferTag] = useState(settings.offerTag);
   const savingSettings = settingsFetcher.state !== "idle";
-  const savedSettings = settingsFetcher.data?.ok;
+
+  useEffect(() => {
+    if (settingsFetcher.state === "idle" && settingsFetcher.data?.ok) {
+      shopify.toast.show("Saved. Re-save a product to apply the tag.");
+    }
+  }, [settingsFetcher.state, settingsFetcher.data, shopify]);
 
   return (
-    <Page>
-      <TitleBar title="Settings" />
-      <Layout>
-        <Layout.Section>
-          <BlockStack gap="400">
-            {/* Discount status */}
-            <Card>
-              <BlockStack gap="300">
-                <InlineStack align="space-between" blockAlign="center">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Icon
-                      source={active ? CheckCircleIcon : AlertTriangleIcon}
-                      tone={active ? "success" : "warning"}
-                    />
-                    <Text as="h2" variant="headingMd">
-                      Automatic discount
-                    </Text>
-                  </InlineStack>
-                  {active ? (
-                    <Badge tone="success">
-                      {status === "ACTIVE" || fetcher.data?.ok
-                        ? "Active"
-                        : "Created"}
-                    </Badge>
-                  ) : (
-                    <Badge tone="attention">Not active</Badge>
-                  )}
-                </InlineStack>
+    <Shell section="Settings">
+      <PageHead
+        title="Settings"
+        subtitle="Automatic discount, search tag and storefront setup."
+      />
 
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  A single Shopify Function discount applies all your bundle,
-                  add-on and free-gift pricing automatically at checkout — no
-                  codes, no manual work. It activates itself; this is only here to
-                  repair it if it was ever deleted.
-                </Text>
+      <div className="kb-grid-2">
+        <div className="kb-stack">
+          {/* Discount status */}
+          <Panel
+            title={
+              <span className="kb-inline" style={{ gap: 8 }}>
+                <span className={`kb-dot ${active ? "is-ok" : "is-warn"}`} />
+                Automatic discount
+              </span>
+            }
+            actions={
+              active ? (
+                <Pill tone="ok">
+                  {status === "ACTIVE" || fetcher.data?.ok ? "Active" : "Created"}
+                </Pill>
+              ) : (
+                <Pill tone="warn">Not active</Pill>
+              )
+            }
+          >
+            <p className="kb-muted" style={{ margin: "0 0 12px" }}>
+              A single Shopify Function discount applies all your bundle, add-on
+              and free-gift pricing automatically at checkout — no codes, no
+              manual work. It activates itself; this is only here to repair it if
+              it was ever deleted.
+            </p>
+            {activateError ? (
+              <Banner tone="danger">
+                <b>Could not activate.</b> {activateError}
+              </Banner>
+            ) : null}
+            {!functionId && !active ? (
+              <Banner tone="warn">
+                <b>Function not deployed.</b> Reinstall the app or contact support
+                if this persists.
+              </Banner>
+            ) : null}
+            {!active ? (
+              <Btn
+                variant="primary"
+                loading={busy}
+                onClick={() => fetcher.submit({}, { method: "POST" })}
+              >
+                Re-activate discount
+              </Btn>
+            ) : null}
+          </Panel>
 
-                {(fetcher.data as any)?.error && (
-                  <Banner tone="critical" title="Could not activate">
-                    <p>{(fetcher.data as any).error}</p>
-                  </Banner>
-                )}
-                {!functionId && !active && (
-                  <Banner tone="warning" title="Function not deployed">
-                    <p>
-                      Reinstall the app or contact support if this persists.
-                    </p>
-                  </Banner>
-                )}
-
-                {!active && (
-                  <InlineStack>
-                    <Button
-                      variant="primary"
-                      loading={busy}
-                      onClick={() => fetcher.submit({}, { method: "POST" })}
-                    >
-                      Re-activate discount
-                    </Button>
-                  </InlineStack>
-                )}
-              </BlockStack>
-            </Card>
-
-            {/* Search & discovery tag */}
-            <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">
-                  Search &amp; discovery tag
-                </Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  Add a product tag to every product that has a live offer, so
-                  you can find bundled products in Shopify search, build automated
-                  collections, or feed a custom search engine. Only KitBundle&apos;s
-                  own tag is added or removed — your other tags are untouched.
-                </Text>
-                <Checkbox
-                  label="Tag products that have a live offer"
-                  checked={tagOffers}
-                  onChange={setTagOffers}
-                />
-                <Box width="240px">
-                  <TextField
-                    label="Tag"
-                    autoComplete="off"
+          {/* Search & discovery tag */}
+          <Panel title="Search &amp; discovery tag">
+            <p className="kb-muted" style={{ margin: "0 0 12px" }}>
+              Add a product tag to every product that has a live offer, so you can
+              find bundled products in Shopify search, build automated
+              collections, or feed a custom search engine. Only KitBundle&apos;s
+              own tag is added or removed — your other tags are untouched.
+            </p>
+            <div className="kb-stack kb-stack--tight">
+              <Checkbox
+                label="Tag products that have a live offer"
+                checked={tagOffers}
+                onChange={setTagOffers}
+              />
+              <div style={{ maxWidth: 260 }}>
+                <Field
+                  label="Tag"
+                  help="Lowercase, no spaces (e.g. kitbundle, has-bundle)."
+                >
+                  <Input
                     value={offerTag}
-                    onChange={setOfferTag}
+                    onChange={(e) => setOfferTag(e.target.value)}
                     disabled={!tagOffers}
-                    helpText="Lowercase, no spaces (e.g. kitbundle, has-bundle)."
+                    autoComplete="off"
                   />
-                </Box>
-                <InlineStack gap="200" blockAlign="center">
-                  <Button
-                    loading={savingSettings}
-                    onClick={() =>
-                      settingsFetcher.submit(
-                        {
-                          intent: "settings",
-                          tagOffers: String(tagOffers),
-                          offerTag,
-                        },
-                        { method: "POST" },
-                      )
-                    }
-                  >
-                    Save
-                  </Button>
-                  {savedSettings && (
-                    <Text as="span" tone="success" variant="bodySm">
-                      Saved. Re-save a product to apply the tag.
-                    </Text>
-                  )}
-                </InlineStack>
-              </BlockStack>
-            </Card>
+                </Field>
+              </div>
+              <div>
+                <Btn
+                  loading={savingSettings}
+                  onClick={() =>
+                    settingsFetcher.submit(
+                      {
+                        intent: "settings",
+                        tagOffers: String(tagOffers),
+                        offerTag,
+                      },
+                      { method: "POST" },
+                    )
+                  }
+                >
+                  Save
+                </Btn>
+              </div>
+            </div>
+          </Panel>
 
-            {/* Storefront block */}
-            <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">
-                  Storefront block
-                </Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  Your offers appear through the <b>KitBundle</b> app block. Add
-                  it once to your product template:
-                </Text>
-                <List type="number">
-                  <List.Item>
-                    Online Store → Themes → Customize.
-                  </List.Item>
-                  <List.Item>
-                    Open a <b>Product</b> template, click Add block, choose{" "}
-                    <b>KitBundle — Bundle &amp; Add-ons</b>.
-                  </List.Item>
-                  <List.Item>
-                    Position it where you want, adjust its colors and headings in
-                    the block settings, and Save.
-                  </List.Item>
-                </List>
-              </BlockStack>
-            </Card>
-          </BlockStack>
-        </Layout.Section>
+          {/* Storefront block */}
+          <Panel title="Storefront block">
+            <p className="kb-muted" style={{ margin: "0 0 8px" }}>
+              Your offers appear through the <b>KitBundle</b> app block. Add it
+              once to your product template:
+            </p>
+            <ol className="kb-steps" style={{ marginBottom: 0 }}>
+              <li>Online Store → Themes → Customize.</li>
+              <li>
+                Open a <b>Product</b> template, click Add block, choose{" "}
+                <b>KitBundle — Bundle &amp; Add-ons</b>.
+              </li>
+              <li>
+                Position it where you want, adjust its colors and headings in the
+                block settings, and Save.
+              </li>
+            </ol>
+          </Panel>
+        </div>
 
-        <Layout.Section variant="oneThird">
-          <Card>
-            <BlockStack gap="200">
-              <Text as="h2" variant="headingMd">
-                Support
-              </Text>
-              <Text as="p" variant="bodySm" tone="subdued">
-                Questions or setup help — we usually reply within a day.
-              </Text>
-              <InlineStack>
-                <Button url="mailto:biglookshan@gmail.com" external variant="plain">
-                  biglookshan@gmail.com
-                </Button>
-              </InlineStack>
-              <Button url="/privacy" external variant="plain">
+        <aside className="kb-side">
+          <Panel title="Support">
+            <p>Questions or setup help — we usually reply within a day.</p>
+            <div className="kb-stack kb-stack--tight">
+              <a className="kb-btn kb-btn--link" href="mailto:biglookshan@gmail.com" target="_blank" rel="noreferrer">
+                biglookshan@gmail.com
+              </a>
+              <a className="kb-btn kb-btn--link" href="/privacy" target="_blank" rel="noreferrer">
                 Privacy policy
-              </Button>
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-      </Layout>
-    </Page>
+              </a>
+            </div>
+          </Panel>
+        </aside>
+      </div>
+    </Shell>
   );
 }

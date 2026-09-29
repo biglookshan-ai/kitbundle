@@ -1,20 +1,23 @@
-import { useState } from "react";
+/**
+ * Offer lists (bundles / sale bundles / add-ons) on the kb kit: search, type
+ * filter, Simple/Detailed, "Show more". Also the shared Offers section frame,
+ * empty state and the "Configure a product" picker.
+ */
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "@remix-run/react";
 import {
-  Card,
-  InlineStack,
-  BlockStack,
-  Text,
-  TextField,
-  Button,
-  ButtonGroup,
-  Thumbnail,
-  Badge,
-  Box,
-  Icon,
-  EmptyState,
-} from "@shopify/polaris";
-import { ImageIcon, SearchIcon } from "@shopify/polaris-icons";
+  Shell,
+  Btn,
+  Empty,
+  Field,
+  Input,
+  List,
+  Pill,
+  Row,
+  Segmented,
+  Thumb,
+  type TabItem,
+} from "../ui/kit";
 
 type Kind = "bundle" | "sale" | "addon" | "free";
 type ViewMode = "simple" | "detailed";
@@ -80,27 +83,25 @@ function fmtDate(iso: string | null) {
   });
 }
 
-function SaleStatusBadge({ state }: { state: OfferRow["saleState"] }) {
-  if (state === "active") return <Badge tone="success">Live</Badge>;
-  if (state === "upcoming") return <Badge tone="info">Scheduled</Badge>;
-  return <Badge>Ended</Badge>;
+export const OFFER_TABS: TabItem[] = [
+  { label: "Products", to: "/app/products" },
+  { label: "Bundles", to: "/app/bundles" },
+  { label: "Add-ons", to: "/app/addons" },
+];
+
+/** Frame for the offer pages: KitBundle · Offers + Products/Bundles/Add-ons. */
+export function OffersShell({ children }: { children: ReactNode }) {
+  return (
+    <Shell section="Offers" tabs={OFFER_TABS}>
+      {children}
+    </Shell>
+  );
 }
 
-/** Light-red "sale" chip for discounts — visually distinct from the green Live
- *  status badge so a discount never reads as a status. */
-function DiscountChip({ label }: { label: string }) {
-  return (
-    <Box
-      background="bg-surface-critical"
-      paddingBlock="050"
-      paddingInline="150"
-      borderRadius="200"
-    >
-      <Text as="span" variant="bodySm" tone="critical" fontWeight="medium">
-        {label}
-      </Text>
-    </Box>
-  );
+function SaleStatusPill({ state }: { state: OfferRow["saleState"] }) {
+  if (state === "active") return <Pill tone="ok">Live</Pill>;
+  if (state === "upcoming") return <Pill tone="info">Scheduled</Pill>;
+  return <Pill>Ended</Pill>;
 }
 
 /** Compact one-line sale status + timing for the Simple view. */
@@ -128,7 +129,7 @@ function saleSummary(r: OfferRow): string {
     : `Ended ${fmtDate(r.endsAt)} · now ${r.discountPercent}% off`;
 }
 
-/** Right-aligned price block: was → now (+ % off badge for kits). */
+/** Right-aligned price block: was → now (+ % off chip for kits). */
 function PriceBlock({
   r,
   kind,
@@ -138,241 +139,84 @@ function PriceBlock({
   kind: Kind;
   currency: string;
 }) {
-  const savings = r.origTotal > r.nowTotal;
   return (
-    <BlockStack gap="100" inlineAlign="end">
-      <InlineStack gap="150" blockAlign="center" wrap={false}>
-        {savings && (
-          <Text as="span" variant="bodySm" tone="subdued">
-            <s>{money(r.origTotal, currency)}</s>
-          </Text>
-        )}
-        <Text as="span" variant="bodyMd" fontWeight="semibold">
-          {money(r.nowTotal, currency)}
-        </Text>
-      </InlineStack>
-      {kind !== "addon" && r.effectivePct > 0 && (
-        <DiscountChip label={`${r.effectivePct}% off kit`} />
-      )}
-    </BlockStack>
+    <div className="kb-price">
+      <span>
+        {r.origTotal > r.nowTotal ? <s>{money(r.origTotal, currency)}</s> : null}
+        <b>{money(r.nowTotal, currency)}</b>
+      </span>
+      {kind !== "addon" && r.effectivePct > 0 ? (
+        <Pill tone="danger">{`${r.effectivePct}% off kit`}</Pill>
+      ) : null}
+    </div>
   );
 }
 
-/** Compact single-line row: code · name · main · N items · price. */
-function OfferRowSimple({
+/** One offer row; Detailed adds the item list and the sale schedule. */
+function OfferItem({
   r,
   kind,
   currency,
-  last,
-  onOpen,
+  detailed,
 }: {
   r: OfferRow;
   kind: Kind;
   currency: string;
-  last: boolean;
-  onOpen: () => void;
+  detailed: boolean;
 }) {
+  const items = `${r.accessoryCount} ${r.accessoryCount === 1 ? "item" : "items"}`;
   return (
-    <Box
-      padding="300"
-      borderBlockEndWidth={last ? undefined : "025"}
-      borderColor="border"
-    >
-      <div onClick={onOpen} style={{ cursor: "pointer" }}>
-        <InlineStack align="space-between" blockAlign="center" wrap={false}>
-          <InlineStack gap="200" blockAlign="center" wrap={false}>
-            <Badge tone={r.dim ? undefined : "info"}>
-              {r.code || "—"}
-            </Badge>
-            <Thumbnail
-              source={r.productImage || ImageIcon}
-              alt={r.productTitle}
-              size="small"
-            />
-            <BlockStack gap="0">
-              <Text
-                as="span"
-                variant="bodyMd"
-                fontWeight="medium"
-                tone={r.dim ? "subdued" : undefined}
-              >
-                {r.title}
-              </Text>
-              <Text as="span" variant="bodyXs" tone="subdued">
-                {r.productTitle} · {r.accessoryCount}{" "}
-                {r.accessoryCount === 1 ? "item" : "items"}
-                {kind === "sale" ? ` · ${saleShort(r)}` : ""}
-              </Text>
-            </BlockStack>
-          </InlineStack>
+    <Row to={`/app/products/${r.numericId}#${r.groupId}`}>
+      <div style={{ minWidth: 0 }}>
+        <div className={`kb-offer${r.dim ? " is-dim" : ""}`}>
+          <span className={`kb-code${r.dim ? " is-dim" : ""}`}>{r.code || "—"}</span>
+          <Thumb src={r.productImage} size={40} alt="" />
+          <div style={{ minWidth: 0 }}>
+            <div className="kb-inline" style={{ gap: 6 }}>
+              <span className="kb-title">{r.title}</span>
+              {detailed && kind === "sale" ? <SaleStatusPill state={r.saleState} /> : null}
+            </div>
+            <div className="kb-sub">
+              {detailed
+                ? `${kind === "addon" ? "On" : "Main ·"} ${r.productTitle}`
+                : `${r.productTitle} · ${items}${kind === "sale" ? ` · ${saleShort(r)}` : ""}`}
+            </div>
+          </div>
           <PriceBlock r={r} kind={kind} currency={currency} />
-        </InlineStack>
+        </div>
+
+        {detailed && r.accessories.length > 0 ? (
+          <div className="kb-items">
+            <div className="kb-overline">
+              {`${kind === "addon" ? "Add-ons" : "Includes"} (${r.accessoryCount})`}
+            </div>
+            {r.accessories.map((a, i) => (
+              <div className="kb-items__row" key={i}>
+                <Thumb src={a.image} size={28} alt="" />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {a.title}
+                </span>
+                <span className="kb-price">
+                  {a.pct > 0 ? <s>{money(a.price, currency)}</s> : null}
+                  <b>{money(a.now, currency)}</b>
+                  {a.pct > 0 ? <Pill tone="danger">{`${a.pct}%`}</Pill> : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {detailed && kind === "sale" ? (
+          <div className="kb-sub" style={{ marginTop: 8 }}>
+            {saleSummary(r)}
+          </div>
+        ) : null}
       </div>
-    </Box>
-  );
-}
-
-/** A rich, expanded row for one offer (bundle / sale bundle / add-on). */
-function OfferRowCard({
-  r,
-  kind,
-  currency,
-  last,
-  onOpen,
-}: {
-  r: OfferRow;
-  kind: Kind;
-  currency: string;
-  last: boolean;
-  onOpen: () => void;
-}) {
-  return (
-    <Box
-      padding="400"
-      borderBlockEndWidth={last ? undefined : "025"}
-      borderColor="border"
-    >
-      <div onClick={onOpen} style={{ cursor: "pointer" }}>
-        <BlockStack gap="300">
-          {/* Header: code + name + status  |  kit price */}
-          <InlineStack align="space-between" blockAlign="start" wrap={false}>
-            <BlockStack gap="150">
-              <InlineStack gap="200" blockAlign="center" wrap>
-                <Badge tone={r.dim ? undefined : "info"}>
-                  {r.code || "—"}
-                </Badge>
-                <Text
-                  as="span"
-                  variant="bodyMd"
-                  fontWeight="semibold"
-                  tone={r.dim ? "subdued" : undefined}
-                >
-                  {r.title}
-                </Text>
-                {kind === "sale" && <SaleStatusBadge state={r.saleState} />}
-              </InlineStack>
-              <InlineStack gap="150" blockAlign="center">
-                <Thumbnail
-                  source={r.productImage || ImageIcon}
-                  alt={r.productTitle}
-                  size="small"
-                />
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {kind === "addon" ? "On " : "Main · "}
-                  {r.productTitle}
-                </Text>
-              </InlineStack>
-            </BlockStack>
-            <PriceBlock r={r} kind={kind} currency={currency} />
-          </InlineStack>
-
-          {/* Included / add-on products with per-item pricing */}
-          {r.accessories.length > 0 && (
-            <Box
-              background="bg-surface-secondary"
-              padding="300"
-              borderRadius="200"
-            >
-              <BlockStack gap="150">
-                <Text as="span" variant="bodyXs" tone="subdued">
-                  {kind === "addon" ? "Add-ons" : "Includes"} (
-                  {r.accessoryCount})
-                </Text>
-                {r.accessories.map((a, i) => (
-                  <InlineStack
-                    key={i}
-                    align="space-between"
-                    blockAlign="center"
-                    wrap={false}
-                  >
-                    <InlineStack gap="150" blockAlign="center" wrap={false}>
-                      <Thumbnail
-                        source={a.image || ImageIcon}
-                        alt={a.title}
-                        size="small"
-                      />
-                      <Text as="span" variant="bodySm">
-                        {a.title}
-                      </Text>
-                    </InlineStack>
-                    <InlineStack gap="150" blockAlign="center" wrap={false}>
-                      {a.pct > 0 && (
-                        <Text as="span" variant="bodySm" tone="subdued">
-                          <s>{money(a.price, currency)}</s>
-                        </Text>
-                      )}
-                      <Text as="span" variant="bodySm" fontWeight="medium">
-                        {money(a.now, currency)}
-                      </Text>
-                      {a.pct > 0 && <DiscountChip label={`${a.pct}%`} />}
-                    </InlineStack>
-                  </InlineStack>
-                ))}
-              </BlockStack>
-            </Box>
-          )}
-
-          {/* Sale schedule / after-end behaviour */}
-          {kind === "sale" && (
-            <Text as="span" variant="bodySm" tone="subdued">
-              🕒 {saleSummary(r)}
-            </Text>
-          )}
-        </BlockStack>
-      </div>
-    </Box>
+    </Row>
   );
 }
 
 const PAGE_STEP = 25;
-
-/** A section of rows rendered in the chosen view mode, capped at `limit`. */
-function OfferSectionCard({
-  section,
-  mode,
-  currency,
-  onOpen,
-  limit,
-  onShowMore,
-}: {
-  section: OfferSection;
-  mode: ViewMode;
-  currency: string;
-  onOpen: (r: OfferRow) => void;
-  limit: number;
-  onShowMore: () => void;
-}) {
-  const shown = section.rows.slice(0, limit);
-  const remaining = section.rows.length - shown.length;
-  return (
-    <SectionCard title={section.title} count={section.rows.length}>
-      <BlockStack>
-        {shown.map((r, i) => {
-          const last = i === shown.length - 1 && remaining === 0;
-          const props = {
-            r,
-            kind: section.kind,
-            currency,
-            last,
-            onOpen: () => onOpen(r),
-          };
-          return mode === "simple" ? (
-            <OfferRowSimple key={r.key} {...props} />
-          ) : (
-            <OfferRowCard key={r.key} {...props} />
-          );
-        })}
-      </BlockStack>
-      {remaining > 0 && (
-        <Box padding="300">
-          <Button fullWidth variant="tertiary" onClick={onShowMore}>
-            {`Show ${Math.min(PAGE_STEP, remaining)} more — ${remaining} hidden`}
-          </Button>
-        </Box>
-      )}
-    </SectionCard>
-  );
-}
 
 /**
  * The full offer list surface: a toolbar (search, type filter, Simple/Detailed
@@ -388,7 +232,6 @@ export function OfferBrowser({
   currency: string;
   showTypeFilter?: boolean;
 }) {
-  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<ViewMode>("simple");
   const [type, setType] = useState<string>("all");
@@ -405,97 +248,107 @@ export function OfferBrowser({
     .filter((s) => type === "all" || s.key === type)
     .map((s) => ({ ...s, rows: s.rows.filter(match) }));
   const totalMatches = filtered.reduce((n, s) => n + s.rows.length, 0);
-
-  const onOpen = (r: OfferRow) =>
-    navigate(`/app/products/${r.numericId}#${r.groupId}`);
+  const typeFilter = showTypeFilter && sections.length > 1;
 
   return (
-    <BlockStack gap="400">
-      <Box>
-        <InlineStack align="space-between" blockAlign="center" gap="300" wrap>
-          <Box minWidth="260px">
-            <TextField
-              label="Search"
-              labelHidden
-              value={query}
-              onChange={(v) => {
-                setQuery(v);
-                setLimit(PAGE_STEP);
-              }}
-              autoComplete="off"
-              placeholder="Search by code, name or product"
-              prefix={<Icon source={SearchIcon} />}
-              clearButton
-              onClearButtonClick={() => setQuery("")}
-            />
-          </Box>
-          <InlineStack gap="200" blockAlign="center">
-            {showTypeFilter && sections.length > 1 && (
-              <ButtonGroup variant="segmented">
-                <Button
-                  pressed={type === "all"}
-                  onClick={() => setType("all")}
-                >
-                  All
-                </Button>
-                {sections.map((s) => (
-                  <Button
-                    key={s.key}
-                    pressed={type === s.key}
-                    onClick={() => setType(s.key)}
-                  >
-                    {s.title.replace("Limited-time sale bundles", "Sale")}
-                  </Button>
-                ))}
-              </ButtonGroup>
-            )}
-            <ButtonGroup variant="segmented">
-              <Button
-                pressed={mode === "simple"}
-                onClick={() => setMode("simple")}
-              >
-                Simple
-              </Button>
-              <Button
-                pressed={mode === "detailed"}
-                onClick={() => setMode("detailed")}
-              >
-                Detailed
-              </Button>
-            </ButtonGroup>
-          </InlineStack>
-        </InlineStack>
-      </Box>
+    <>
+      <div
+        className="kb-filters"
+        style={{
+          ["--cols" as string]: typeFilter
+            ? "minmax(240px,1fr) auto auto"
+            : "minmax(240px,1fr) auto",
+        }}
+      >
+        <Field label="Search">
+          <Input
+            type="search"
+            placeholder="Search by code, name or product"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setLimit(PAGE_STEP);
+            }}
+          />
+        </Field>
+        {typeFilter ? (
+          <Segmented
+            value={type}
+            onChange={setType}
+            options={[
+              { value: "all", label: "All" },
+              ...sections.map((s) => ({
+                value: s.key,
+                label: s.title.replace("Limited-time sale bundles", "Sale"),
+              })),
+            ]}
+          />
+        ) : null}
+        <Segmented<ViewMode>
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "simple", label: "Simple" },
+            { value: "detailed", label: "Detailed" },
+          ]}
+        />
+      </div>
+
+      <div className="kb-summary">
+        <span>{`${totalMatches} offer${totalMatches === 1 ? "" : "s"}`}</span>
+      </div>
 
       {totalMatches === 0 ? (
-        <Card>
-          <Box padding="400">
-            <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
-              No offers match “{query}”.
-            </Text>
-          </Box>
-        </Card>
+        <List cols="1fr">
+          <Empty title={`No offers match “${query}”`} />
+        </List>
       ) : (
-        filtered.map(
-          (s) =>
-            s.rows.length > 0 && (
-              <OfferSectionCard
+        <div className="kb-stack">
+          {filtered.map((s) => {
+            if (!s.rows.length) return null;
+            const shown = s.rows.slice(0, limit);
+            const remaining = s.rows.length - shown.length;
+            return (
+              <List
                 key={s.key}
-                section={s}
-                mode={mode}
-                currency={currency}
-                onOpen={onOpen}
-                limit={limit}
-                onShowMore={() => setLimit((l) => l + PAGE_STEP)}
-              />
-            ),
-        )
+                cols="minmax(0,1fr)"
+                title={
+                  <span className="kb-inline" style={{ gap: 8 }}>
+                    {s.title}
+                    <Pill tone="info">{s.rows.length}</Pill>
+                  </span>
+                }
+                footer={
+                  remaining > 0 ? (
+                    <button
+                      type="button"
+                      className="kb-list__more"
+                      onClick={() => setLimit((l) => l + PAGE_STEP)}
+                    >
+                      {`Show ${Math.min(PAGE_STEP, remaining)} more — ${remaining} hidden`}
+                    </button>
+                  ) : null
+                }
+              >
+                {shown.map((r) => (
+                  <OfferItem
+                    key={r.key}
+                    r={r}
+                    kind={s.kind}
+                    currency={currency}
+                    detailed={mode === "detailed"}
+                  />
+                ))}
+              </List>
+            );
+          })}
+        </div>
       )}
-    </BlockStack>
+    </>
   );
 }
 
-/** Empty-state card shown when a page has no offers of its kinds yet. */
+/** Empty state shown when a page has no offers of its kinds yet. */
 export function OfferEmpty({
   heading,
   body,
@@ -506,15 +359,18 @@ export function OfferEmpty({
   onConfigure: () => void;
 }) {
   return (
-    <Card>
-      <EmptyState
-        heading={heading}
-        action={{ content: "Configure a product", onAction: onConfigure }}
-        image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+    <List cols="1fr">
+      <Empty
+        title={heading}
+        action={
+          <Btn variant="primary" onClick={onConfigure}>
+            Configure a product
+          </Btn>
+        }
       >
-        <p>{body}</p>
-      </EmptyState>
-    </Card>
+        {body}
+      </Empty>
+    </List>
   );
 }
 
@@ -534,28 +390,20 @@ export function useConfigureProduct() {
   };
 }
 
-export function SectionCard({
-  title,
-  count,
-  children,
+/** Offer-count pills for a configured product (bundle / sale / add-on / free). */
+export function OfferCountPills({
+  counts,
 }: {
-  title: string;
-  count?: number;
-  children: React.ReactNode;
+  counts: { bundle: number; sale: number; addon: number; free: number };
 }) {
+  const none = counts.bundle + counts.sale + counts.addon + counts.free === 0;
+  if (none) return <span className="kb-sub">No active offers</span>;
   return (
-    <Card padding="0">
-      <Box padding="400" borderBlockEndWidth="025" borderColor="border">
-        <InlineStack gap="200" blockAlign="center">
-          <Text as="h3" variant="headingSm">
-            {title}
-          </Text>
-          {typeof count === "number" && (
-            <Badge tone="info">{String(count)}</Badge>
-          )}
-        </InlineStack>
-      </Box>
-      {children}
-    </Card>
+    <div className="kb-pills">
+      {counts.bundle > 0 ? <Pill tone="info">{`${counts.bundle} bundle`}</Pill> : null}
+      {counts.sale > 0 ? <Pill tone="warn">{`${counts.sale} sale`}</Pill> : null}
+      {counts.addon > 0 ? <Pill>{`${counts.addon} add-on`}</Pill> : null}
+      {counts.free > 0 ? <Pill tone="ok">{`${counts.free} free`}</Pill> : null}
+    </div>
   );
 }
