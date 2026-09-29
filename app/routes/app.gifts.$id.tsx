@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { useLoaderData, useFetcher } from "@remix-run/react";
+import { Link, useLoaderData, useFetcher } from "@remix-run/react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
@@ -83,7 +83,14 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       : Promise.resolve({} as Record<string, { id: string; title: string }[]>),
     ruleSuggestions(admin),
   ]);
-  return { campaign: c, isNew: !campaign, variantMap, suggest };
+  // Products this campaign actually covers (from the gifts index, as of the
+  // last sync) — rules like tags/brands expand to many products.
+  const covers = campaign
+    ? await prisma.giftCoverage.count({
+        where: { shop: session.shop, campaignId: campaign.id, role: "trigger" },
+      })
+    : 0;
+  return { campaign: c, isNew: !campaign, variantMap, suggest, covers };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -142,6 +149,7 @@ export default function GiftCampaignEditor() {
     isNew,
     variantMap: loadedVariants,
     suggest,
+    covers,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -312,8 +320,17 @@ export default function GiftCampaignEditor() {
         subtitle={
           <span className="kb-inline">
             <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+            {!isNew ? (
+              <Link
+                to={`/app/gifts/products?campaign=${encodeURIComponent(c.id)}`}
+                prefetch="intent"
+                style={{ color: "var(--link)", fontWeight: 600 }}
+              >
+                {`Covers ${covers} product${covers === 1 ? "" : "s"}`}
+              </Link>
+            ) : null}
             <span>
-              {`${triggerSummary(c)} → ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
+              {`Triggers: ${triggerSummary(c)} · ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
             </span>
           </span>
         }
