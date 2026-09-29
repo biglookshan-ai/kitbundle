@@ -458,3 +458,44 @@ export function Switch({
     </label>
   );
 }
+
+/* ---------------- Editor helpers ---------------- */
+
+/** Icon-only button (drag handles excluded — those are plain spans). */
+export function IconBtn({
+  label,
+  onClick,
+  tone,
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  tone?: "danger";
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={cx("kb-iconbtn", tone && `kb-iconbtn--${tone}`)}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Text input with a trailing unit (e.g. "%"). */
+export function AffixInput({
+  suffix,
+  invalid,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { suffix: string; invalid?: boolean }) {
+  return (
+    <span className="kb-affix">
+      <input {...props} className={cx("kb-input", invalid && "is-error", props.className)} />
+      <span className="kb-affix__s">{suffix}</span>
+    </span>
+  );
+}

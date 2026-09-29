@@ -199,7 +199,7 @@ export default function Settings() {
         <aside className="kb-side">
           <Panel title="Support">
             <p>Questions or setup help — we usually reply within a day.</p>
-            <div className="kb-stack kb-stack--tight">
+            <div className="kb-stack kb-stack--tight" style={{ alignItems: "flex-start" }}>
               <a className="kb-btn kb-btn--link" href="mailto:biglookshan@gmail.com" target="_blank" rel="noreferrer">
                 biglookshan@gmail.com
               </a>

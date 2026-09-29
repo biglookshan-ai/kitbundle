@@ -7,41 +7,8 @@ import {
 } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { useLoaderData, useFetcher } from "@remix-run/react";
-import {
-  Page,
-  Layout,
-  Card,
-  BlockStack,
-  InlineStack,
-  Text,
-  TextField,
-  Select,
-  Button,
-  ButtonGroup,
-  Badge,
-  Thumbnail,
-  Box,
-  Banner,
-  Divider,
-  Checkbox,
-  Icon,
-  Popover,
-  Collapsible,
-} from "@shopify/polaris";
-import {
-  DeleteIcon,
-  PlusIcon,
-  ImageIcon,
-  ArchiveIcon,
-  DragHandleIcon,
-  QuestionCircleIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  ViewIcon,
-  HideIcon,
-} from "@shopify/polaris-icons";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { Link, useLoaderData, useFetcher } from "@remix-run/react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { canConfigureProduct } from "../models/plan.server";
 import {
@@ -68,6 +35,35 @@ import {
   type AddonAccessory,
   type LimitedOffer,
 } from "../models/addon-config";
+import { OffersShell } from "../components/OfferList";
+import {
+  PageHead,
+  Btn,
+  IconBtn,
+  Banner,
+  Panel,
+  Pill,
+  Thumb,
+  Empty,
+  List,
+  Row,
+  Segmented,
+  Input,
+  AffixInput,
+  Select,
+  Checkbox,
+  sized,
+} from "../ui/kit";
+import {
+  IconArchive,
+  IconChevron,
+  IconDrag,
+  IconEye,
+  IconEyeOff,
+  IconHelp,
+  IconPlus,
+  IconTrash,
+} from "../ui/icons";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -341,6 +337,13 @@ export default function ProductConfig() {
     );
   const isSaving = fetcher.state !== "idle";
 
+  // Report a failed save as an admin toast too (success redirects away).
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data?.error) {
+      shopify.toast.show(fetcher.data.error, { isError: true });
+    }
+  }, [fetcher.state, fetcher.data, shopify]);
+
   // Deep link from the dashboard (#groupId): switch to that group's tab, then
   // scroll + flash it.
   useEffect(() => {
@@ -354,12 +357,12 @@ export default function ProductConfig() {
       if (!node) return;
       node.scrollIntoView({ behavior: "smooth", block: "center" });
       node.style.transition = "box-shadow .3s";
-      node.style.boxShadow = "0 0 0 3px #2b44ff";
+      node.style.borderRadius = "10px";
+      node.style.boxShadow = "0 0 0 3px #3659a7";
       setTimeout(() => (node.style.boxShadow = ""), 1600);
     }, 80);
     return () => clearTimeout(t);
   }, []);
-
   const addGroup = useCallback((type: GroupType) => {
     setGroups((prev) => [...prev, blankGroup(type)]);
   }, []);
@@ -545,211 +548,201 @@ export default function ProductConfig() {
     `Add-on (${countOf("addon")})`,
   ];
   const addLabel = currentType === "bundle" ? "Add bundle" : "Add add-on";
+  const hasCodeError = groups.some((g) => Boolean(codeErrorFor(g)));
 
   return (
-    <Page
-      backAction={{ content: "Add-ons", url: "/app" }}
-      title={product.title}
-      titleMetadata={
-        <Badge tone="info">{`${activeGroups.length} group(s)`}</Badge>
-      }
-      secondaryActions={[
-        {
-          content: "View product",
-          url: `shopify:admin/products/${numericId}`,
-          target: "_blank",
-        },
-      ]}
-      primaryAction={{
-        content: "Save",
-        loading: isSaving,
-        disabled: groups.some((g) => Boolean(codeErrorFor(g))),
-        onAction: save,
-      }}
-    >
-      <TitleBar title={`Configure: ${product.title}`} />
-      <BlockStack gap="500">
-        {fetcher.data?.error && (
-          <Banner tone="critical" title="Could not save">
-            <p>{fetcher.data.error}</p>
-          </Banner>
-        )}
+    <OffersShell>
+      <PageHead
+        back={{ to: "/app/products", label: "Products" }}
+        title={
+          <span className="kb-inline" style={{ gap: 10 }}>
+            {product.title}
+            <Pill tone="info">{`${activeGroups.length} group(s)`}</Pill>
+          </span>
+        }
+        actions={
+          <>
+            <a
+              className="kb-btn"
+              href={`shopify:admin/products/${numericId}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View product
+            </a>
+            <Btn
+              variant="primary"
+              loading={isSaving}
+              disabled={hasCodeError}
+              onClick={save}
+            >
+              Save
+            </Btn>
+          </>
+        }
+      />
 
-        <Layout>
-          <Layout.Section>
-            <BlockStack gap="400">
-              {/* Main product shown ONCE — every bundle/add-on on this page
-                  attaches to it, so no need to repeat it per card. */}
-              <Card>
-                <InlineStack
-                  align="space-between"
-                  blockAlign="center"
-                  wrap={false}
-                >
-                  <InlineStack gap="300" blockAlign="center" wrap={false}>
-                    <Thumbnail
-                      source={infoMap[product.id]?.image ?? product.image ?? ImageIcon}
-                      alt={product.title}
-                      size="small"
-                    />
-                    <BlockStack gap="050">
-                      <InlineStack gap="150" blockAlign="center">
-                        <Text as="span" variant="bodyMd" fontWeight="semibold">
-                          {product.title}
-                        </Text>
-                        <Badge tone="info">Main product</Badge>
-                      </InlineStack>
-                      {mainPrice != null && (
-                        <Text as="span" variant="bodySm" tone="subdued">
-                          {fmtMoney(mainPrice, currency)}
-                        </Text>
-                      )}
-                    </BlockStack>
-                  </InlineStack>
-                  <StockBadge qty={inventory[product.id] ?? null} />
-                </InlineStack>
-              </Card>
+      {fetcher.data?.error ? (
+        <Banner tone="danger">
+          <b>Could not save.</b> {fetcher.data.error}
+        </Banner>
+      ) : null}
 
-              <ButtonGroup variant="segmented">
-                {TAB_LABELS.map((label, i) => (
-                  <Button key={i} pressed={tab === i} onClick={() => setTab(i)}>
-                    {label}
-                  </Button>
-                ))}
-              </ButtonGroup>
-
-              {tabGroups.length === 0 ? (
-                <Card>
-                  <BlockStack gap="200" inlineAlign="center">
-                    <Text as="p" variant="bodyMd" tone="subdued">
-                      No {currentType + "s"} yet.
-                    </Text>
-                    <Button
-                      variant="primary"
-                      icon={PlusIcon}
-                      onClick={() => addGroup(currentType)}
-                    >
-                      {addLabel}
-                    </Button>
-                  </BlockStack>
-                </Card>
-              ) : (
-                tabGroups.map((group) => (
-                  <div
-                    key={group.id}
-                    id={group.id}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (dragGroupId.current)
-                        moveGroup(dragGroupId.current, group.id);
-                      dragGroupId.current = null;
-                    }}
-                  >
-                    <GroupCard
-                      group={group}
-                      productHandle={product.handle}
-                      codeError={codeErrorFor(group)}
-                      offerWarning={offerWarningFor(group)}
-                      prices={priceMap}
-                      compareAt={compareMap}
-                      variants={variantMap}
-                      info={infoMap}
-                      inventory={inventory}
-                      mainVariants={variantMap[product.id] || []}
-                      mainImages={mainImages}
-                      mainTitle={product.title}
-                      mainPrice={mainPrice}
-                      mainCompareAt={compareMap[product.id] ?? mainPrice}
-                      currency={currency}
-                      dragHandle={
-                        <span
-                          draggable
-                          onDragStart={(e) => {
-                            dragGroupId.current = group.id;
-                            e.dataTransfer.effectAllowed = "move";
-                          }}
-                          onDragEnd={() => {
-                            dragGroupId.current = null;
-                          }}
-                          style={{ cursor: "grab", display: "inline-flex" }}
-                          aria-label="Drag to reorder"
-                          title="Drag to reorder"
-                        >
-                          <Icon source={DragHandleIcon} tone="subdued" />
-                        </span>
-                      }
-                      onChange={(patch) => updateGroup(group.id, patch)}
-                      onArchive={() => archiveGroup(group.id)}
-                      onPickAccessories={() =>
-                        pickAccessories(group.id, group.accessories)
-                      }
-                      onRemoveAccessory={(pid) => removeAccessory(group.id, pid)}
-                      onUpdateAccessory={(pid, patch) =>
-                        updateAccessory(group.id, pid, patch)
-                      }
-                    />
-                  </div>
-                ))
-              )}
-
-              {tabGroups.length > 0 && (
-                <InlineStack>
-                  <Button icon={PlusIcon} onClick={() => addGroup(currentType)}>
-                    {addLabel}
-                  </Button>
-                </InlineStack>
-              )}
-
-              {archivedGroups.length > 0 && (
-                <ArchivedSection
-                  groups={archivedGroups}
-                  onRestore={restoreGroup}
-                  onDelete={deleteGroup}
+      <div className="kb-grid-2">
+        <div className="kb-stack">
+          {/* Main product shown ONCE — every bundle/add-on on this page
+              attaches to it, so no need to repeat it per card. */}
+          <div className="kb-group">
+            <div className="kb-between">
+              <div className="kb-ident">
+                <Thumb
+                  src={infoMap[product.id]?.image ?? product.image}
+                  size={44}
+                  alt=""
                 />
-              )}
-            </BlockStack>
-          </Layout.Section>
+                <div style={{ minWidth: 0 }}>
+                  <div className="kb-inline" style={{ gap: 6 }}>
+                    <span className="kb-title">{product.title}</span>
+                    <Pill tone="info">Main product</Pill>
+                  </div>
+                  {mainPrice != null ? (
+                    <div className="kb-sub">{fmtMoney(mainPrice, currency)}</div>
+                  ) : null}
+                </div>
+              </div>
+              <StockBadge qty={inventory[product.id] ?? null} />
+            </div>
+          </div>
 
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="400">
-              <GiftInfoCard gifts={giftInfo} />
-              <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">
-                  How it works
-                </Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  <b>Bundle</b> — a curated set sold together. One discount
-                  applies to the whole kit (main + accessories). Toggle{" "}
-                  <b>Limited-time offer</b> for a countdown + deeper price.
-                </Text>
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  <b>Add-on</b> — individual extras. <b>Free add-on</b> rides
-                  along at 100% off.
-                </Text>
-                <Divider />
-                <Text as="p" variant="bodyMd" tone="subdued">
-                  Each accessory can override the group discount — leave its box
-                  blank to use the group %. Give each bundle a unique{" "}
-                  <b>code</b> — it's searchable and shows on the cart & order.
-                </Text>
-              </BlockStack>
-              </Card>
-            </BlockStack>
-          </Layout.Section>
-        </Layout>
-      </BlockStack>
-    </Page>
+          <div>
+            <Segmented
+              value={String(tab)}
+              onChange={(v) => setTab(Number(v))}
+              options={TAB_LABELS.map((label, i) => ({ value: String(i), label }))}
+            />
+          </div>
+
+          {tabGroups.length === 0 ? (
+            <div className="kb-group">
+              <Empty
+                title={`No ${currentType}s yet`}
+                action={
+                  <Btn variant="primary" onClick={() => addGroup(currentType)}>
+                    <IconPlus size={14} />
+                    {addLabel}
+                  </Btn>
+                }
+              />
+            </div>
+          ) : (
+            tabGroups.map((group) => (
+              <div
+                key={group.id}
+                id={group.id}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragGroupId.current)
+                    moveGroup(dragGroupId.current, group.id);
+                  dragGroupId.current = null;
+                }}
+              >
+                <GroupCard
+                  group={group}
+                  productHandle={product.handle}
+                  codeError={codeErrorFor(group)}
+                  offerWarning={offerWarningFor(group)}
+                  prices={priceMap}
+                  compareAt={compareMap}
+                  variants={variantMap}
+                  info={infoMap}
+                  inventory={inventory}
+                  mainVariants={variantMap[product.id] || []}
+                  mainImages={mainImages}
+                  mainTitle={product.title}
+                  mainPrice={mainPrice}
+                  mainCompareAt={compareMap[product.id] ?? mainPrice}
+                  currency={currency}
+                  dragHandle={
+                    <span
+                      className="kb-drag"
+                      draggable
+                      onDragStart={(e) => {
+                        dragGroupId.current = group.id;
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        dragGroupId.current = null;
+                      }}
+                      aria-label="Drag to reorder"
+                      title="Drag to reorder"
+                    >
+                      <IconDrag />
+                    </span>
+                  }
+                  onChange={(patch) => updateGroup(group.id, patch)}
+                  onArchive={() => archiveGroup(group.id)}
+                  onPickAccessories={() =>
+                    pickAccessories(group.id, group.accessories)
+                  }
+                  onRemoveAccessory={(pid) => removeAccessory(group.id, pid)}
+                  onUpdateAccessory={(pid, patch) =>
+                    updateAccessory(group.id, pid, patch)
+                  }
+                />
+              </div>
+            ))
+          )}
+
+          {tabGroups.length > 0 ? (
+            <div>
+              <Btn onClick={() => addGroup(currentType)}>
+                <IconPlus size={14} />
+                {addLabel}
+              </Btn>
+            </div>
+          ) : null}
+
+          {archivedGroups.length > 0 ? (
+            <ArchivedSection
+              groups={archivedGroups}
+              onRestore={restoreGroup}
+              onDelete={deleteGroup}
+            />
+          ) : null}
+        </div>
+
+        <aside className="kb-side kb-sticky">
+          <GiftInfoCard gifts={giftInfo} />
+          <Panel title="How it works">
+            <p>
+              <b>Bundle</b> — a curated set sold together. One discount applies to
+              the whole kit (main + accessories). Toggle <b>Limited-time offer</b>{" "}
+              for a countdown + deeper price.
+            </p>
+            <p>
+              <b>Add-on</b> — individual extras. <b>Free add-on</b> rides along at
+              100% off.
+            </p>
+            <div className="kb-divider" />
+            <p>
+              Each accessory can override the group discount — leave its box blank
+              to use the group %. Give each bundle a unique <b>code</b> — it&apos;s
+              searchable and shows on the cart &amp; order.
+            </p>
+          </Panel>
+        </aside>
+      </div>
+    </OffersShell>
   );
 }
 
-const GIFT_STATE_BADGE: Record<
+const GIFT_STATE_PILL: Record<
   ProductGiftInfo["state"],
-  { label: string; tone: "success" | "attention" | "info" | undefined }
+  { label: string; tone: "ok" | "warn" | "info" | undefined }
 > = {
-  active: { label: "Active", tone: "success" },
-  scheduled: { label: "Scheduled", tone: "attention" },
+  active: { label: "Active", tone: "ok" },
+  scheduled: { label: "Scheduled", tone: "warn" },
   ended: { label: "Ended", tone: undefined },
   disabled: { label: "Off", tone: undefined },
 };
@@ -757,127 +750,166 @@ const GIFT_STATE_BADGE: Record<
 /** ④ Read-only card: which gift campaigns give a free gift with this product. */
 function GiftInfoCard({ gifts }: { gifts: ProductGiftInfo[] }) {
   return (
-    <Card>
-      <BlockStack gap="300">
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="h2" variant="headingMd">
-            🎁 Free gifts
-          </Text>
-          <Button url="/app/gifts" variant="plain">
-            Manage
-          </Button>
-        </InlineStack>
-        {gifts.length === 0 ? (
-          <Text as="p" variant="bodySm" tone="subdued">
-            No gift campaign includes this product yet. Buyers get a free gift
-            when a campaign's trigger product is purchased — set one up under{" "}
-            <b>Free gifts</b>.
-          </Text>
-        ) : (
-          <BlockStack gap="300">
-            <Text as="p" variant="bodySm" tone="subdued">
-              Buying this product triggers these free-gift campaigns:
-            </Text>
-            {gifts.map((g) => {
-              const badge = GIFT_STATE_BADGE[g.state];
-              return (
-                <Box
-                  key={g.id}
-                  background="bg-surface-secondary"
-                  padding="300"
-                  borderRadius="200"
-                >
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between" blockAlign="center">
-                      <Text as="span" variant="bodySm" fontWeight="medium">
-                        {g.title}
-                      </Text>
-                      <Badge tone={badge.tone}>{badge.label}</Badge>
-                    </InlineStack>
-                    <InlineStack gap="200" blockAlign="center" wrap>
-                      {g.gifts.map((gp, i) => (
-                        <InlineStack key={i} gap="100" blockAlign="center">
-                          <Thumbnail
-                            source={gp.image || ImageIcon}
-                            alt={gp.title}
-                            size="extraSmall"
-                          />
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {gp.title}
-                          </Text>
-                        </InlineStack>
-                      ))}
-                    </InlineStack>
-                    {g.perQualifying > 1 && (
-                      <Text as="span" variant="bodySm" tone="subdued">
-                        {g.perQualifying} free per qualifying item
-                      </Text>
-                    )}
-                  </BlockStack>
-                </Box>
-              );
-            })}
-          </BlockStack>
-        )}
-      </BlockStack>
-    </Card>
+    <Panel
+      title="Free gifts"
+      actions={
+        <Link to="/app/gifts" prefetch="intent" className="kb-btn kb-btn--link kb-small">
+          Manage
+        </Link>
+      }
+    >
+      {gifts.length === 0 ? (
+        <p>
+          No gift campaign includes this product yet. Buyers get a free gift when
+          a campaign&apos;s trigger product is purchased — set one up under{" "}
+          <b>Free gifts</b>.
+        </p>
+      ) : (
+        <div className="kb-stack kb-stack--tight">
+          <p>Buying this product triggers these free-gift campaigns:</p>
+          {gifts.map((g) => {
+            const pill = GIFT_STATE_PILL[g.state];
+            return (
+              <div key={g.id} className="kb-box">
+                <div className="kb-between" style={{ marginBottom: 6 }}>
+                  <Link
+                    to={`/app/gifts/${g.id}`}
+                    prefetch="intent"
+                    className="kb-title"
+                    style={{ fontSize: 13 }}
+                  >
+                    {g.title}
+                  </Link>
+                  <Pill tone={pill.tone}>{pill.label}</Pill>
+                </div>
+                <div>
+                  {g.gifts.map((gp, i) => (
+                    <span key={i} className="kb-refchip kb-refchip--gift">
+                      <Thumb src={gp.image} size={22} alt="" />
+                      <span>{gp.title}</span>
+                    </span>
+                  ))}
+                </div>
+                {g.perQualifying > 1 ? (
+                  <div className="kb-sub">{`${g.perQualifying} free per qualifying item`}</div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
   );
 }
 
-/** Inventory badge: green in-stock, amber low, red sold-out; nothing if untracked. */
+/** Inventory pill: green in-stock, amber low, red sold-out; nothing if untracked. */
 function StockBadge({ qty }: { qty: number | null | undefined }) {
   if (qty == null) return null; // not tracked / unknown
-  if (qty <= 0) return <Badge tone="critical">Sold out</Badge>;
-  if (qty <= 5) return <Badge tone="warning">{`${qty} left`}</Badge>;
-  return <Badge tone="success">{`${qty} in stock`}</Badge>;
+  if (qty <= 0) return <Pill tone="danger">Sold out</Pill>;
+  if (qty <= 5) return <Pill tone="warn">{`${qty} left`}</Pill>;
+  return <Pill tone="ok">{`${qty} in stock`}</Pill>;
 }
 
 /** A small "?" that reveals a short explanation on click — keeps cards uncluttered. */
 function InfoTip({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
   return (
-    <Popover
-      active={open}
-      onClose={() => setOpen(false)}
-      preferredAlignment="left"
-      activator={
-        <Button
-          variant="plain"
-          icon={QuestionCircleIcon}
-          onClick={() => setOpen((o) => !o)}
-          accessibilityLabel="What's this?"
-        />
-      }
-    >
-      <Box padding="300" maxWidth="260px">
-        <Text as="p" variant="bodySm">
+    <span className="kb-tip" ref={ref}>
+      <button
+        type="button"
+        className="kb-iconbtn kb-iconbtn--sm"
+        aria-label="What's this?"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <IconHelp size={14} />
+      </button>
+      {open ? (
+        <span className="kb-tip__pop" role="tooltip">
           {text}
-        </Text>
-      </Box>
-    </Popover>
+        </span>
+      ) : null}
+    </span>
   );
 }
 
-/** A field label with an inline "?" info popover, used with labelHidden fields. */
-function FieldLabel({
+/** A labelled field with an inline "?" tip (div, not <label>, so the tip button
+ *  doesn't steal label clicks). */
+function LField({
   text,
   tip,
   required,
+  error,
+  help,
+  children,
 }: {
   text: string;
-  tip: string;
+  tip?: string;
   required?: boolean;
+  error?: string;
+  help?: string;
+  children: ReactNode;
 }) {
   return (
-    <InlineStack gap="100" blockAlign="center">
-      <Text as="span" variant="bodySm" fontWeight="medium">
+    <div className="kb-lfield">
+      <span className="kb-lfield__label">
         {text}
         {required ? " *" : ""}
-      </Text>
-      <InfoTip text={tip} />
-    </InlineStack>
+        {tip ? <InfoTip text={tip} /> : null}
+      </span>
+      {children}
+      {error ? <span className="kb-field__error">{error}</span> : null}
+      {help ? <span className="kb-field__help">{help}</span> : null}
+    </div>
   );
 }
+
+/** Variant toggle chips; keeps at least one selected, all = undefined. */
+function VariantChips({
+  all,
+  selected,
+  onChange,
+}: {
+  all: { id: string; title: string }[];
+  selected: string[] | undefined;
+  onChange: (ids: string[] | undefined) => void;
+}) {
+  const current = selected && selected.length ? selected : all.map((x) => x.id);
+  return (
+    <div className="kb-chips">
+      {all.map((v) => {
+        const on = current.includes(v.id);
+        return (
+          <button
+            key={v.id}
+            type="button"
+            className={`kb-chip${on ? " is-on" : ""}`}
+            onClick={() => {
+              const next = on
+                ? current.filter((x) => x !== v.id)
+                : [...current, v.id];
+              if (next.length === 0) return; // keep at least one offered
+              onChange(next.length === all.length ? undefined : next);
+            }}
+          >
+            {v.title}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const GROUP_TONE = (isFree: boolean, limitedOn: boolean, isBundle: boolean) =>
+  isFree ? "ok" : limitedOn ? "warn" : isBundle ? "info" : undefined;
 
 function GroupCard({
   group,
@@ -1043,702 +1075,501 @@ function GroupCard({
         { id: `t-prod-${group.id}`, content: "Products" },
       ];
 
+  const mainVarCount = group.mainVariantIds?.length ?? mainVariants.length;
+
   return (
-    <Card>
-      <BlockStack gap="300">
-        {/* ---- Summary (always visible): row 1 = info, row 2 = thumbs + price ---- */}
-        <BlockStack gap="150">
-          <InlineStack align="space-between" blockAlign="center" wrap={false} gap="200">
-            <InlineStack gap="200" blockAlign="center" wrap={false}>
-              {dragHandle}
-              <Badge
-                tone={
-                  isFree
-                    ? "success"
-                    : limitedOn
-                      ? "attention"
-                      : isBundle
-                        ? "info"
-                        : undefined
-                }
-              >
-                {formLabel(group)}
-              </Badge>
-              {group.hidden && <Badge tone="warning">Hidden</Badge>}
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
+    <div className="kb-group">
+      {/* ---- Summary (always visible): row 1 = info, row 2 = thumbs + price ---- */}
+      <div className="kb-group__head">
+        {dragHandle}
+        <Pill tone={GROUP_TONE(isFree, limitedOn, isBundle)}>{formLabel(group)}</Pill>
+        {group.hidden ? <Pill tone="warn">Hidden</Pill> : null}
+        <button
+          type="button"
+          className="kb-group__name"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {group.code ? <span className="kb-sub">{group.code}</span> : null}
+          <b>{group.title || "Untitled"}</b>
+        </button>
+        <IconBtn
+          label={group.hidden ? "Show on storefront" : "Hide from storefront"}
+          onClick={() => onChange({ hidden: !group.hidden })}
+        >
+          {group.hidden ? <IconEyeOff /> : <IconEye />}
+        </IconBtn>
+        <IconBtn
+          label={expanded ? "Collapse" : "Expand"}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <IconChevron up={expanded} />
+        </IconBtn>
+        <IconBtn label="Archive group" onClick={onArchive}>
+          <IconArchive />
+        </IconBtn>
+      </div>
+
+      {summaryThumbs.length > 0 || (isBundle && haveAllPrices) || !isFree ? (
+        <div className="kb-group__sum">
+          <div className="kb-thumbs">
+            {summaryThumbs.slice(0, 6).map((u, i) => (
+              <Thumb key={i} src={u} size={28} alt="" />
+            ))}
+            {summaryThumbs.length > 6 ? (
+              <span className="kb-sub">+{summaryThumbs.length - 6}</span>
+            ) : null}
+          </div>
+          <div className="kb-inline" style={{ flexWrap: "nowrap" }}>
+            {isBundle && haveAllPrices ? (
+              <>
+                <b>{fmtMoney(summaryNow, currency)}</b>
+                {summaryOffPct > 0 ? (
+                  <Pill tone="danger">{`${summaryOffPct}% off`}</Pill>
+                ) : null}
+              </>
+            ) : null}
+            {!isFree ? <StockBadge qty={minStock} /> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {offerWarning ? (
+        <div style={{ marginTop: 10 }}>
+          <Banner tone="danger">
+            <b>Limited offer not active.</b> {offerWarning}
+          </Banner>
+        </div>
+      ) : null}
+      {codeError && !expanded ? (
+        <div className="kb-field__error" style={{ marginTop: 6 }}>
+          {codeError}
+        </div>
+      ) : null}
+
+      {expanded ? (
+        <div className="kb-group__body">
+          <div>
+            <Segmented
+              value={String(tab)}
+              onChange={(v) => setTab(Number(v))}
+              options={tabItems.map((t, i) => ({ value: String(i), label: t.content }))}
+            />
+          </div>
+
+          {/* ---- INFO TAB ---- */}
+          {tab === 0 ? (
+            <>
+              {/* Code + title (+ discount for add-ons) on one tidy row. */}
+              <div
                 style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  textAlign: "left",
+                  display: "grid",
+                  gridTemplateColumns: isBundle ? "38fr 62fr" : "30fr 42fr 28fr",
+                  gap: 12,
+                  alignItems: "start",
                 }}
               >
-                <InlineStack gap="150" blockAlign="center" wrap>
-                  {group.code && (
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      {group.code}
-                    </Text>
-                  )}
-                  <Text as="span" variant="bodyMd" fontWeight="semibold">
-                    {group.title || "Untitled"}
-                  </Text>
-                </InlineStack>
-              </button>
-            </InlineStack>
-            <InlineStack gap="100" blockAlign="center" wrap={false}>
-              <Button
-                icon={group.hidden ? HideIcon : ViewIcon}
-                variant="tertiary"
-                onClick={() => onChange({ hidden: !group.hidden })}
-                accessibilityLabel={
-                  group.hidden ? "Show on storefront" : "Hide from storefront"
-                }
-              />
-              <Button
-                variant="tertiary"
-                icon={expanded ? ChevronUpIcon : ChevronDownIcon}
-                onClick={() => setExpanded((v) => !v)}
-                accessibilityLabel={expanded ? "Collapse" : "Expand"}
-              />
-              <Button
-                icon={ArchiveIcon}
-                variant="tertiary"
-                onClick={onArchive}
-                accessibilityLabel="Archive group"
-              />
-            </InlineStack>
-          </InlineStack>
-
-          {(summaryThumbs.length > 0 || (isBundle && haveAllPrices) || !isFree) && (
-            <InlineStack align="space-between" blockAlign="center" gap="200">
-              <InlineStack gap="050" blockAlign="center" wrap>
-                {summaryThumbs.slice(0, 6).map((u, i) => (
-                  <Thumbnail key={i} source={u} alt="" size="extraSmall" />
-                ))}
-                {summaryThumbs.length > 6 && (
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    +{summaryThumbs.length - 6}
-                  </Text>
-                )}
-              </InlineStack>
-              <InlineStack gap="150" blockAlign="center" wrap={false}>
-                {isBundle && haveAllPrices && (
-                  <>
-                    <Text as="span" variant="bodyMd" fontWeight="semibold">
-                      {fmtMoney(summaryNow, currency)}
-                    </Text>
-                    {summaryOffPct > 0 && (
-                      <Badge tone="critical">{`${summaryOffPct}% off`}</Badge>
-                    )}
-                  </>
-                )}
-                {!isFree && <StockBadge qty={minStock} />}
-              </InlineStack>
-            </InlineStack>
-          )}
-        </BlockStack>
-
-        {offerWarning && (
-          <Banner tone="critical" title="Limited offer not active">
-            <Text as="p" variant="bodySm">
-              {offerWarning}
-            </Text>
-          </Banner>
-        )}
-        {codeError && !expanded && (
-          <Text as="span" variant="bodySm" tone="critical">
-            {codeError}
-          </Text>
-        )}
-
-        {expanded && (
-          <BlockStack gap="300">
-            <ButtonGroup variant="segmented">
-              {tabItems.map((t, i) => (
-                <Button key={t.id} pressed={tab === i} onClick={() => setTab(i)}>
-                  {t.content}
-                </Button>
-              ))}
-            </ButtonGroup>
-
-            {tab === 0 && (
-              <BlockStack gap="400">
-
-        {/* Code + title (+ discount for add-ons) on one tidy row. */}
-        <InlineStack gap="300" wrap={false} blockAlign="start">
-          <Box width={isBundle ? "38%" : "30%"}>
-            <BlockStack gap="100">
-              <FieldLabel
-                text="Code"
-                required
-                tip="Customer-facing code — searchable, shown on the storefront card, and on the cart line & order via the discount. A–Z, 0–9 and dashes."
-              />
-              <TextField
-                label="Code"
-                labelHidden
-                autoComplete="off"
-                value={group.code}
-                onChange={(v) => onChange({ code: normalizeCode(v) })}
-                error={codeError}
-                placeholder="e.g. CREATOR-KIT"
-              />
-            </BlockStack>
-          </Box>
-          <Box width={isBundle ? "62%" : "42%"}>
-            <BlockStack gap="100">
-              <FieldLabel
-                text={isFree ? "Section title" : "Card / tab title"}
-                tip={
-                  isFree
-                    ? "Heading for the gift section, e.g. “🎁 Free gift”."
-                    : isBundle
-                      ? "Shown as the bundle card name, e.g. “Advanced Kit”."
-                      : "Shown as the tab label, e.g. “T-Series Lenses”."
-                }
-              />
-              <TextField
-                label="Title"
-                labelHidden
-                autoComplete="off"
-                value={group.title}
-                onChange={(v) => onChange({ title: v })}
-              />
-            </BlockStack>
-          </Box>
-          {!isBundle && (
-            <Box width="28%">
-              <BlockStack gap="100">
-                <FieldLabel
-                  text="Discount %"
+                <LField
+                  text="Code"
+                  required
+                  error={codeError}
+                  tip="Customer-facing code — searchable, shown on the storefront card, and on the cart line & order via the discount. A–Z, 0–9 and dashes."
+                >
+                  <Input
+                    autoComplete="off"
+                    className={codeError ? "is-error" : undefined}
+                    value={group.code}
+                    onChange={(e) => onChange({ code: normalizeCode(e.target.value) })}
+                    placeholder="e.g. CREATOR-KIT"
+                  />
+                </LField>
+                <LField
+                  text={isFree ? "Section title" : "Card / tab title"}
                   tip={
                     isFree
-                      ? "Free add-ons are always 100% off."
-                      : "Default % for accessories that don't set their own."
+                      ? "Heading for the gift section, e.g. “🎁 Free gift”."
+                      : isBundle
+                        ? "Shown as the bundle card name, e.g. “Advanced Kit”."
+                        : "Shown as the tab label, e.g. “T-Series Lenses”."
                   }
-                />
-                <TextField
-                  label="Discount %"
-                  labelHidden
-                  type="number"
-                  min={0}
-                  max={100}
-                  autoComplete="off"
-                  suffix="%"
-                  disabled={isFree}
-                  value={String(isFree ? 100 : group.discountPercent)}
-                  onChange={(v) => onChange({ discountPercent: clampPercent(v) })}
-                />
-              </BlockStack>
-            </Box>
-          )}
-        </InlineStack>
-
-        {/* Bundle cover image (bundle only): single thumbnail + click-to-open picker. */}
-        {isBundle && (
-          <BlockStack gap="150">
-            <FieldLabel
-              text="Bundle cover image"
-              tip="Shown as the bundle's image in search and (collapsed) on the product page. Pick one of the main product's images — the kit / installation “demo” shots you upload to the main product are ideal. Leave empty to fall back to the product's main image."
-            />
-            <InlineStack gap="300" blockAlign="center" wrap={false}>
-              <Thumbnail
-                source={group.coverImage || ImageIcon}
-                alt="Bundle cover"
-                size="large"
-              />
-              <Button
-                disclosure={coverOpen ? "up" : "down"}
-                disabled={coverChoices.length === 0}
-                onClick={() => setCoverOpen((o) => !o)}
-              >
-                {group.coverImage ? "Change cover" : "Choose cover"}
-              </Button>
-              {group.coverImage && (
-                <Button
-                  variant="plain"
-                  tone="critical"
-                  onClick={() => onChange({ coverImage: undefined })}
                 >
-                  Remove
-                </Button>
-              )}
-            </InlineStack>
-            <Collapsible open={coverOpen} id={`cover-${group.id}`}>
-              {coverChoices.length > 0 ? (
-                <InlineStack gap="150" wrap>
-                  {coverChoices.map((c) => {
-                    const active = group.coverImage === c.url;
-                    return (
+                  <Input
+                    autoComplete="off"
+                    value={group.title}
+                    onChange={(e) => onChange({ title: e.target.value })}
+                  />
+                </LField>
+                {!isBundle ? (
+                  <LField
+                    text="Discount %"
+                    tip={
+                      isFree
+                        ? "Free add-ons are always 100% off."
+                        : "Default % for accessories that don't set their own."
+                    }
+                  >
+                    <AffixInput
+                      suffix="%"
+                      type="number"
+                      min={0}
+                      max={100}
+                      autoComplete="off"
+                      disabled={isFree}
+                      value={String(isFree ? 100 : group.discountPercent)}
+                      onChange={(e) =>
+                        onChange({ discountPercent: clampPercent(e.target.value) })
+                      }
+                    />
+                  </LField>
+                ) : null}
+              </div>
+
+              {/* Bundle cover image (bundle only): single thumbnail + click-to-open picker. */}
+              {isBundle ? (
+                <LField
+                  text="Bundle cover image"
+                  tip="Shown as the bundle's image in search and (collapsed) on the product page. Pick one of the main product's images — the kit / installation “demo” shots you upload to the main product are ideal. Leave empty to fall back to the product's main image."
+                >
+                  <div className="kb-inline" style={{ gap: 12 }}>
+                    <Thumb src={group.coverImage} size={72} alt="Bundle cover" />
+                    <Btn
+                      disabled={coverChoices.length === 0}
+                      onClick={() => setCoverOpen((o) => !o)}
+                    >
+                      {group.coverImage ? "Change cover" : "Choose cover"}
+                      <IconChevron size={14} up={coverOpen} />
+                    </Btn>
+                    {group.coverImage ? (
                       <button
-                        key={c.url}
                         type="button"
-                        title={c.label}
-                        onClick={() => {
-                          onChange({ coverImage: c.url });
-                          setCoverOpen(false);
-                        }}
-                        style={{
-                          width: 48,
-                          height: 48,
-                          padding: 0,
-                          borderRadius: 8,
-                          overflow: "hidden",
-                          cursor: "pointer",
-                          background: "#fff",
-                          border: active
-                            ? "2px solid #008060"
-                            : "1px solid #c9cccf",
-                        }}
+                        className="kb-btn kb-btn--link"
+                        style={{ color: "var(--danger)" }}
+                        onClick={() => onChange({ coverImage: undefined })}
                       >
-                        <img
-                          src={c.url}
-                          alt={c.label}
-                          width={46}
-                          height={46}
-                          style={{ objectFit: "cover", display: "block" }}
-                        />
+                        Remove
                       </button>
-                    );
-                  })}
-                </InlineStack>
-              ) : (
-                <Text as="span" variant="bodySm" tone="subdued">
-                  This product has no images to pick from — add images to the main
-                  product first.
-                </Text>
-              )}
-            </Collapsible>
-          </BlockStack>
-        )}
-
-        {/* Deep-link (bundle only): just the link + a "?" for how to use it. */}
-        {isBundle && (
-          <BlockStack gap="100">
-            <FieldLabel
-              text="Search deep-link"
-              tip="Link customers straight to this bundle (auto-selected). Your search engine can read every bundle from this product's custom.addon_config metafield and link to it with this code."
-            />
-            <TextField
-              label="Deep-link"
-              labelHidden
-              readOnly
-              autoComplete="off"
-              value={`/products/${productHandle}?kb_bundle=${group.code}`}
-            />
-          </BlockStack>
-        )}
-
-        {/* Add-on visibility targeting — bundles put their main variants in the
-            Products tab instead. */}
-        {!isFree && !isBundle && mainVariants.length > 1 && (
-          <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-            <BlockStack gap="150">
-              <Text as="span" variant="bodySm" tone="subdued">
-                Show this add-on for main variants (
-                {group.mainVariantIds?.length ?? mainVariants.length}/
-                {mainVariants.length})
-              </Text>
-              <InlineStack gap="150" wrap>
-                {mainVariants.map((v) => {
-                  const current =
-                    group.mainVariantIds && group.mainVariantIds.length
-                      ? group.mainVariantIds
-                      : mainVariants.map((x) => x.id);
-                  const on = current.includes(v.id);
-                  return (
-                    <Button
-                      key={v.id}
-                      size="micro"
-                      pressed={on}
-                      onClick={() => {
-                        const next = on
-                          ? current.filter((x) => x !== v.id)
-                          : [...current, v.id];
-                        if (next.length === 0) return;
-                        onChange({
-                          mainVariantIds:
-                            next.length === mainVariants.length
-                              ? undefined
-                              : next,
-                        });
-                      }}
-                    >
-                      {v.title}
-                    </Button>
-                  );
-                })}
-              </InlineStack>
-              <Text as="span" variant="bodySm" tone="subdued">
-                This add-on group only shows when the selected main variant is one
-                of these — otherwise it's hidden.
-              </Text>
-            </BlockStack>
-          </Box>
-        )}
-
-        {!isFree && (
-          <InlineStack gap="100" blockAlign="center">
-            <Checkbox
-              label="Hide when sold out"
-              checked={!!group.hideWhenSoldOut}
-              onChange={(v) => onChange({ hideWhenSoldOut: v })}
-            />
-            <InfoTip
-              text={
-                isBundle
-                  ? "Off by default. When on, the whole bundle disappears from the storefront if any item in it is out of stock (the kit can't be completed)."
-                  : "Off by default. When on, an item with no stock disappears from the storefront; when every item is sold out the whole group hides."
-              }
-            />
-          </InlineStack>
-        )}
-              </BlockStack>
-            )}
-
-            {/* ---- PRODUCTS TAB ---- */}
-            {tab === 1 && (
-              <BlockStack gap="300">
-                {isBundle && mainTitle && (
-                  <BlockStack gap="150">
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      In this kit
-                    </Text>
-                    <InlineStack
-                      align="space-between"
-                      blockAlign="center"
-                      wrap={false}
-                    >
-                      <InlineStack gap="200" blockAlign="center">
-                        <Thumbnail
-                          source={
-                            group.coverImage ||
-                            (mainImages && mainImages[0]?.url) ||
-                            ImageIcon
-                          }
-                          alt={mainTitle}
-                          size="small"
-                        />
-                        <BlockStack gap="050">
-                          <InlineStack gap="150" blockAlign="center" wrap>
-                            <Text as="span" variant="bodyMd">
-                              {mainTitle}
-                            </Text>
-                            <Badge>MAIN</Badge>
-                          </InlineStack>
-                          {mainPrice != null && (
-                            <Text as="span" variant="bodySm" tone="subdued">
-                              {fmtMoney(mainRep.now, currency)}
-                            </Text>
-                          )}
-                        </BlockStack>
-                      </InlineStack>
-                      {mainVariants.length > 1 && (
-                        <Button
-                          size="slim"
-                          disclosure={mainVarsOpen ? "up" : "down"}
-                          onClick={() => setMainVarsOpen((o) => !o)}
-                        >
-                          {`Variants ${group.mainVariantIds?.length ?? mainVariants.length}/${mainVariants.length}`}
-                        </Button>
-                      )}
-                    </InlineStack>
-                    {mainVariants.length > 1 && (
-                      <Collapsible open={mainVarsOpen} id={`mainvars-${group.id}`}>
-                        <Box paddingInlineStart="800">
-                          <BlockStack gap="100">
-                            <InlineStack gap="150" wrap>
-                              {mainVariants.map((v) => {
-                                const current =
-                                  group.mainVariantIds &&
-                                  group.mainVariantIds.length
-                                    ? group.mainVariantIds
-                                    : mainVariants.map((x) => x.id);
-                                const on = current.includes(v.id);
-                                return (
-                                  <Button
-                                    key={v.id}
-                                    size="micro"
-                                    pressed={on}
-                                    onClick={() => {
-                                      const next = on
-                                        ? current.filter((x) => x !== v.id)
-                                        : [...current, v.id];
-                                      if (next.length === 0) return;
-                                      onChange({
-                                        mainVariantIds:
-                                          next.length === mainVariants.length
-                                            ? undefined
-                                            : next,
-                                      });
-                                    }}
-                                  >
-                                    {v.title}
-                                  </Button>
-                                );
-                              })}
-                            </InlineStack>
-                            <Text as="span" variant="bodySm" tone="subdued">
-                              Offered as the main-product options inside the
-                              bundle — the customer picks one.
-                            </Text>
-                          </BlockStack>
-                        </Box>
-                      </Collapsible>
-                    )}
-                    <Divider />
-                  </BlockStack>
-                )}
-
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text as="span" variant="headingSm">
-                    Accessories ({group.accessories.length})
-                  </Text>
-                  <Button onClick={onPickAccessories}>Select accessories</Button>
-                </InlineStack>
-
-        {group.accessories.length > 0 ? (
-          <BlockStack gap="200">
-            {group.accessories.map((a) => {
-              const accVariants = variants[a.productId] || [];
-              const offeredIds =
-                a.variantIds && a.variantIds.length
-                  ? a.variantIds
-                  : accVariants.map((v) => v.id);
-              // Show the FIRST offered variant's price (what the storefront
-              // defaults to), not the cheapest non-offered one.
-              const repV =
-                accVariants.find((v) => offeredIds.includes(v.id)) ||
-                accVariants[0];
-              const price =
-                typeof repV?.price === "number"
-                  ? repV.price
-                  : prices[a.productId];
-              const pct = effectiveAccessoryPercent(group, a);
-              const now = price != null ? price * (1 - pct / 100) : null;
-              const toggleVariant = (vid: string) => {
-                const next = offeredIds.includes(vid)
-                  ? offeredIds.filter((x) => x !== vid)
-                  : [...offeredIds, vid];
-                if (next.length === 0) return; // keep at least one offered
-                onUpdateAccessory(a.productId, {
-                  variantIds:
-                    next.length === accVariants.length ? undefined : next,
-                });
-              };
-              return (
-                <div
-                  key={a.productId}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (dragAccId.current)
-                      moveAccessory(dragAccId.current, a.productId);
-                    dragAccId.current = null;
-                  }}
-                >
-                  <BlockStack gap="150">
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        width: "100%",
-                      }}
-                    >
-                      <span
-                        draggable
-                        onDragStart={(e) => {
-                          dragAccId.current = a.productId;
-                          e.dataTransfer.effectAllowed = "move";
-                        }}
-                        onDragEnd={() => {
-                          dragAccId.current = null;
-                        }}
-                        style={{ cursor: "grab", display: "inline-flex", flex: "none" }}
-                        title="Drag to reorder"
-                      >
-                        <Icon source={DragHandleIcon} tone="subdued" />
+                    ) : null}
+                  </div>
+                  {coverOpen ? (
+                    coverChoices.length > 0 ? (
+                      <div className="kb-inline" style={{ gap: 6, marginTop: 6 }}>
+                        {coverChoices.map((c) => (
+                          <button
+                            key={c.url}
+                            type="button"
+                            title={c.label}
+                            className={`kb-cover${group.coverImage === c.url ? " is-on" : ""}`}
+                            onClick={() => {
+                              onChange({ coverImage: c.url });
+                              setCoverOpen(false);
+                            }}
+                          >
+                            <img src={sized(c.url, 48)} alt={c.label} loading="lazy" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="kb-sub">
+                        This product has no images to pick from — add images to the
+                        main product first.
                       </span>
-                      <div style={{ flex: "none" }}>
-                        <Thumbnail
-                          source={info[a.productId]?.image || ImageIcon}
-                          alt={info[a.productId]?.title || a.title}
-                          size="small"
-                        />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <BlockStack gap="050">
-                          <InlineStack gap="150" blockAlign="center" wrap>
-                            <Text as="span" variant="bodyMd">
-                              {info[a.productId]?.title || a.title || a.handle}
-                            </Text>
-                            <StockBadge qty={inventory[a.productId]} />
-                          </InlineStack>
-                          {price != null && (
-                            <Text as="span" variant="bodySm" tone="subdued">
-                              {fmtMoney(price, currency)}
-                            </Text>
-                          )}
-                        </BlockStack>
-                      </div>
-                      <div style={{ flex: "none" }}>
-                        <InlineStack gap="150" blockAlign="center" wrap={false}>
-                          {accVariants.length > 1 && (
-                            <Button
-                              size="slim"
-                              disclosure={
-                                openVarPids[a.productId] ? "up" : "down"
-                              }
-                              onClick={() => toggleVarOpen(a.productId)}
-                            >
-                              {`Variants ${offeredIds.length}/${accVariants.length}`}
-                            </Button>
-                          )}
-                          <Button
-                            icon={DeleteIcon}
-                            variant="tertiary"
-                            tone="critical"
-                            accessibilityLabel={`Remove ${a.title}`}
-                            onClick={() => onRemoveAccessory(a.productId)}
-                          />
-                        </InlineStack>
+                    )
+                  ) : null}
+                </LField>
+              ) : null}
+
+              {/* Deep-link (bundle only): just the link + a "?" for how to use it. */}
+              {isBundle ? (
+                <LField
+                  text="Search deep-link"
+                  tip="Link customers straight to this bundle (auto-selected). Your search engine can read every bundle from this product's custom.addon_config metafield and link to it with this code."
+                >
+                  <Input
+                    readOnly
+                    autoComplete="off"
+                    value={`/products/${productHandle}?kb_bundle=${group.code}`}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                </LField>
+              ) : null}
+
+              {/* Add-on visibility targeting — bundles put their main variants in the
+                  Products tab instead. */}
+              {!isFree && !isBundle && mainVariants.length > 1 ? (
+                <div className="kb-box">
+                  <div className="kb-sub" style={{ marginBottom: 8 }}>
+                    {`Show this add-on for main variants (${mainVarCount}/${mainVariants.length})`}
+                  </div>
+                  <VariantChips
+                    all={mainVariants}
+                    selected={group.mainVariantIds}
+                    onChange={(ids) => onChange({ mainVariantIds: ids })}
+                  />
+                  <div className="kb-sub" style={{ marginTop: 8 }}>
+                    This add-on group only shows when the selected main variant is
+                    one of these — otherwise it&apos;s hidden.
+                  </div>
+                </div>
+              ) : null}
+
+              {!isFree ? (
+                <div className="kb-inline" style={{ gap: 4 }}>
+                  <Checkbox
+                    label="Hide when sold out"
+                    checked={!!group.hideWhenSoldOut}
+                    onChange={(v) => onChange({ hideWhenSoldOut: v })}
+                  />
+                  <InfoTip
+                    text={
+                      isBundle
+                        ? "Off by default. When on, the whole bundle disappears from the storefront if any item in it is out of stock (the kit can't be completed)."
+                        : "Off by default. When on, an item with no stock disappears from the storefront; when every item is sold out the whole group hides."
+                    }
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          {/* ---- PRODUCTS TAB ---- */}
+          {tab === 1 ? (
+            <>
+              {isBundle && mainTitle ? (
+                <div>
+                  <div className="kb-overline" style={{ marginBottom: 8 }}>
+                    In this kit
+                  </div>
+                  <div className="kb-between">
+                    <div className="kb-ident">
+                      <Thumb
+                        src={group.coverImage || (mainImages && mainImages[0]?.url)}
+                        size={44}
+                        alt=""
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="kb-inline" style={{ gap: 6 }}>
+                          <span>{mainTitle}</span>
+                          <Pill>MAIN</Pill>
+                        </div>
+                        {mainPrice != null ? (
+                          <div className="kb-sub">{fmtMoney(mainRep.now, currency)}</div>
+                        ) : null}
                       </div>
                     </div>
+                    {mainVariants.length > 1 ? (
+                      <Btn size="tiny" onClick={() => setMainVarsOpen((o) => !o)}>
+                        {`Variants ${mainVarCount}/${mainVariants.length}`}
+                        <IconChevron size={14} up={mainVarsOpen} />
+                      </Btn>
+                    ) : null}
+                  </div>
+                  {mainVariants.length > 1 && mainVarsOpen ? (
+                    <div className="kb-indent" style={{ marginTop: 8, paddingLeft: 56 }}>
+                      <VariantChips
+                        all={mainVariants}
+                        selected={group.mainVariantIds}
+                        onChange={(ids) => onChange({ mainVariantIds: ids })}
+                      />
+                      <div className="kb-sub" style={{ marginTop: 6 }}>
+                        Offered as the main-product options inside the bundle — the
+                        customer picks one.
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="kb-divider" style={{ marginBottom: 0 }} />
+                </div>
+              ) : null}
 
-                    {isFree ? (
-                      <InlineStack align="end">
-                        <Text as="span" variant="bodyMd" tone="subdued">
-                          FREE
-                        </Text>
-                      </InlineStack>
-                    ) : isBundle ? null : price != null ? (
-                      <Box paddingInlineStart="800">
-                        <InlineStack
-                          align="space-between"
-                          blockAlign="end"
-                          wrap
-                        >
-                          <DiscountCalc
-                            price={price}
-                            percent={pct}
-                            onChangePercent={(p) =>
-                              onUpdateAccessory(a.productId, {
-                                discountPercent: p,
-                              })
-                            }
-                          />
-                          {a.discountPercent != null && (
-                            <Button
-                              variant="plain"
-                              onClick={() =>
+              <div className="kb-between">
+                <b>{`Accessories (${group.accessories.length})`}</b>
+                <Btn onClick={onPickAccessories}>Select accessories</Btn>
+              </div>
+
+              {group.accessories.length > 0 ? (
+                <div className="kb-stack kb-stack--tight">
+                  {group.accessories.map((a) => {
+                    const accVariants = variants[a.productId] || [];
+                    const offeredIds =
+                      a.variantIds && a.variantIds.length
+                        ? a.variantIds
+                        : accVariants.map((v) => v.id);
+                    // Show the FIRST offered variant's price (what the storefront
+                    // defaults to), not the cheapest non-offered one.
+                    const repV =
+                      accVariants.find((v) => offeredIds.includes(v.id)) ||
+                      accVariants[0];
+                    const price =
+                      typeof repV?.price === "number"
+                        ? repV.price
+                        : prices[a.productId];
+                    const pct = effectiveAccessoryPercent(group, a);
+                    return (
+                      <div
+                        key={a.productId}
+                        className="kb-stack kb-stack--tight"
+                        style={{ gap: 8 }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragAccId.current)
+                            moveAccessory(dragAccId.current, a.productId);
+                          dragAccId.current = null;
+                        }}
+                      >
+                        <div className="kb-acc">
+                          <span
+                            className="kb-drag"
+                            draggable
+                            onDragStart={(e) => {
+                              dragAccId.current = a.productId;
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                            onDragEnd={() => {
+                              dragAccId.current = null;
+                            }}
+                            title="Drag to reorder"
+                          >
+                            <IconDrag />
+                          </span>
+                          <Thumb src={info[a.productId]?.image} size={44} alt="" />
+                          <div style={{ minWidth: 0 }}>
+                            <div className="kb-inline" style={{ gap: 6 }}>
+                              <span>{info[a.productId]?.title || a.title || a.handle}</span>
+                              <StockBadge qty={inventory[a.productId]} />
+                            </div>
+                            {price != null ? (
+                              <div className="kb-sub">{fmtMoney(price, currency)}</div>
+                            ) : null}
+                          </div>
+                          <div className="kb-inline" style={{ flexWrap: "nowrap", gap: 4 }}>
+                            {accVariants.length > 1 ? (
+                              <Btn size="tiny" onClick={() => toggleVarOpen(a.productId)}>
+                                {`Variants ${offeredIds.length}/${accVariants.length}`}
+                                <IconChevron size={14} up={!!openVarPids[a.productId]} />
+                              </Btn>
+                            ) : null}
+                            <IconBtn
+                              label={`Remove ${a.title}`}
+                              tone="danger"
+                              onClick={() => onRemoveAccessory(a.productId)}
+                            >
+                              <IconTrash />
+                            </IconBtn>
+                          </div>
+                        </div>
+
+                        {isFree ? (
+                          <div className="kb-sub" style={{ textAlign: "right" }}>
+                            FREE
+                          </div>
+                        ) : isBundle ? null : price != null ? (
+                          <div className="kb-indent kb-between" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+                            <DiscountCalc
+                              price={price}
+                              percent={pct}
+                              onChangePercent={(p) =>
                                 onUpdateAccessory(a.productId, {
-                                  discountPercent: undefined,
+                                  discountPercent: p,
                                 })
                               }
-                            >
-                              {`Reset to group ${pctStr(group.discountPercent)}%`}
-                            </Button>
-                          )}
-                        </InlineStack>
-                      </Box>
-                    ) : (
-                      <Box paddingInlineStart="800" width="120px">
-                        <TextField
-                          label="Discount %"
-                          type="number"
-                          min={0}
-                          max={100}
-                          suffix="%"
-                          autoComplete="off"
-                          placeholder={String(group.discountPercent)}
-                          value={
-                            a.discountPercent == null
-                              ? ""
-                              : String(a.discountPercent)
-                          }
-                          onChange={(v) =>
-                            onUpdateAccessory(a.productId, {
-                              discountPercent:
-                                v === "" ? undefined : clampPercent(v),
-                            })
-                          }
-                        />
-                      </Box>
-                    )}
-
-                  {accVariants.length > 1 && (
-                    <Collapsible
-                      open={!!openVarPids[a.productId]}
-                      id={`accvars-${a.productId}`}
-                    >
-                      <Box paddingInlineStart="800">
-                        <BlockStack gap="100">
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            Variants offered to the customer ({offeredIds.length}/
-                            {accVariants.length})
-                          </Text>
-                          <InlineStack gap="150" wrap>
-                            {accVariants.map((v) => (
-                              <Button
-                                key={v.id}
-                                size="micro"
-                                pressed={offeredIds.includes(v.id)}
-                                onClick={() => toggleVariant(v.id)}
+                            />
+                            {a.discountPercent != null ? (
+                              <Btn
+                                variant="link"
+                                onClick={() =>
+                                  onUpdateAccessory(a.productId, {
+                                    discountPercent: undefined,
+                                  })
+                                }
                               >
-                                {v.title}
-                              </Button>
-                            ))}
-                          </InlineStack>
-                        </BlockStack>
-                      </Box>
-                    </Collapsible>
-                  )}
-                  </BlockStack>
+                                {`Reset to group ${pctStr(group.discountPercent)}%`}
+                              </Btn>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="kb-indent">
+                            <div style={{ width: 120 }}>
+                              <LField text="Discount %">
+                                <AffixInput
+                                  suffix="%"
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  autoComplete="off"
+                                  placeholder={String(group.discountPercent)}
+                                  value={
+                                    a.discountPercent == null
+                                      ? ""
+                                      : String(a.discountPercent)
+                                  }
+                                  onChange={(e) =>
+                                    onUpdateAccessory(a.productId, {
+                                      discountPercent:
+                                        e.target.value === ""
+                                          ? undefined
+                                          : clampPercent(e.target.value),
+                                    })
+                                  }
+                                />
+                              </LField>
+                            </div>
+                          </div>
+                        )}
+
+                        {accVariants.length > 1 && openVarPids[a.productId] ? (
+                          <div className="kb-indent">
+                            <div className="kb-sub" style={{ marginBottom: 6 }}>
+                              {`Variants offered to the customer (${offeredIds.length}/${accVariants.length})`}
+                            </div>
+                            <VariantChips
+                              all={accVariants}
+                              selected={a.variantIds}
+                              onChange={(ids) =>
+                                onUpdateAccessory(a.productId, { variantIds: ids })
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </BlockStack>
-                ) : (
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    No accessories in this group yet.
-                  </Text>
-                )}
-              </BlockStack>
-            )}
-
-            {/* ---- PRICE TAB (bundle) ---- */}
-            {isBundle &&
-              tab === 2 &&
-              (group.accessories.length > 0 && haveAllPrices ? (
-                <BundleTotals
-                  group={group}
-                  lines={bundleLines}
-                  currency={currency}
-                  onChange={onChange}
-                />
               ) : (
-                <Text as="p" variant="bodySm" tone="subdued">
-                  Add accessories with prices to set the bundle total.
-                </Text>
-              ))}
+                <p className="kb-muted" style={{ margin: 0 }}>
+                  No accessories in this group yet.
+                </p>
+              )}
+            </>
+          ) : null}
 
-            {/* ---- LIMITED TAB (bundle) ---- */}
-            {isBundle && tab === 3 && (
-              <LimitedOfferCard
+          {/* ---- PRICE TAB (bundle) ---- */}
+          {isBundle && tab === 2 ? (
+            group.accessories.length > 0 && haveAllPrices ? (
+              <BundleTotals
                 group={group}
-                totalNow={bundleTotalNow}
-                haveTotal={haveAllPrices}
+                lines={bundleLines}
                 currency={currency}
                 onChange={onChange}
               />
-            )}
-          </BlockStack>
-        )}
-      </BlockStack>
-    </Card>
+            ) : (
+              <p className="kb-muted" style={{ margin: 0 }}>
+                Add accessories with prices to set the bundle total.
+              </p>
+            )
+          ) : null}
+
+          {/* ---- LIMITED TAB (bundle) ---- */}
+          {isBundle && tab === 3 ? (
+            <LimitedOfferCard
+              group={group}
+              totalNow={bundleTotalNow}
+              haveTotal={haveAllPrices}
+              currency={currency}
+              onChange={onChange}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1771,120 +1602,122 @@ function LimitedOfferCard({
     });
   const deepPct = clampPercent(limited?.discountPercent ?? 0);
   return (
-    <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-      <BlockStack gap="300">
-        <InlineStack align="space-between" blockAlign="center">
-          <Checkbox
-            label="Limited-time offer (countdown + deeper price)"
-            checked={limitedOn}
-            onChange={(checked) =>
-              onChange(
-                checked
-                  ? {
-                      limited: { ...(limited ?? DEFAULT_LIMITED), enabled: true },
-                      offerId: group.offerId || newOfferId(),
-                    }
-                  : {
-                      limited: limited
-                        ? { ...limited, enabled: false }
-                        : { ...DEFAULT_LIMITED, enabled: false },
-                    },
-              )
-            }
-          />
-          {limitedOn &&
-            (ended ? (
-              <Badge tone="critical">Ended</Badge>
-            ) : (
-              <Badge tone="success">Active</Badge>
-            ))}
-        </InlineStack>
-
-        {limitedOn && (
-          <>
-            {ended && (
-              <Banner tone="warning">
-                <p>
-                  This promotion has ended — the bundle is now at its
-                  {limited?.mode === "end"
-                    ? " normal full price (hidden on the storefront)."
-                    : " normal price."}{" "}
-                  Set a new end date below to start a fresh promotion.
-                </p>
-                <Box paddingBlockStart="200">
-                  <Button
-                    onClick={() => patchLimited({ startsAt: "", endsAt: "" })}
-                  >
-                    Start a new promotion
-                  </Button>
-                </Box>
-              </Banner>
-            )}
-            <BlockStack gap="100">
-              <Text as="span" variant="headingSm">
-                Deal price — deeper bundle discount while the timer runs
-              </Text>
-              {haveTotal ? (
-                <DiscountCalc
-                  price={totalNow}
-                  percent={deepPct}
-                  onChangePercent={(p) =>
-                    patchLimited({ discountPercent: clampPercent(p) })
+    <div className="kb-box kb-stack">
+      <div className="kb-between">
+        <Checkbox
+          label="Limited-time offer (countdown + deeper price)"
+          checked={limitedOn}
+          onChange={(checked) =>
+            onChange(
+              checked
+                ? {
+                    limited: { ...(limited ?? DEFAULT_LIMITED), enabled: true },
+                    offerId: group.offerId || newOfferId(),
                   }
-                />
-              ) : (
-                <Box width="110px">
-                  <TextField
-                    label="Deal discount"
+                : {
+                    limited: limited
+                      ? { ...limited, enabled: false }
+                      : { ...DEFAULT_LIMITED, enabled: false },
+                  },
+            )
+          }
+        />
+        {limitedOn ? (
+          ended ? <Pill tone="danger">Ended</Pill> : <Pill tone="ok">Active</Pill>
+        ) : null}
+      </div>
+
+      {limitedOn ? (
+        <>
+          {ended ? (
+            <Banner tone="warn">
+              <p style={{ margin: "0 0 8px" }}>
+                This promotion has ended — the bundle is now at its
+                {limited?.mode === "end"
+                  ? " normal full price (hidden on the storefront)."
+                  : " normal price."}{" "}
+                Set a new end date below to start a fresh promotion.
+              </p>
+              <Btn
+                size="tiny"
+                onClick={() => patchLimited({ startsAt: "", endsAt: "" })}
+              >
+                Start a new promotion
+              </Btn>
+            </Banner>
+          ) : null}
+          <div>
+            <b style={{ display: "block", marginBottom: 8 }}>
+              Deal price — deeper bundle discount while the timer runs
+            </b>
+            {haveTotal ? (
+              <DiscountCalc
+                price={totalNow}
+                percent={deepPct}
+                onChangePercent={(p) =>
+                  patchLimited({ discountPercent: clampPercent(p) })
+                }
+              />
+            ) : (
+              <div style={{ width: 110 }}>
+                <LField text="Deal discount">
+                  <AffixInput
+                    suffix="%"
                     type="text"
                     inputMode="decimal"
-                    suffix="%"
                     autoComplete="off"
                     disabled={ended}
                     value={pctStr(deepPct)}
-                    onChange={(v) =>
-                      patchLimited({ discountPercent: clampPercent(v) })
+                    onChange={(e) =>
+                      patchLimited({ discountPercent: clampPercent(e.target.value) })
                     }
                   />
-                </Box>
-              )}
-            </BlockStack>
-            <InlineStack gap="400" wrap blockAlign="start">
-              <Box minWidth="220px">
-                <Select
-                  label="When the timer ends"
-                  options={LIMITED_MODE_OPTIONS}
-                  disabled={ended}
-                  value={limited?.mode ?? "revert"}
-                  onChange={(v) => patchLimited({ mode: v as "revert" | "end" })}
-                />
-              </Box>
-              <Box minWidth="220px">
-                <TextField
-                  label="Starts"
-                  type={"datetime-local" as any}
-                  autoComplete="off"
-                  disabled={ended}
-                  value={toLocalInput(limited?.startsAt)}
-                  onChange={(v) => patchLimited({ startsAt: fromLocalInput(v) })}
-                  helpText="Leave blank to start immediately."
-                />
-              </Box>
-              <Box minWidth="220px">
-                <TextField
-                  label="Ends"
-                  type={"datetime-local" as any}
-                  autoComplete="off"
-                  value={toLocalInput(limited?.endsAt)}
-                  onChange={(v) => patchLimited({ endsAt: fromLocalInput(v) })}
-                  helpText="Server-enforced — reverts even for unpaid carts."
-                />
-              </Box>
-            </InlineStack>
-          </>
-        )}
-      </BlockStack>
-    </Box>
+                </LField>
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 12,
+              alignItems: "start",
+            }}
+          >
+            <LField text="When the timer ends">
+              <Select
+                disabled={ended}
+                value={limited?.mode ?? "revert"}
+                onChange={(e) =>
+                  patchLimited({ mode: e.target.value as "revert" | "end" })
+                }
+              >
+                {LIMITED_MODE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </LField>
+            <LField text="Starts" help="Leave blank to start immediately.">
+              <Input
+                type="datetime-local"
+                disabled={ended}
+                value={toLocalInput(limited?.startsAt)}
+                onChange={(e) => patchLimited({ startsAt: fromLocalInput(e.target.value) })}
+              />
+            </LField>
+            <LField text="Ends" help="Server-enforced — reverts even for unpaid carts.">
+              <Input
+                type="datetime-local"
+                value={toLocalInput(limited?.endsAt)}
+                onChange={(e) => patchLimited({ endsAt: fromLocalInput(e.target.value) })}
+              />
+            </LField>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -1933,43 +1766,27 @@ function DiscountCalc({
     onChangePercent(clampPercent(pct));
   };
   const onBlur = () => setActive(null);
+  const field = (f: Field, label: string, suffix?: string) => {
+    const common = {
+      type: "text",
+      inputMode: "decimal" as const,
+      autoComplete: "off",
+      value: valOf(f),
+      onChange: (e: { target: { value: string } }) => onF(f, e.target.value),
+      onBlur,
+    };
+    return (
+      <LField text={label}>
+        {suffix ? <AffixInput suffix={suffix} {...common} /> : <Input {...common} />}
+      </LField>
+    );
+  };
   return (
-    <InlineStack gap="200" blockAlign="end" wrap>
-      <Box width="120px">
-        <TextField
-          label="New price"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          value={valOf("price")}
-          onChange={(v) => onF("price", v)}
-          onBlur={onBlur}
-        />
-      </Box>
-      <Box width="110px">
-        <TextField
-          label="Discount"
-          type="text"
-          inputMode="decimal"
-          suffix="%"
-          autoComplete="off"
-          value={valOf("disc")}
-          onChange={(v) => onF("disc", v)}
-          onBlur={onBlur}
-        />
-      </Box>
-      <Box width="120px">
-        <TextField
-          label="Save"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          value={valOf("save")}
-          onChange={(v) => onF("save", v)}
-          onBlur={onBlur}
-        />
-      </Box>
-    </InlineStack>
+    <div className="kb-calc">
+      {field("price", "New price")}
+      {field("disc", "Discount", "%")}
+      {field("save", "Save")}
+    </div>
   );
 }
 
@@ -2019,89 +1836,62 @@ function BundleTotals({
         )
       : 0;
   const priceCell = (orig: number, now: number, strong?: boolean) => (
-    <InlineStack gap="150" blockAlign="center" wrap={false}>
-      {orig > now + 0.005 && (
-        <Text as="span" variant="bodySm" tone="subdued">
-          <s>{fmtMoney(orig, currency)}</s>
-        </Text>
-      )}
-      <Text
-        as="span"
-        variant={strong ? "bodyMd" : "bodySm"}
-        fontWeight={strong ? "semibold" : undefined}
-      >
-        {fmtMoney(now, currency)}
-      </Text>
-    </InlineStack>
+    <span className="kb-price" style={{ flexDirection: "row", alignItems: "center" }}>
+      {orig > now + 0.005 ? <s>{fmtMoney(orig, currency)}</s> : null}
+      {strong ? <b>{fmtMoney(now, currency)}</b> : <span>{fmtMoney(now, currency)}</span>}
+    </span>
   );
   return (
-    <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-      <BlockStack gap="200">
-        {lines.map((l, i) => (
-          <InlineStack key={i} align="space-between" blockAlign="center" wrap={false}>
-            <Text as="span" variant="bodySm">
-              {l.label}
-            </Text>
-            {priceCell(l.orig, l.now)}
-          </InlineStack>
-        ))}
+    <div className="kb-box kb-stack kb-stack--tight">
+      {lines.map((l, i) => (
+        <div key={i} className="kb-between kb-small">
+          <span>{l.label}</span>
+          {priceCell(l.orig, l.now)}
+        </div>
+      ))}
 
-        <Divider />
+      <div className="kb-divider" style={{ margin: "2px 0" }} />
 
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="span" variant="bodySm" tone="subdued">
-            Items total
-          </Text>
-          {priceCell(totalOrig, totalNow, true)}
-        </InlineStack>
+      <div className="kb-between">
+        <span className="kb-muted kb-small">Items total</span>
+        {priceCell(totalOrig, totalNow, true)}
+      </div>
 
-        <Divider />
+      <div className="kb-divider" style={{ margin: "2px 0" }} />
 
-        <InlineStack gap="100" blockAlign="center">
-          <Text as="span" variant="headingSm">
-            Buy together — bundle discount
-          </Text>
-          <InfoTip text="One discount on the whole kit — applied on top of current prices, to the main and every accessory." />
-        </InlineStack>
-        <DiscountCalc
-          price={totalNow}
-          percent={pct}
-          onChangePercent={(p) => onChange({ discountPercent: clampPercent(p) })}
-        />
+      <div className="kb-inline" style={{ gap: 4 }}>
+        <b>Buy together — bundle discount</b>
+        <InfoTip text="One discount on the whole kit — applied on top of current prices, to the main and every accessory." />
+      </div>
+      <DiscountCalc
+        price={totalNow}
+        percent={pct}
+        onChangePercent={(p) => onChange({ discountPercent: clampPercent(p) })}
+      />
 
-        <Divider />
+      <div className="kb-divider" style={{ margin: "2px 0" }} />
 
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="span" variant="bodyMd" fontWeight="semibold">
-            Bundle price
-          </Text>
-          <Text as="span" variant="bodyMd" fontWeight="semibold">
-            {fmtMoney(bundlePrice, currency)}
-          </Text>
-        </InlineStack>
-        <InlineStack align="space-between" blockAlign="center">
-          <Text as="span" variant="bodySm" tone="subdued">
-            You save
-          </Text>
-          <Text as="span" variant="bodySm" tone="success">
-            {fmtMoney(totalSave, currency)}
-            {savePct > 0.05 ? ` · ${pctStr(savePct)}% off` : ""}
-          </Text>
-        </InlineStack>
+      <div className="kb-between">
+        <b>Bundle price</b>
+        <b>{fmtMoney(bundlePrice, currency)}</b>
+      </div>
+      <div className="kb-between kb-small">
+        <span className="kb-muted">You save</span>
+        <span style={{ color: "var(--ok)" }}>
+          {fmtMoney(totalSave, currency)}
+          {savePct > 0.05 ? ` · ${pctStr(savePct)}% off` : ""}
+        </span>
+      </div>
 
-        {belowBestItem && (
-          <Banner tone="warning">
-            <Text as="span" variant="bodySm">
-              This kit’s total discount ({pctStr(savePct)}% off) is lower than “
-              {bestItemLabel}”’s own sale ({pctStr(bestItemPct)}% off), so the
-              bundle may look less appealing than buying that item alone. Raise the
-              bundle discount to about {suggestedPct}% so the kit is the better
-              deal.
-            </Text>
-          </Banner>
-        )}
-      </BlockStack>
-    </Box>
+      {belowBestItem ? (
+        <Banner tone="warn">
+          This kit’s total discount ({pctStr(savePct)}% off) is lower than “
+          {bestItemLabel}”’s own sale ({pctStr(bestItemPct)}% off), so the bundle
+          may look less appealing than buying that item alone. Raise the bundle
+          discount to about {suggestedPct}% so the kit is the better deal.
+        </Banner>
+      ) : null}
+    </div>
   );
 }
 
@@ -2115,54 +1905,39 @@ function ArchivedSection({
   onDelete: (id: string) => void;
 }) {
   return (
-    <Card>
-      <BlockStack gap="300">
-        <InlineStack gap="200" blockAlign="center">
-          <ArchiveIcon width={18} height={18} />
-          <Text as="h3" variant="headingSm">
-            Archived ({groups.length})
-          </Text>
-        </InlineStack>
-        <Text as="p" variant="bodySm" tone="subdued">
-          Archived groups are hidden from the storefront and grant no discount.
-          Restore one to use it again, or delete it permanently. Changes apply
-          when you Save.
-        </Text>
-        <Divider />
-        <BlockStack gap="200">
-          {groups.map((group) => (
-            <InlineStack
-              key={group.id}
-              align="space-between"
-              blockAlign="center"
-              wrap={false}
-            >
-              <InlineStack gap="200" blockAlign="center">
-                <Badge>{displayCode(group)}</Badge>
-                <Text as="span" variant="bodyMd">
-                  {group.title || "Untitled"}
-                </Text>
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {formLabel(group)} · {group.accessories.length} item
-                  {group.accessories.length === 1 ? "" : "s"}
-                </Text>
-              </InlineStack>
-              <InlineStack gap="200">
-                <Button onClick={() => onRestore(group.id)}>Restore</Button>
-                <Button
-                  icon={DeleteIcon}
-                  tone="critical"
-                  variant="tertiary"
-                  accessibilityLabel="Delete permanently"
-                  onClick={() => onDelete(group.id)}
-                >
-                  Delete
-                </Button>
-              </InlineStack>
-            </InlineStack>
-          ))}
-        </BlockStack>
-      </BlockStack>
-    </Card>
+    <List
+      cols="minmax(0,1fr) auto"
+      title={
+        <span className="kb-inline" style={{ gap: 8 }}>
+          <IconArchive />
+          {`Archived (${groups.length})`}
+        </span>
+      }
+    >
+      <div className="kb-sub" style={{ padding: "10px 14px 0" }}>
+        Archived groups are hidden from the storefront and grant no discount.
+        Restore one to use it again, or delete it permanently. Changes apply when
+        you Save.
+      </div>
+      {groups.map((group) => (
+        <Row key={group.id}>
+          <div className="kb-inline" style={{ gap: 8, minWidth: 0 }}>
+            <span className="kb-code is-dim">{displayCode(group)}</span>
+            <span>{group.title || "Untitled"}</span>
+            <span className="kb-sub">
+              {`${formLabel(group)} · ${group.accessories.length} item${group.accessories.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+          <div className="kb-inline" style={{ flexWrap: "nowrap" }}>
+            <Btn size="tiny" onClick={() => onRestore(group.id)}>
+              Restore
+            </Btn>
+            <Btn size="tiny" variant="danger" onClick={() => onDelete(group.id)}>
+              Delete
+            </Btn>
+          </div>
+        </Row>
+      ))}
+    </List>
   );
 }

@@ -1,18 +1,20 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { useEffect, type ReactNode } from "react";
+import {
+  Link,
+  Outlet,
+  useLoaderData,
+  useNavigate,
+  useRouteError,
+} from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
-import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
-import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import kbStyles from "../ui/kb.css?url";
 
 import { authenticate, BILLING_ENABLED } from "../shopify.server";
 
-// Polaris stays until every page is migrated to the kb kit (app/ui).
-export const links = () => [
-  { rel: "stylesheet", href: polarisStyles },
-  { rel: "stylesheet", href: kbStyles },
-];
+// Every admin page uses the kb kit (app/ui) — no Polaris CSS/JS is loaded.
+export const links = () => [{ rel: "stylesheet", href: kbStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -23,11 +25,43 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+/**
+ * What @shopify/shopify-app-remix's AppProvider does, minus the Polaris
+ * provider it wraps (which would pull Polaris into every page): load App Bridge
+ * and route its `shopify:navigate` events (NavMenu clicks) through Remix.
+ */
+function AppBridgeProvider({
+  apiKey,
+  children,
+}: {
+  apiKey: string;
+  children: ReactNode;
+}) {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const onNavigate = (event: Event) => {
+      const href = (event.target as HTMLElement | null)?.getAttribute("href");
+      if (href) navigate(href);
+    };
+    addEventListener("shopify:navigate", onNavigate);
+    return () => removeEventListener("shopify:navigate", onNavigate);
+  }, [navigate]);
+  return (
+    <>
+      <script
+        src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
+        data-api-key={apiKey}
+      />
+      {children}
+    </>
+  );
+}
+
 export default function App() {
   const { apiKey, billingEnabled } = useLoaderData<typeof loader>();
 
   return (
-    <AppProvider isEmbeddedApp apiKey={apiKey}>
+    <AppBridgeProvider apiKey={apiKey}>
       <NavMenu>
         <Link to="/app" rel="home">
           Dashboard
@@ -40,7 +74,7 @@ export default function App() {
         {billingEnabled ? <Link to="/app/plan">Plan</Link> : null}
       </NavMenu>
       <Outlet />
-    </AppProvider>
+    </AppBridgeProvider>
   );
 }
 

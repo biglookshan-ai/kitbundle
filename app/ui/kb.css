@@ -4,6 +4,13 @@
  * lists. Every class is `kb-` prefixed so it can't collide with Polaris while
  * pages are migrated one by one.
  */
+/* Base page (Polaris' reset used to provide this). */
+html,
+body {
+  margin: 0;
+  background: #f6f6f7;
+}
+
 .kb {
   --bg: #f6f6f7;
   --panel: #fff;
@@ -851,4 +858,185 @@ button.kb-title:hover {
 @media (max-width: 640px) {
   .kb-offer { grid-template-columns: auto minmax(0, 1fr); }
   .kb-plans { grid-template-columns: 1fr; }
+}
+
+/* ---- Editor (product config) ---- */
+.kb-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.kb-iconbtn:hover {
+  background: #eef0f2;
+  color: var(--ink);
+}
+.kb-iconbtn--danger:hover {
+  background: #fde8e9;
+  color: var(--danger);
+}
+.kb-iconbtn--sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.kb-drag {
+  display: inline-flex;
+  flex: none;
+  color: #9aa0a6;
+  cursor: grab;
+}
+.kb-tip {
+  position: relative;
+  display: inline-flex;
+}
+.kb-tip__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 30;
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.kb-lfield {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.kb-lfield__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.kb-field__error {
+  color: var(--danger);
+  font-size: 12px;
+}
+.kb-input.is-error {
+  border-color: var(--danger);
+}
+.kb-affix {
+  position: relative;
+  display: block;
+}
+.kb-affix .kb-input {
+  padding-right: 28px;
+}
+.kb-affix__s {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.kb-box {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f6f7f8;
+}
+.kb-group {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.kb-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kb-group__name {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.kb-group__name b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-group__sum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+.kb-group__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.kb-cover {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #c9cccf;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.kb-cover.is-on {
+  border: 2px solid var(--brand);
+}
+.kb-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.kb-acc {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.kb-indent {
+  padding-left: 72px;
+}
+.kb-calc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.kb-calc .kb-lfield {
+  width: 120px;
+}
+@media (max-width: 640px) {
+  .kb-indent { padding-left: 0; }
 }
