@@ -6,10 +6,12 @@ import {
   campaignState,
   cleanStrings,
   newCampaignId,
+  giftQty,
   type GiftCampaign,
   type ProductGiftInfo,
 } from "./gift-campaign";
 import { syncAll } from "../modules/gifts/engine.server";
+import { rescheduleGiftTimer } from "../modules/gifts/scheduler.server";
 
 type AdminGraphql = {
   graphql: (query: string, options?: { variables?: any }) => Promise<Response>;
@@ -70,6 +72,7 @@ export async function getProductGiftInfo(
       gifts: c.giftProducts.map((g) => ({
         title: g.title,
         image: g.image ?? null,
+        qty: giftQty(g),
       })),
     });
   }
@@ -127,7 +130,8 @@ export async function saveCampaign(
     draft: !!c.draft,
     startsAt: c.startsAt ? new Date(c.startsAt) : null,
     endsAt: c.endsAt ? new Date(c.endsAt) : null,
-    perQualifying: Math.max(1, c.perQualifying || 1),
+    // Quantities live on each gift now (giftProductsJson[].qty).
+    perQualifying: 1,
     rewardMode:
       c.rewardMode === "choice"
         ? "choice"
@@ -135,7 +139,7 @@ export async function saveCampaign(
           ? "all"
           : "fixed",
     chooseCount: Math.max(1, Math.floor(Number(c.chooseCount)) || 1),
-    rulesVersion: 2,
+    rulesVersion: 3,
     priority: Math.trunc(Number(c.priority) || 0),
     exclusive: !!c.exclusive,
     badgeText: c.badgeText,
@@ -149,7 +153,9 @@ export async function saveCampaign(
     allProducts: !!c.allProducts,
     excludeTagsJson: JSON.stringify(cleanStrings(c.excludeTags)),
     excludeProductsJson: JSON.stringify(c.excludeProducts ?? []),
-    giftProductsJson: JSON.stringify(c.giftProducts),
+    giftProductsJson: JSON.stringify(
+      c.giftProducts.map((g) => ({ ...g, qty: giftQty(g) })),
+    ),
     nodeId: null, // no separate gift node any more
   };
   await prisma.giftCampaign.upsert({
@@ -161,6 +167,7 @@ export async function saveCampaign(
   // 3. Re-sync stamps + the coverage index (only changed products are written;
   //    products that dropped out of this campaign are cleared).
   const r = await syncAll(admin, shop, "save");
+  rescheduleGiftTimer();
   errors.push(...r.errors);
   return { ok: errors.length === 0, errors };
 }
@@ -190,6 +197,7 @@ export async function deleteCampaign(
   // Forget the row first so the sync recomputes WITHOUT this campaign.
   await prisma.giftCampaign.delete({ where: { id } });
   const r = await syncAll(admin, shop, "delete");
+  rescheduleGiftTimer();
   errors.push(...r.errors);
   return { ok: errors.length === 0, errors };
 }
@@ -225,10 +233,10 @@ export async function duplicateCampaign(
       startsAt: null,
       endsAt: null,
       nodeId: null,
-      rulesVersion: 2,
     },
   });
   // Drafts don't touch the storefront; this just indexes its coverage.
   const r = await syncAll(admin, shop, "duplicate");
+  rescheduleGiftTimer();
   return { ok: true, id: newId, errors: r.errors };
 }

@@ -139,4 +139,14 @@ describe("gift rules", () => {
     ];
     expect(freeOf(lines)).toEqual({ L2: 1 });
   });
+
+  it("per-gift quantities: each gift capped at units × its own quantity", () => {
+    reset();
+    const lines = [
+      main(2, [{ id: "c1", rewardMode: "all", giftIds: ["11", "12"], giftQty: { 11: 2, 12: 1 } }]),
+      gift(11, 9, 50),
+      gift(12, 9, 10),
+    ];
+    expect(freeOf(lines)).toEqual({ L2: 4, L3: 2 });
+  });
 });

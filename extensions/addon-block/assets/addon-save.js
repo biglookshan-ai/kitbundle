@@ -239,8 +239,14 @@
         config = null;
       }
     }
-    if (!config && !(giftCampaigns && giftCampaigns.length)) return;
     var groups = (config && config.groups) || [];
+    // Nothing to sell with the product right now (no visible bundle / add-on,
+    // and no gift campaign inside its time window) → leave the theme's own
+    // add button alone.
+    var anyAddon = groups.some(function (g) {
+      return g && !g.archived && !g.hidden;
+    });
+    if (!anyAddon && !giftsInWindow().length) return;
 
     // Inventory map (handle -> total available, null = untracked). Emitted by
     // Liquid because the AJAX product JSON omits inventory_quantity.
@@ -331,6 +337,7 @@
     setupModal(ctx.modal);
     setupCTA(ctx);
     updateCTA(ctx);
+    watchGiftExpiry(ctx, root, anyAddon);
 
     // When the customer changes the main product variant on the page, let
     // bundles re-sync their main-variant picker/price.
@@ -571,6 +578,7 @@
   // Keeps the total bar + our CTA in sync with the current selection.
   function updateCTA(ctx) {
     var cta = ctx.cta;
+    if (ctx.released) return; // theme button handed back (gift ended)
     if (cta) cta.hidden = false;
     var mv = mainVariant(ctx);
     var plan = buildPlan(ctx, ctx.mainInCart);
@@ -3031,6 +3039,38 @@
   // hidden (so two buttons / two cart logics — or a pre-order app's handler —
   // can't fight ours), and our button MIRRORS it, so a theme state such as
   // "Pre-Order Now" or "Sold out" is preserved instead of a generic label.
+  // Gift campaigns inside their time window (any main variant).
+  function giftsInWindow() {
+    return (giftCampaigns || []).filter(function (c) {
+      return giftActive(c) && (c.giftHandles || []).length;
+    });
+  }
+
+  // While the page is open, a gift campaign can reach its end time: hide its
+  // section on the dot, and when nothing else needs our button (no bundle /
+  // add-on on this product) hand the theme's own add button back.
+  function watchGiftExpiry(ctx, root, anyAddon) {
+    var now = Date.now();
+    var next = Infinity;
+    (giftCampaigns || []).forEach(function (c) {
+      var e = c.endsAt ? Date.parse(c.endsAt) : NaN;
+      if (!isNaN(e) && e > now && e < next) next = e;
+    });
+    if (next === Infinity) return;
+    var wait = Math.min(next - now + 500, 2147483000);
+    setTimeout(function () {
+      renderGiftPromo(root);
+      notifyGiftChange();
+      if (!anyAddon && !giftsInWindow().length && ctx.cta) {
+        ctx.released = true;
+        ctx.cta.hidden = true;
+        uninstallNativeHide();
+        return;
+      }
+      watchGiftExpiry(ctx, root, anyAddon);
+    }, wait);
+  }
+
   function setupCTA(ctx) {
     if (!ctx.cta) return;
     ctx.cta.addEventListener("click", function () {
@@ -3289,12 +3329,13 @@
         // Live campaigns for the selected variant, after overlap rules (same as
         // the promo + the Function).
         liveCampaigns().forEach(function (c) {
-          // One set per qualifying unit being added: q of each chosen gift.
-          var eachQty = c.qtyPerGift * Math.max(1, addUnitsOf(plan));
+          // One set per qualifying unit being added: each chosen gift at its
+          // own quantity.
+          var units = Math.max(1, addUnitsOf(plan));
           chosenGifts(c).forEach(function (h) {
             items.push({
               handle: h,
-              quantity: eachQty,
+              quantity: giftQtyOf(c, h) * units,
               _giftCampId: c.id, // resolved to a variant id + tag below
             });
           });
@@ -3614,6 +3655,13 @@
     return handles[0];
   }
 
+  // How many of one gift per product bought (per-gift quantity; older stamps
+  // fall back to the campaign-wide number).
+  function giftQtyOf(c, h) {
+    var tail = (c.giftIds || [])[(c.giftHandles || []).indexOf(h)];
+    return (tail && c.giftQty[String(tail)]) || c.qtyPerGift;
+  }
+
   // Multi-pick ("choice" with chooseCount > 1): giftChoice holds an ARRAY.
   function isMulti(c) {
     return c.rewardMode === "choice" && c.chooseCount > 1;
@@ -3643,7 +3691,9 @@
     var n = 0;
     var u = units > 0 ? units : 1;
     liveCampaigns().forEach(function (c) {
-      n += chosenGifts(c).length * c.qtyPerGift * u;
+      chosenGifts(c).forEach(function (h) {
+        n += giftQtyOf(c, h) * u;
+      });
     });
     return n;
   }
@@ -3876,7 +3926,7 @@
             el(
               "span",
               "cgp-free__badge",
-              c.qtyPerGift > 1 ? "FREE ×" + c.qtyPerGift : "FREE",
+              giftQtyOf(c, h) > 1 ? "FREE ×" + giftQtyOf(c, h) : "FREE",
             ),
           );
           metaRow.appendChild(giftPriceSpan);
@@ -4052,6 +4102,16 @@
               1,
           ),
         ),
+        // { productIdTail: n } — per-gift quantity per product bought.
+        giftQty: (function () {
+          var m = {};
+          var src = e.giftQty && typeof e.giftQty === "object" ? e.giftQty : {};
+          Object.keys(src).forEach(function (k) {
+            var n = Math.floor(Number(src[k]));
+            if (n >= 1) m[String(k)] = n;
+          });
+          return m;
+        })(),
         priority: Number(e.priority) || 0,
         exclusive: !!e.exclusive,
         startsAt: e.startsAt || "",

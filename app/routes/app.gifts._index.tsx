@@ -281,7 +281,7 @@ export default function GiftCampaigns() {
       </div>
       <div className="kb-summary" style={{ paddingTop: 0 }}>
         <span
-          title="Campaigns switch on and off at their start / end times, checked every 10 minutes."
+          title="Campaigns switch on and off automatically at their start / end times (plus a safety check every 30 minutes)."
           style={/^(failed|errors)/.test(timer.lastResult) ? { color: "var(--danger)" } : undefined}
         >
           {`Auto schedule: ${

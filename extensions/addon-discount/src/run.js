@@ -83,7 +83,18 @@ function giftRuleOf(e) {
         1,
     ),
   );
-  return { k, q };
+  // Per-gift quantities { productIdTail: n } (current stamps); q is the
+  // fallback for gifts without an entry and for older stamps.
+  /** @type {Record<string, number>} */
+  const qmap = {};
+  const gq = e && e.giftQty;
+  if (gq && typeof gq === "object") {
+    for (const t of Object.keys(gq)) {
+      const n = Math.floor(Number(gq[t]));
+      if (n >= 1) qmap[String(t)] = n;
+    }
+  }
+  return { k, q, qmap };
 }
 
 /** Numeric tail of a gid, for tolerant variant id comparison. */
@@ -476,7 +487,7 @@ export function run(input) {
   //     bundle (with several trigger components) would inflate the gift count.
   /** @type {Map<string, number>} */ // campaign -> qualifying units
   const giftQual = new Map();
-  /** @type {Map<string, {k: number, q: number}>} */
+  /** @type {Map<string, {k: number, q: number, qmap: Record<string, number>}>} */
   const giftRule = new Map();
   /** @type {Map<string, Set<string>>} */
   const giftIdsByCamp = new Map();
@@ -573,12 +584,15 @@ export function run(input) {
       byCamp.set(cid, prods);
     }
     for (const [cid, prods] of byCamp) {
-      const rule = giftRule.get(cid) ?? { k: 1, q: 1 };
-      const cap = (giftQual.get(cid) ?? 0) * rule.q;
-      // Cheapest gift products first; only the first k are free.
-      const ranked = [...prods.values()].sort((a, b) => a.cost - b.cost);
+      const rule = giftRule.get(cid) ?? { k: 1, q: 1, qmap: {} };
+      const qual = giftQual.get(cid) ?? 0;
+      // Cheapest gift products first; only the first k are free, each up to
+      // (qualifying units × that gift's own quantity).
+      const ranked = [...prods.entries()]
+        .map(([tail, p]) => ({ tail, ...p }))
+        .sort((a, b) => a.cost - b.cost);
       for (const p of ranked.slice(0, rule.k)) {
-        let left = cap;
+        let left = qual * (rule.qmap[p.tail] || rule.q);
         for (const l of p.lines) {
           if (left <= 0) break;
           const take = Math.min(left, l.qty);

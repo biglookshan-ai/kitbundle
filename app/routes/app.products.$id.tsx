@@ -787,13 +787,10 @@ function GiftInfoCard({ gifts }: { gifts: ProductGiftInfo[] }) {
                   {g.gifts.map((gp, i) => (
                     <span key={i} className="kb-refchip kb-refchip--gift">
                       <Thumb src={gp.image} size={22} alt="" />
-                      <span>{gp.title}</span>
+                      <span>{gp.qty > 1 ? `${gp.qty} × ${gp.title}` : gp.title}</span>
                     </span>
                   ))}
                 </div>
-                {g.perQualifying > 1 ? (
-                  <div className="kb-sub">{`${g.perQualifying} free per qualifying item`}</div>
-                ) : null}
               </div>
             );
           })}

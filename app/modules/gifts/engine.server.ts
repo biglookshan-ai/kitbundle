@@ -23,6 +23,7 @@ import {
   rowToCampaign,
   rewardRule,
   campaignState,
+  giftQty,
   type GiftCampaign,
 } from "../../models/gift-campaign";
 
@@ -153,10 +154,13 @@ function campaignEntry(c: GiftCampaign, tz: string) {
     giftIds: c.giftProducts.map((g) => gidTail(g.id)).filter(Boolean),
     // { productIdTail: [variantIdTail] } for gifts that restrict variants.
     giftVariants,
-    perQualifying: rule.q,
-    // Unified reward rule: k different gifts, q of each, per qualifying unit.
+    // Reward rule: k different gifts; each gift's own quantity per unit bought.
+    perQualifying: 1,
     chooseCount: rule.k,
-    qtyPerGift: rule.q,
+    qtyPerGift: 1,
+    giftQty: Object.fromEntries(
+      c.giftProducts.map((g) => [gidTail(g.id), giftQty(g)]).filter(([t]) => t),
+    ),
     // Overlaps are resolved at checkout / on the page among campaigns live that
     // day (so a future exclusive campaign doesn't block today's).
     priority: c.priority || 0,

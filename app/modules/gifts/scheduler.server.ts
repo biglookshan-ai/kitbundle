@@ -1,12 +1,15 @@
 /**
  * Gifts module — in-app scheduler (no separate service, no Shopify Flow).
  *
- * Every 10 minutes, per shop with gift campaigns:
+ * Event-driven: the timer is armed for the NEXT campaign start / end across all
+ * shops (a few seconds after it), so a campaign switches on / off right on
+ * time. A 30-minute backstop tick always runs as well. On each run, per shop:
  * - if any campaign's start or end passed since the last check → full sync, so
- *   the campaign appears in / disappears from product stamps (checkout
- *   precision ~10 min; the Function's date gate remains a backstop);
+ *   the campaign appears in / disappears from product stamps (the Function's
+ *   date gate remains a backstop);
  * - once a day → full reconcile anyway (catches anything a webhook missed,
  *   e.g. manual collection edits).
+ * Saving / deleting / duplicating a campaign re-arms the timer.
  *
  * Missed boundaries (server restart / deploy) are covered because we compare
  * against the stored last-check time, not the timer tick. A DB lock keeps two
@@ -16,8 +19,9 @@ import prisma from "../../db.server";
 import { unauthenticated } from "../../shopify.server";
 import { syncAll } from "./engine.server";
 
-const TICK_MS = 10 * 60 * 1000;
+const BACKSTOP_MS = 30 * 60 * 1000;
 const FIRST_TICK_MS = 45 * 1000;
+const AFTER_BOUNDARY_MS = 3000;
 const DAILY_MS = 24 * 60 * 60 * 1000;
 const LOCK_MS = 15 * 60 * 1000;
 
@@ -131,16 +135,56 @@ export async function schedulerStatus(shop: string) {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __kbGiftScheduler: NodeJS.Timeout | undefined;
+  var __kbGiftTimer: { handle?: NodeJS.Timeout; started?: boolean } | undefined;
+}
+
+/** The next campaign start / end after `now`, across every shop. */
+async function nextBoundary(now: Date): Promise<Date | null> {
+  const where = { draft: false, enabled: true };
+  const [s, e] = await Promise.all([
+    prisma.giftCampaign.findFirst({
+      where: { ...where, startsAt: { gt: now } },
+      orderBy: { startsAt: "asc" },
+      select: { startsAt: true },
+    }),
+    prisma.giftCampaign.findFirst({
+      where: { ...where, endsAt: { gt: now } },
+      orderBy: { endsAt: "asc" },
+      select: { endsAt: true },
+    }),
+  ]);
+  const times = [s?.startsAt, e?.endsAt].filter((d): d is Date => !!d);
+  return times.length ? new Date(Math.min(...times.map((d) => d.getTime()))) : null;
+}
+
+/** (Re)arm the timer for the next boundary, capped by the backstop interval. */
+async function arm(delayOverride?: number) {
+  const t = (globalThis.__kbGiftTimer ??= {});
+  if (t.handle) clearTimeout(t.handle);
+  let delay = delayOverride ?? BACKSTOP_MS;
+  if (delayOverride === undefined) {
+    const next = await nextBoundary(new Date()).catch(() => null);
+    if (next) delay = Math.min(delay, Math.max(1000, next.getTime() - Date.now() + AFTER_BOUNDARY_MS));
+  }
+  t.handle = setTimeout(() => {
+    void schedulerTick()
+      .catch((e) => console.error("[gifts] scheduler error", e))
+      .finally(() => void arm());
+  }, delay);
+}
+
+/** Call after a campaign's dates / status may have changed. */
+export function rescheduleGiftTimer() {
+  if (!globalThis.__kbGiftTimer?.started) return;
+  void arm().catch((e) => console.error("[gifts] re-arm failed", e));
 }
 
 /** Start the timer once per process (guards against dev reloads). */
 export function startGiftScheduler() {
-  if (globalThis.__kbGiftScheduler) return;
   if (process.env.KB_GIFT_SCHEDULER === "off") return;
-  const tick = () =>
-    void schedulerTick().catch((e) => console.error("[gifts] scheduler error", e));
-  setTimeout(tick, FIRST_TICK_MS);
-  globalThis.__kbGiftScheduler = setInterval(tick, TICK_MS);
-  console.log("[gifts] scheduler started (every 10 min)");
+  const t = (globalThis.__kbGiftTimer ??= {});
+  if (t.started) return;
+  t.started = true;
+  void arm(FIRST_TICK_MS);
+  console.log("[gifts] scheduler started (on each campaign start / end + every 30 min)");
 }

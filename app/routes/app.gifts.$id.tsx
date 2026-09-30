@@ -22,6 +22,7 @@ import {
   overlapWinners,
   rowToCampaign,
   rewardRule,
+  giftQty,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -318,6 +319,7 @@ export default function GiftCampaignEditor() {
     refs: Ref[],
     onChange: (next: Ref[]) => void,
     chipLabel: string,
+    withQty = false,
   ) =>
     refs.length === 0 ? (
       <p className="kb-sub" style={{ margin: 0 }}>
@@ -348,6 +350,25 @@ export default function GiftCampaignEditor() {
                 {r.title || r.handle || r.id}
               </span>
               <div className="kb-inline">
+                {withQty ? (
+                  <label className="kb-qty" title="How many of this gift per product bought">
+                    Qty
+                    <input
+                      type="number"
+                      min={1}
+                      value={String(giftQty(r))}
+                      onChange={(e) =>
+                        onChange(
+                          refs.map((x) =>
+                            x.id === r.id
+                              ? { ...x, qty: Math.max(1, Math.floor(Number(e.target.value)) || 1) }
+                              : x,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                ) : null}
                 {vs.length > 1 ? (
                   <Btn size="tiny" onClick={() => toggleVarOpen(r.id)}>
                     {`Variants ${offeredIds.length}/${vs.length} ${openVarPids[r.id] ? "▴" : "▾"}`}
@@ -597,6 +618,7 @@ export default function GiftCampaignEditor() {
               c.giftProducts,
               (r) => patch({ giftProducts: r }),
               "Variants offered free",
+              true,
             )}
           </Panel>
         </div>
@@ -635,7 +657,7 @@ export default function GiftCampaignEditor() {
               </Field>
               <Field
                 label="Ends (optional)"
-                help="Starts and ends automatically, within about 10 minutes of these times."
+                help="Starts and ends automatically at these times (the product page may take a minute to refresh)."
               >
                 <Input
                   type="datetime-local"
@@ -705,7 +727,7 @@ function RewardSettings({
   legacyFixed: boolean;
 }) {
   const n = c.giftProducts.length;
-  const { k, q } = rewardRule(c);
+  const { k } = rewardRule(c);
   const modes: {
     value: GiftCampaign["rewardMode"];
     title: string;
@@ -730,18 +752,15 @@ function RewardSettings({
       title: "First gift only (old mode)",
       desc: "Only the first gift is shown. Switch to another option to retire it.",
     });
-  const buyer = c.triggerProducts[0]?.title || "a qualifying product";
-  const name = (i: number) => c.giftProducts[i]?.title || `Gift ${i + 1}`;
+  // Neutral labels keep the example short: "main product", "Gift 1", "Gift 2"…
+  const qtys = c.giftProducts.map(giftQty);
   const example = (units: number) => {
-    const each = q * units;
-    if (n === 0) return "Add a gift product first.";
-    if (c.rewardMode === "all" || n === 1) {
-      return c.giftProducts.map((_, i) => `${each} × ${name(i)}`).join(" + ");
-    }
-    if (c.rewardMode === "fixed") return `${each} × ${name(0)}`;
-    return k === 1
-      ? `${each} × one gift they choose from ${n}`
-      : `${each} of each of ${k} gifts they choose from ${n}`;
+    if (n === 0) return "add a gift product first";
+    const list = (idx: number[]) => idx.map((i) => `${qtys[i] * units} × Gift ${i + 1}`).join(" + ");
+    if (c.rewardMode === "all" || n === 1) return list(qtys.map((_, i) => i));
+    if (c.rewardMode === "fixed") return list([0]);
+    const each = units === 1 ? "each at its Qty" : `${units} × each gift's Qty`;
+    return `${k} gift${k === 1 ? "" : "s"} of their choice (${each})`;
   };
 
   return (
@@ -798,36 +817,26 @@ function RewardSettings({
         </Field>
       ) : null}
 
-      <Field label="Gift quantity">
-        <div className="kb-inline" style={{ flexWrap: "nowrap" }}>
-          <Input
-            type="number"
-            min={1}
-            style={{ width: 80 }}
-            value={String(c.perQualifying)}
-            onChange={(e) =>
-              patch({
-                perQualifying: Math.max(
-                  1,
-                  Math.floor(Number(e.target.value)) || 1,
-                ),
-              })
-            }
-          />
-          <span className="kb-sub">of each gift, for every product bought</span>
-        </div>
-      </Field>
-
       <div className="kb-box kb-small">
         <div className="kb-overline" style={{ marginBottom: 6 }}>
           Example
         </div>
         <div>
-          Buys 1 × {buyer} → gets <b>{example(1)}</b> free
+          Buys 1 × main product → gets <b>{example(1)}</b> free
         </div>
         <div style={{ marginTop: 4 }}>
-          Buys 2 → gets <b>{example(2)}</b> free
+          Buys 2 × main product → gets <b>{example(2)}</b> free
         </div>
+        {n > 1 ? (
+          <div className="kb-muted" style={{ marginTop: 6 }}>
+            Gift 1, Gift 2… follow the order of the gift list. Set each gift&apos;s
+            quantity with its Qty box.
+          </div>
+        ) : (
+          <div className="kb-muted" style={{ marginTop: 6 }}>
+            Set the quantity with the gift&apos;s Qty box.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1220,3 +1220,22 @@ button.kb-title:hover {
   border-bottom-right-radius: 0;
   margin-right: 0;
 }
+
+/* Per-gift quantity box in the gift list. */
+.kb-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.kb-qty input {
+  width: 58px;
+  height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+  color: var(--ink);
+}

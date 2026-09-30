@@ -22,6 +22,8 @@ export type Ref = {
    * set so an off-list variant can't be claimed free.
    */
   variantIds?: string[];
+  /** Gift products only: how many of this gift per product bought (default 1). */
+  qty?: number;
 };
 
 export type GiftCampaign = {
@@ -34,8 +36,8 @@ export type GiftCampaign = {
   startsAt: string; // ISO-8601 or ""
   endsAt: string; // ISO-8601 or ""
   /**
-   * Free units of EACH gift per qualifying unit (q). Buy 2 mains with q = 1 →
-   * 2 of each chosen gift.
+   * Legacy campaign-wide quantity of each gift. Gift quantities now live on
+   * each gift (`giftProducts[].qty`); this seeds them for older campaigns.
    */
   perQualifying: number;
   /**
@@ -105,7 +107,7 @@ export type ProductGiftInfo = {
   state: CampaignState;
   badge: string;
   perQualifying: number;
-  gifts: { title: string; image: string | null }[];
+  gifts: { title: string; image: string | null; qty: number }[];
 };
 
 /**
@@ -127,7 +129,12 @@ export function overlapWinners<T extends { priority?: number; exclusive?: boolea
   return sorted.filter((c) => !c.exclusive);
 }
 
-/** The effective reward rule: k different gifts, q of each, per qualifying unit. */
+/** How many of one gift per product bought (default 1). */
+export function giftQty(g: Ref): number {
+  return Math.max(1, Math.floor(Number(g.qty)) || 1);
+}
+
+/** The effective reward rule: k different gifts (each at its own quantity). */
 export function rewardRule(c: GiftCampaign): { k: number; q: number; n: number } {
   const n = c.giftProducts.length;
   const k =
@@ -139,14 +146,18 @@ export function rewardRule(c: GiftCampaign): { k: number; q: number; n: number }
   return { k, q: Math.max(1, c.perQualifying || 1), n };
 }
 
-/** Plain-English reward summary ("Pick 2 of 5 gifts · 1 of each per item"). */
+/** Plain-English reward summary ("Pick 2 of 5 gifts · some ×2"). */
 export function rewardSummary(c: GiftCampaign): string {
-  const { k, q, n } = rewardRule(c);
-  const each = `${q} of each per item bought`;
-  if (c.rewardMode === "all") return `Every gift (${n}) · ${each}`;
-  if (c.rewardMode === "choice")
-    return k > 1 ? `Pick ${k} of ${n} gifts · ${each}` : `Pick 1 of ${n} gifts · ${q} per item bought`;
-  return `First gift auto-added · ${q} per item bought`;
+  const { k, n } = rewardRule(c);
+  const qtys = c.giftProducts.map(giftQty);
+  const extra = qtys.some((x) => x > 1)
+    ? qtys.every((x) => x === qtys[0])
+      ? ` · ${qtys[0]} of each`
+      : " · quantities vary"
+    : "";
+  if (c.rewardMode === "all") return `Every gift (${n})${extra} per item bought`;
+  if (c.rewardMode === "choice") return `Pick ${k} of ${n} gift${n === 1 ? "" : "s"}${extra} per item bought`;
+  return `First gift only${extra} per item bought`;
 }
 
 export function newCampaignId() {
@@ -212,6 +223,10 @@ function parseRefs(json: string | null | undefined): Ref[] {
             variantIds: Array.isArray(r.variantIds)
               ? r.variantIds.filter((x: any) => typeof x === "string")
               : undefined,
+            qty:
+              Number.isFinite(Number(r.qty)) && Number(r.qty) >= 1
+                ? Math.floor(Number(r.qty))
+                : undefined,
           }))
       : [];
   } catch {
@@ -243,6 +258,11 @@ function parseStrings(json: string | null | undefined): string[] {
 
 /** Build a GiftCampaign from a Prisma row (shape-compatible). */
 export function rowToCampaign(row: any): GiftCampaign {
+  // Legacy All-mode rows ignored perQualifying (one of each gift per unit).
+  const legacyQ =
+    row.rewardMode === "all" && (Number(row.rulesVersion) || 1) < 2
+      ? 1
+      : Math.max(1, Number(row.perQualifying) || 1);
   return {
     id: row.id,
     title: row.title ?? "",
@@ -250,11 +270,7 @@ export function rowToCampaign(row: any): GiftCampaign {
     draft: !!row.draft,
     startsAt: row.startsAt ? new Date(row.startsAt).toISOString() : "",
     endsAt: row.endsAt ? new Date(row.endsAt).toISOString() : "",
-    // Legacy All-mode rows ignored perQualifying (one of each gift per unit).
-    perQualifying:
-      row.rewardMode === "all" && (Number(row.rulesVersion) || 1) < 2
-        ? 1
-        : Math.max(1, Number(row.perQualifying) || 1),
+    perQualifying: legacyQ,
     chooseCount: Math.max(1, Number(row.chooseCount) || 1),
     priority: Math.trunc(Number(row.priority) || 0),
     exclusive: !!row.exclusive,
@@ -275,6 +291,10 @@ export function rowToCampaign(row: any): GiftCampaign {
     allProducts: !!row.allProducts,
     excludeTags: parseStrings(row.excludeTagsJson),
     excludeProducts: parseRefs(row.excludeProductsJson),
-    giftProducts: parseRefs(row.giftProductsJson),
+    giftProducts: parseRefs(row.giftProductsJson).map((g) => ({
+      ...g,
+      // Older campaigns had one quantity for every gift; seed each gift with it.
+      qty: g.qty ?? legacyQ,
+    })),
   };
 }
