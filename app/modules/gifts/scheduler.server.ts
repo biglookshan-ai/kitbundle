@@ -56,7 +56,11 @@ async function runShop(shop: string, now: Date, force = false) {
     const since = state?.lastRunAt ?? null;
     const crossed = since ? await boundariesBetween(shop, since, now) : 1;
     const daily = !state?.lastFullAt || now.getTime() - state.lastFullAt.getTime() > DAILY_MS;
-    if (force || crossed || daily) {
+    // Stores that uninstalled the app (no offline session) are skipped quietly.
+    const installed = await prisma.session.count({ where: { shop, isOnline: false } });
+    if (!installed) {
+      result = "skipped: app not installed";
+    } else if (force || crossed || daily) {
       full = true;
       const { admin } = await unauthenticated.admin(shop);
       const r = await syncAll(admin, shop, force ? "timer-now" : crossed ? "timer" : "daily");

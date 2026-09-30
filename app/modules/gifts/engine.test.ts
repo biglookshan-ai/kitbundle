@@ -222,6 +222,7 @@ describe("gift sync engine", () => {
 
   it("scheduler: first tick syncs, idle ticks do nothing, a passed start re-syncs", async () => {
     vi.mocked(unauthenticated.admin).mockResolvedValue({ admin } as any);
+    db.session = [{ shop: "s", isOnline: false }];
     const t0 = Date.now();
     const B = db.giftCampaign.find((c) => c.id === "B")!;
     B.startsAt = new Date(t0 + 5 * 60_000); // starts in 5 minutes
@@ -243,5 +244,12 @@ describe("gift sync engine", () => {
     }
     expect(ids(P(3))).toEqual(["B"]);
     expect(db.giftSchedulerState[0].lockedUntil).toBeNull();
+  });
+
+  it("scheduler skips stores that uninstalled the app", async () => {
+    db.session = [];
+    await schedulerTick(new Date());
+    expect(db.giftSchedulerState[0].lastResult).toBe("skipped: app not installed");
+    expect(writes).toEqual([]);
   });
 });
