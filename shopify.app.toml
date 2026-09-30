@@ -8,7 +8,8 @@ client_id = "f7b9d6e29086498ce53bd02ed0d8ff44"
 [access_scopes]
 # read/write_products: read + write the offer config product metafield.
 # write_discounts: create the automatic discount that activates the Function.
-scopes = "read_products,write_products,write_discounts"
+# read_inventory + read_locations: per-location stock in the Gifts views.
+scopes = "read_products,write_products,write_discounts,read_inventory,read_locations"
 use_legacy_install_flow = false
 
 [webhooks]

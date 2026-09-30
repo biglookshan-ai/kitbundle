@@ -13,6 +13,9 @@ import {
   RebuildButton,
   openProductInAdmin,
   fmtWhen,
+  useStockPrice,
+  StockCell,
+  PriceCell,
 } from "../modules/gifts/ui";
 import {
   PageHead,
@@ -37,14 +40,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { gifts: views.gifts, updatedAt };
 };
 
-/** Stock pill: out of stock / low / count / not tracked. */
-function StockPill({ qty }: { qty: number | null }) {
-  if (qty === null) return <Pill>Not tracked</Pill>;
-  if (qty <= 0) return <Pill tone="danger">Out of stock</Pill>;
-  if (qty <= 5) return <Pill tone="warn">{`Low · ${qty}`}</Pill>;
-  return <Pill tone="ok">{`${qty} in stock`}</Pill>;
-}
-
 export default function GiftItems() {
   const { gifts, updatedAt } = useLoaderData<typeof loader>();
   const [query, setQuery] = useState("");
@@ -59,6 +54,7 @@ export default function GiftItems() {
     return [g.title, g.vendor].join(" ").toLowerCase().includes(q);
   });
 
+  const live = useStockPrice(visible.map((g) => g.productId));
   const beingGiven = gifts.filter((g) => g.activeTriggerCount > 0).length;
   const atRisk = gifts.filter(
     (g) => g.totalInventory !== null && g.totalInventory <= 5,
@@ -106,8 +102,8 @@ export default function GiftItems() {
       </div>
 
       <List
-        cols="minmax(0,1.6fr) 140px 160px minmax(0,1.3fr)"
-        head={["Gift", "Stock", "Given by", "Campaigns"]}
+        cols="minmax(0,1.5fr) 110px 190px 150px minmax(0,1.2fr)"
+        head={["Gift", "Price", "Stock", "Given by", "Campaigns"]}
       >
         {gifts.length === 0 ? (
           <Empty title="No gifts configured yet">
@@ -139,7 +135,8 @@ export default function GiftItems() {
                   ) : null}
                 </div>
               </div>
-              <StockPill qty={g.totalInventory} />
+              <PriceCell info={live?.price[g.productId]} />
+              <StockCell info={live?.stock[g.productId]} needsAccess={live?.needsAccess} />
               <div>
                 <Link
                   to={`/app/gifts/products?gift=${g.numericId}`}

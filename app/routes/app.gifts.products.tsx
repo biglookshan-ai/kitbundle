@@ -13,6 +13,8 @@ import {
   RebuildButton,
   openProductInAdmin,
   fmtWhen,
+  useStockPrice,
+  StockCell,
 } from "../modules/gifts/ui";
 import {
   PageHead,
@@ -84,6 +86,7 @@ export default function GiftProducts() {
       .includes(q);
   });
   const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
+  const live = useStockPrice(rows.map((r) => r.productId));
 
   const giftName =
     giftFilter &&
@@ -114,7 +117,7 @@ export default function GiftProducts() {
         className="kb-filters"
         style={{
           ["--cols" as string]:
-            "minmax(220px,1.6fr) repeat(3,minmax(150px,1fr)) auto",
+            "minmax(200px,1.4fr) minmax(140px,1fr) minmax(140px,1fr) minmax(220px,1.3fr) auto",
         }}
       >
         <Field label="Search">
@@ -160,7 +163,7 @@ export default function GiftProducts() {
             ))}
           </Select>
         </Field>
-        <Field label="Status">
+        <Field label="Gift right now">
           <Select
             value={state}
             onChange={(e) => {
@@ -169,13 +172,13 @@ export default function GiftProducts() {
             }}
           >
             <option value="any">Any</option>
-            <option value="active">Giving a gift now</option>
-            <option value="inactive">Not giving now</option>
+            <option value="active">Gets a gift now (a campaign is active)</option>
+            <option value="inactive">No gift now (campaigns paused / scheduled / ended)</option>
           </Select>
         </Field>
         <div style={{ height: 38, display: "flex", alignItems: "center" }}>
           <Checkbox
-            label="Only overlaps"
+            label="Only products in 2+ active campaigns"
             checked={overlapOnly}
             onChange={(v) => {
               setOverlapOnly(v);
@@ -186,7 +189,14 @@ export default function GiftProducts() {
       </div>
 
       <div className="kb-summary">
-        <span>{`${filtered.length} product${filtered.length === 1 ? "" : "s"}`}</span>
+        <span>
+          {`${filtered.length} product${filtered.length === 1 ? "" : "s"}`}
+          <span className="kb-muted">
+            {" "}
+            · A product &ldquo;gets a gift now&rdquo; when at least one of its campaigns is
+            active. Campaign pills are coloured by that campaign&apos;s status.
+          </span>
+        </span>
         {giftName ? (
           <span className="kb-inline">
             <Pill tone="info">{`Giving: ${giftName}`}</Pill>
@@ -205,8 +215,8 @@ export default function GiftProducts() {
       </div>
 
       <List
-        cols="minmax(0,1.5fr) 150px minmax(0,1.3fr) 160px"
-        head={["Product", "Gifts", "Campaigns", "Included via"]}
+        cols="minmax(0,1.5fr) 170px 140px minmax(0,1.3fr) 150px"
+        head={["Product", "Stock", "Gifts", "Campaigns", "Included via"]}
         footer={
           <Pager page={page} pageSize={PAGE} total={filtered.length} onPage={setPage} />
         }
@@ -249,6 +259,7 @@ export default function GiftProducts() {
                   </div>
                 </div>
               </div>
+              <StockCell info={live?.stock[p.productId]} needsAccess={live?.needsAccess} />
               <div className="kb-thumbs">
                 {p.gifts.slice(0, 4).map((g) => (
                   <Thumb key={g.productId} src={g.image} size={28} alt={g.title} />

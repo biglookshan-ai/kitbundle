@@ -1270,3 +1270,98 @@ button.kb-title:hover {
 .kb-exclude__title {
   font-weight: 600;
 }
+
+.kb-pricecell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+.kb-pricecell s {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---- Campaign cards ---- */
+.kb-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.kb-card {
+  padding: 14px 16px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.kb-card__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+.kb-card__actions {
+  display: flex;
+  gap: 2px;
+}
+.kb-card__actions a.kb-iconbtn {
+  text-decoration: none;
+}
+.kb-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.kb-giftrows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kb-giftrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* Segmented control made of links (calendar views). */
+.kb-seg a {
+  padding: 6px 12px;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.kb-seg a.is-active {
+  background: var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: var(--ink);
+  font-weight: 600;
+}
+.kb-cal__day span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.kb-cal__day small {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+.kb-cal__grid--week .kb-cal__bar,
+.kb-cal__grid--quarter .kb-cal__bar {
+  margin: 0 3px;
+}

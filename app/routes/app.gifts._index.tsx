@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
+import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -18,6 +18,7 @@ import {
 import {
   campaignState,
   rewardSummary,
+  giftQty,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -30,7 +31,11 @@ import {
   fmtWhen,
   fmtRelative,
   timingHint,
+  useStockPrice,
+  StockCell,
+  PriceCell,
 } from "../modules/gifts/ui";
+import { IconChevron, IconCopy, IconEdit, IconTrash } from "../ui/icons";
 import {
   PageHead,
   Stats,
@@ -38,10 +43,10 @@ import {
   Input,
   Segmented,
   List,
-  Row,
   Pill,
   Thumb,
   Btn,
+  IconBtn,
   Empty,
 } from "../ui/kit";
 
@@ -186,6 +191,8 @@ export default function GiftCampaigns() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Status>("all");
   const [mode, setMode] = useState<"simple" | "detailed">("simple");
+  // Per-card override of Simple / Detailed.
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
 
   // Report action results as admin toasts.
   useEffect(() => {
@@ -212,6 +219,12 @@ export default function GiftCampaigns() {
   });
 
   const count = (s: string) => campaigns.filter((c) => campaignState(c) === s).length;
+  // Price + stock for the gifts of expanded cards.
+  const live = useStockPrice(
+    visible
+      .filter((c) => openMap[c.id] ?? mode === "detailed")
+      .flatMap((c) => c.giftProducts.map((g) => g.id)),
+  );
 
   return (
     <GiftsShell>
@@ -312,8 +325,8 @@ export default function GiftCampaigns() {
         </Btn>
       </div>
 
-      <List cols="minmax(0,1fr) auto">
-        {campaigns.length === 0 ? (
+      {campaigns.length === 0 ? (
+        <List cols="1fr">
           <Empty
             title="No gift campaigns yet"
             action={
@@ -325,105 +338,143 @@ export default function GiftCampaigns() {
             Reward customers with a free gift when they buy chosen products or
             collections.
           </Empty>
-        ) : visible.length === 0 ? (
+        </List>
+      ) : visible.length === 0 ? (
+        <List cols="1fr">
           <Empty title="No campaigns match your search" />
-        ) : (
-          visible.map((c) => {
+        </List>
+      ) : (
+        <div className="kb-cards">
+          {visible.map((c) => {
             const state = campaignState(c) as keyof typeof STATE_LABEL;
             const covers = coverage[c.id] ?? 0;
+            const open = openMap[c.id] ?? mode === "detailed";
             const meta = [
               `Covers ${covers} product${covers === 1 ? "" : "s"}`,
               rewardSummary(c),
               c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
-              c.startsAt && state === "scheduled"
-                ? `starts ${fmtDate(c.startsAt)}`
-                : null,
+              c.startsAt && state === "scheduled" ? `starts ${fmtDate(c.startsAt)}` : null,
             ]
               .filter(Boolean)
               .join(" · ");
-            const deleting =
+            const doing = (intent: string) =>
               busy &&
-              fetcher.formData?.get("intent") === "delete" &&
+              fetcher.formData?.get("intent") === intent &&
               fetcher.formData?.get("id") === c.id;
             return (
-              <Row key={c.id}>
-                <div style={{ minWidth: 0 }}>
-                  <div className="kb-inline">
-                    <span className="kb-title" style={{ display: "inline" }}>
-                      {c.title || "Untitled campaign"}
-                    </span>
-                    <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
-                    {timingHint(c, state) ? <Pill tone="info">{timingHint(c, state)}</Pill> : null}
-                    {c.exclusive ? <Pill tone="warn">Exclusive</Pill> : null}
-                    {c.priority ? <Pill>{`Priority ${c.priority}`}</Pill> : null}
-                  </div>
-                  <div className="kb-sub" style={{ marginTop: 2 }}>
-                    {meta}
-                  </div>
-                  {mode === "detailed" ? (
-                    <div className="kb-flow">
-                      <div>
-                        <h4>Buy any of</h4>
-                        <RefChips
-                          products={c.triggerProducts}
-                          collections={c.triggerCollections}
-                          rules={ruleLabels(c)}
-                          emptyText="No trigger set"
-                        />
-                        {excludeText(c) ? (
-                          <div className="kb-sub" style={{ marginTop: 4 }}>
-                            {`Excluding ${excludeText(c)}`}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="kb-flow__arrow">→</div>
-                      <div>
-                        <h4>{`Get free (${c.giftProducts.length})`}</h4>
-                        <RefChips products={c.giftProducts} gift emptyText="No gift set" />
-                      </div>
+              <article key={c.id} className="kb-card">
+                <div className="kb-card__head">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="kb-inline" style={{ gap: 6 }}>
+                      <Link
+                        to={`/app/gifts/${c.id}`}
+                        prefetch="intent"
+                        className="kb-title"
+                        style={{ display: "inline" }}
+                      >
+                        {c.title || "Untitled campaign"}
+                      </Link>
+                      <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+                      {timingHint(c, state) ? <Pill tone="info">{timingHint(c, state)}</Pill> : null}
+                      {c.exclusive ? <Pill tone="warn">Exclusive</Pill> : null}
+                      {c.priority ? <Pill>{`Priority ${c.priority}`}</Pill> : null}
                     </div>
-                  ) : null}
-                </div>
-                <div className="kb-inline" style={{ alignSelf: "start", paddingTop: 2 }}>
-                  <Btn size="tiny" to={`/app/gifts/${c.id}`}>
-                    Edit
-                  </Btn>
-                  <Btn
-                    size="tiny"
-                    title="Copy as a draft (no dates) — for a series of promotions"
-                    loading={
-                      busy &&
-                      fetcher.formData?.get("intent") === "duplicate" &&
-                      fetcher.formData?.get("id") === c.id
-                    }
-                    onClick={() =>
-                      fetcher.submit({ intent: "duplicate", id: c.id }, { method: "POST" })
-                    }
-                  >
-                    Duplicate
-                  </Btn>
-                  <Btn
-                    size="tiny"
-                    variant="danger"
-                    loading={deleting}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Delete “${c.title || "Untitled campaign"}”? Its gifts stop immediately.`,
-                        )
-                      ) {
-                        fetcher.submit({ intent: "delete", id: c.id }, { method: "POST" });
+                    <div className="kb-sub" style={{ marginTop: 3 }}>
+                      {meta}
+                    </div>
+                  </div>
+                  <div className="kb-card__actions">
+                    <Link
+                      to={`/app/gifts/${c.id}`}
+                      prefetch="intent"
+                      className="kb-iconbtn"
+                      title="Edit"
+                      aria-label="Edit"
+                    >
+                      <IconEdit />
+                    </Link>
+                    <IconBtn
+                      label="Duplicate as a draft (no dates)"
+                      onClick={() =>
+                        doing("duplicate")
+                          ? undefined
+                          : fetcher.submit({ intent: "duplicate", id: c.id }, { method: "POST" })
                       }
-                    }}
-                  >
-                    Delete
-                  </Btn>
+                    >
+                      {doing("duplicate") ? <span className="kb-spin" /> : <IconCopy />}
+                    </IconBtn>
+                    <IconBtn
+                      label="Delete"
+                      tone="danger"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Delete “${c.title || "Untitled campaign"}”? Its gifts stop immediately.`,
+                          )
+                        ) {
+                          fetcher.submit({ intent: "delete", id: c.id }, { method: "POST" });
+                        }
+                      }}
+                    >
+                      {doing("delete") ? <span className="kb-spin" /> : <IconTrash />}
+                    </IconBtn>
+                  </div>
                 </div>
-              </Row>
+
+                {open ? (
+                  <div className="kb-flow">
+                    <div>
+                      <h4>Buy any of</h4>
+                      <RefChips
+                        products={c.triggerProducts}
+                        collections={c.triggerCollections}
+                        rules={ruleLabels(c)}
+                        emptyText="No trigger set"
+                      />
+                      {excludeText(c) ? (
+                        <div className="kb-sub" style={{ marginTop: 4 }}>
+                          {`Excluding ${excludeText(c)}`}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="kb-flow__arrow">→</div>
+                    <div>
+                      <h4>{`Get free (${c.giftProducts.length})`}</h4>
+                      {c.giftProducts.length ? (
+                        <div className="kb-giftrows">
+                          {c.giftProducts.map((g) => (
+                            <div key={g.id} className="kb-giftrow">
+                              <Thumb src={g.image} size={36} alt="" />
+                              <div style={{ minWidth: 0 }}>
+                                <div className="kb-title" style={{ fontSize: 13, fontWeight: 500 }}>
+                                  {`${giftQty(g) > 1 ? `${giftQty(g)} × ` : ""}${g.title || g.handle}`}
+                                </div>
+                                <StockCell info={live?.stock[g.id]} needsAccess={live?.needsAccess} />
+                              </div>
+                              <PriceCell info={live?.price[g.id]} />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="kb-sub">No gift set</span>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="kb-card__toggle"
+                  onClick={() => setOpenMap((m) => ({ ...m, [c.id]: !open }))}
+                >
+                  {open ? "Hide details" : "Show details"}
+                  <IconChevron size={14} up={open} />
+                </button>
+              </article>
             );
-          })
-        )}
-      </List>
+          })}
+        </div>
+      )}
     </GiftsShell>
   );
 }

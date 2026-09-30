@@ -3,6 +3,7 @@
  * index status bar.
  */
 import { useEffect, type ReactNode } from "react";
+import type { PriceInfo, StockInfo } from "./stock.server";
 import { useFetcher } from "@remix-run/react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { Shell, Pill, Btn, type TabItem } from "../../ui/kit";
@@ -155,5 +156,72 @@ export function RebuildButton() {
     >
       Re-sync
     </Btn>
+  );
+}
+
+type StockResult = {
+  stock: Record<string, StockInfo>;
+  price: Record<string, PriceInfo>;
+  needsAccess: boolean;
+};
+
+/** Live stock per location + price for the product ids on screen. */
+export function useStockPrice(ids: string[]): StockResult | null {
+  const f = useFetcher<StockResult>();
+  const key = [...new Set(ids)].sort().join(",");
+  useEffect(() => {
+    if (key) f.load(`/app/gifts/stock?ids=${encodeURIComponent(key)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return f.data ?? null;
+}
+
+export function fmtMoney(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+/** "£59.00" (with the struck compare-at price when there is one). */
+export function PriceCell({ info }: { info?: PriceInfo | null }) {
+  if (!info) return <span className="kb-muted">…</span>;
+  return (
+    <span className="kb-pricecell">
+      <b>{fmtMoney(info.amount, info.currency)}</b>
+      {info.compareAt && info.compareAt > info.amount ? (
+        <s>{fmtMoney(info.compareAt, info.currency)}</s>
+      ) : null}
+    </span>
+  );
+}
+
+/** Total stock pill + one line per location ("UK Warehouse 12 · HK 3"). */
+export function StockCell({
+  info,
+  needsAccess,
+}: {
+  info?: StockInfo | null;
+  needsAccess?: boolean;
+}) {
+  if (!info) return <span className="kb-muted">…</span>;
+  if (!info.tracked) return <Pill>Not tracked</Pill>;
+  const t = info.total ?? 0;
+  const pill =
+    t <= 0 ? <Pill tone="danger">Out of stock</Pill> : t <= 5 ? <Pill tone="warn">{`Low · ${t}`}</Pill> : <Pill tone="ok">{`${t} in stock`}</Pill>;
+  return (
+    <div>
+      {pill}
+      {info.byLocation.length ? (
+        <div className="kb-sub" style={{ marginTop: 3, lineHeight: 1.35 }}>
+          {info.byLocation.map((l) => `${l.name} ${l.qty}`).join(" · ")}
+        </div>
+      ) : needsAccess ? (
+        <div className="kb-sub" style={{ marginTop: 3 }}>
+          Approve inventory access to see each location.
+        </div>
+      ) : null}
+    </div>
   );
 }

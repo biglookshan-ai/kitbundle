@@ -71,3 +71,13 @@ export const IconHelp = ({ size = 16 }: P) =>
     </>,
   );
 export const IconPlus = ({ size = 16 }: P) => svg(size, <path d="M10 4v12M4 10h12" />);
+export const IconEdit = ({ size = 16 }: P) =>
+  svg(size, <path d="M12.5 4.5l3 3M4 16l.7-3.3 8.6-8.6a1.4 1.4 0 0 1 2 0l.6.6a1.4 1.4 0 0 1 0 2l-8.6 8.6L4 16Z" />);
+export const IconCopy = ({ size = 16 }: P) =>
+  svg(
+    size,
+    <>
+      <rect x="7" y="7" width="9.5" height="9.5" rx="1.5" />
+      <path d="M13 7V4.5A1.5 1.5 0 0 0 11.5 3h-7A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13H7" />
+    </>,
+  );
