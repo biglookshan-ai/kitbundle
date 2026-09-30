@@ -12,7 +12,7 @@ import type { CampaignMeta } from "./views.server";
 export const GIFT_TABS: TabItem[] = [
   { label: "Campaigns", to: "/app/gifts" },
   { label: "Products", to: "/app/gifts/products" },
-  { label: "Gifts", to: "/app/gifts/items" },
+  { label: "Gift pool", to: "/app/gifts/items" },
   { label: "Brands", to: "/app/gifts/brands" },
   { label: "Calendar", to: "/app/gifts/calendar" },
 ];
@@ -206,7 +206,12 @@ export function StockCell({
   needsAccess?: boolean;
 }) {
   if (!info) return <span className="kb-muted">…</span>;
-  if (!info.tracked) return <Pill>Not tracked</Pill>;
+  if (!info.tracked)
+    return (
+      <div>
+        <Pill>Not tracked</Pill>
+      </div>
+    );
   const t = info.total ?? 0;
   const pill =
     t <= 0 ? <Pill tone="danger">Out of stock</Pill> : t <= 5 ? <Pill tone="warn">{`Low · ${t}`}</Pill> : <Pill tone="ok">{`${t} in stock`}</Pill>;

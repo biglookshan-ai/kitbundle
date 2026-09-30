@@ -170,6 +170,22 @@ model GiftSchedulerState {
   updatedAt   DateTime  @updatedAt @default(now())
 }
 
+// Gifts module — the gift pool: products the merchant has set aside to give
+// away (cheap / overstocked items). Campaigns pick gifts from here.
+model GiftPoolItem {
+  id        String   @id @default(cuid())
+  shop      String
+  productId String   // gid://shopify/Product/...
+  title     String   @default("")
+  handle    String   @default("")
+  image     String?
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([shop, productId])
+  @@index([shop])
+}
+
 // Per-shop app settings (opt-in behaviors). One row per shop.
 model ShopSettings {
   shop      String  @id

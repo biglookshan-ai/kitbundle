@@ -47,6 +47,7 @@ export type GiftRow = {
   productId: string;
   numericId: string;
   title: string;
+  handle: string;
   image: string | null;
   vendor: string;
   status: string;
@@ -168,6 +169,7 @@ export async function buildGiftViews(shop: string) {
         productId: g.productId,
         numericId: tail(g.productId),
         title: g.title,
+        handle: g.handle,
         image: g.image,
         vendor: g.vendor,
         status: g.status,

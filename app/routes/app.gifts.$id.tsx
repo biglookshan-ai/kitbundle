@@ -33,6 +33,7 @@ import {
   statusSentence,
 } from "../modules/gifts/ui";
 import { previewCoverage } from "../modules/gifts/engine.server";
+import { listPool } from "../modules/gifts/pool.server";
 import {
   PageHead,
   Panel,
@@ -84,6 +85,22 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     if (!campaign) throw new Response("Not found", { status: 404 });
   }
   const c = campaign ?? emptyCampaign();
+  // "New campaign with this gift" (from the gift pool): start with that gift.
+  const seedGift = new URL(request.url).searchParams.get("gift");
+  if (!campaign && seedGift && /^gid:\/\/shopify\/Product\/\d+$/.test(seedGift)) {
+    const r = await admin.graphql(
+      `#graphql
+        query SeedGift($id: ID!) { product(id: $id) { id title handle featuredImage { url } } }`,
+      { variables: { id: seedGift } },
+    );
+    const p = (await r.json())?.data?.product;
+    if (p) {
+      c.giftProducts = [
+        { id: p.id, title: p.title, handle: p.handle, image: p.featuredImage?.url ?? null, qty: 1 },
+      ];
+      c.title = `Free ${p.title}`;
+    }
+  }
   // Variants of each gift AND trigger product, so the editor can offer
   // per-variant selection on both sides.
   const productIds = [
@@ -146,7 +163,13 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       });
     }
   }
-  return { campaign: c, isNew: !campaign, variantMap, suggest, covers, overlaps };
+  const pool = (await listPool(session.shop)).map((p) => ({
+    id: p.productId,
+    title: p.title,
+    handle: p.handle,
+    image: p.image,
+  }));
+  return { campaign: c, isNew: !campaign, variantMap, suggest, covers, overlaps, pool };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -227,6 +250,7 @@ export default function GiftCampaignEditor() {
     suggest,
     covers,
     overlaps,
+    pool,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -634,6 +658,33 @@ export default function GiftCampaignEditor() {
                   )
                 : null}
             </ScopeSection>
+            {pool.some((p) => !c.giftProducts.some((g) => g.id === p.id)) ? (
+              <div className="kb-scope">
+                <div className="kb-between">
+                  <span className="kb-overline">From the gift pool</span>
+                  <Link to="/app/gifts/items" prefetch="intent" className="kb-btn kb-btn--link kb-small">
+                    Manage pool
+                  </Link>
+                </div>
+                <div className="kb-chips" style={{ marginTop: 6 }}>
+                  {pool
+                    .filter((p) => !c.giftProducts.some((g) => g.id === p.id))
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="kb-refchip kb-refchip--gift"
+                        style={{ cursor: "pointer", font: "inherit" }}
+                        title="Add as a gift"
+                        onClick={() => patch({ giftProducts: [...c.giftProducts, { ...p, qty: 1 }] })}
+                      >
+                        <Thumb src={p.image} size={22} alt="" />
+                        <span>{`+ ${p.title}`}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : null}
           </Panel>
         </div>
 
