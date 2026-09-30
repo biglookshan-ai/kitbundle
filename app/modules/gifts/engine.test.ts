@@ -95,6 +95,9 @@ const campaign = (id: string, extra: Row) => ({
   allProducts: false,
   excludeTagsJson: "[]",
   excludeProductsJson: "[]",
+  excludeCollectionsJson: "[]",
+  excludeVendorsJson: "[]",
+  excludeTypesJson: "[]",
   giftProductsJson: JSON.stringify([{ id: P(99), title: "Gift", handle: "gift" }]),
   ...extra,
 });
@@ -251,5 +254,25 @@ describe("gift sync engine", () => {
     await schedulerTick(new Date());
     expect(db.giftSchedulerState[0].lastResult).toBe("skipped: app not installed");
     expect(writes).toEqual([]);
+  });
+
+  it("excludes by collection, brand and type — full sync and webhook agree", async () => {
+    db.giftCampaign = [
+      campaign("X", {
+        allProducts: true,
+        excludeCollectionsJson: JSON.stringify([{ id: C1, title: "Lenses", handle: "lenses" }]),
+        excludeVendorsJson: '["other"]',
+        excludeTypesJson: '["gift"]',
+      }),
+    ];
+    await syncAll(admin, "s");
+    // P1, P2 in C1 (excluded); P4 brand Other; P99 type Gift → only P3 left.
+    expect(ids(P(1))).toEqual([]);
+    expect(ids(P(3))).toEqual(["X"]);
+    expect(stamps[P(4)]).toBeUndefined();
+    expect(stamps[P(99)]).toBeUndefined();
+    // Webhook path on P1: still excluded via its collection.
+    const r = await syncProduct(admin, "s", P(1));
+    expect(r.changed).toBe(0);
   });
 });

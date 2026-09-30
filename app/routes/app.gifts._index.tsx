@@ -122,6 +122,18 @@ function ruleLabels(c: GiftCampaign): string[] {
   ];
 }
 
+/** "tag “clearance”, 2 products, collection Sale" — or "" when none. */
+function excludeText(c: GiftCampaign): string {
+  const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
+  return [
+    ...c.excludeTags.map((t) => `tag “${t}”`),
+    ...c.excludeVendors.map((v) => `brand “${v}”`),
+    ...c.excludeTypes.map((t) => `type “${t}”`),
+    ...c.excludeCollections.map((x) => `collection “${x.title || "Untitled"}”`),
+    ...(c.excludeProducts.length ? [n(c.excludeProducts.length, "product")] : []),
+  ].join(", ");
+}
+
 function RefChips({
   products,
   collections = [],
@@ -358,14 +370,9 @@ export default function GiftCampaigns() {
                           rules={ruleLabels(c)}
                           emptyText="No trigger set"
                         />
-                        {c.excludeTags.length || c.excludeProducts.length ? (
+                        {excludeText(c) ? (
                           <div className="kb-sub" style={{ marginTop: 4 }}>
-                            {`Excluding ${[
-                              ...c.excludeTags.map((t) => `tag “${t}”`),
-                              ...(c.excludeProducts.length
-                                ? [`${c.excludeProducts.length} product${c.excludeProducts.length === 1 ? "" : "s"}`]
-                                : []),
-                            ].join(", ")}`}
+                            {`Excluding ${excludeText(c)}`}
                           </div>
                         ) : null}
                       </div>

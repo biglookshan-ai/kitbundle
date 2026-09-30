@@ -324,10 +324,18 @@ function ruleLabels(
   return labels;
 }
 
-function isExcluded(c: GiftCampaign, id: string, p: ProductFacts) {
+function isExcluded(
+  c: GiftCampaign,
+  id: string,
+  p: ProductFacts,
+  inCollection: (collectionId: string) => boolean,
+) {
   if (c.excludeProducts.some((x) => x.id === id)) return true;
+  if ((c.excludeCollections ?? []).some((x) => inCollection(x.id))) return true;
   const tags = lc(p.tags);
-  return c.excludeTags.some((t) => tags.has(t.toLowerCase()));
+  if (c.excludeTags.some((t) => tags.has(t.toLowerCase()))) return true;
+  if ((c.excludeVendors ?? []).some((v) => v.toLowerCase() === p.vendor.toLowerCase())) return true;
+  return (c.excludeTypes ?? []).some((t) => t.toLowerCase() === p.productType.toLowerCase());
 }
 
 function directMember(c: GiftCampaign, id: string): Member | null {
@@ -346,7 +354,8 @@ function matchProduct(
 ): Member | null {
   const direct = directMember(c, id);
   const rules = ruleLabels(c, p, (cid) => collectionIds.has(cid));
-  const ruled = rules.length && !isExcluded(c, id, p) ? rules : [];
+  const ruled =
+    rules.length && !isExcluded(c, id, p, (cid) => collectionIds.has(cid)) ? rules : [];
   if (!direct && !ruled.length) return null;
   return {
     via: [...(direct?.via ?? []), ...ruled],
@@ -375,11 +384,17 @@ async function resolveCampaign(
     for (const v of c.triggerVendors) (await ctx.search(`vendor:${q(v)}`)).forEach((id) => candidates.add(id));
     for (const t of c.triggerTypes) (await ctx.search(`product_type:${q(t)}`)).forEach((id) => candidates.add(id));
   }
+  // Excluded collections: fetch their members (cached per run).
+  const exColl = new Map<string, Set<string>>();
+  for (const coll of c.excludeCollections ?? []) {
+    exColl.set(coll.id, new Set(await ctx.collection(coll.id)));
+  }
   for (const id of candidates) {
     const p = ctx.facts.get(id);
     if (!p) continue;
     const labels = ruleLabels(c, p, (cid) => inColl.get(cid)?.has(id) ?? false);
-    if (labels.length && !isExcluded(c, id, p)) out.set(id, { via: labels });
+    if (labels.length && !isExcluded(c, id, p, (cid) => exColl.get(cid)?.has(id) ?? false))
+      out.set(id, { via: labels });
   }
   for (const d of c.triggerProducts) {
     const m = directMember(c, d.id)!;

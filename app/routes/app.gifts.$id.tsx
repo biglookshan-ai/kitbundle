@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { PreviewProduct } from "../modules/gifts/engine.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
@@ -45,7 +45,6 @@ import {
   Pill,
   Thumb,
   Banner,
-  TokenInput,
 } from "../ui/kit";
 
 /** Existing brands / types / tags in the store, for the rule inputs. */
@@ -240,6 +239,7 @@ export default function GiftCampaignEditor() {
   const [openVarPids, setOpenVarPids] = useState<Record<string, boolean>>({});
   const toggleVarOpen = (pid: string) =>
     setOpenVarPids((m) => ({ ...m, [pid]: !m[pid] }));
+  const [showExclude, setShowExclude] = useState(false);
   const busy = fetcher.state !== "idle";
   const patch = (p: Partial<GiftCampaign>) => setC((cur) => ({ ...cur, ...p }));
 
@@ -463,163 +463,177 @@ export default function GiftCampaignEditor() {
             </Field>
           </Panel>
 
-          <Panel
-            title="Trigger — buy any of these"
-            actions={
-              <Btn
-                size="tiny"
-                onClick={() =>
-                  pick("product", c.triggerProducts, (refs) =>
-                    patch({ triggerProducts: refs }),
-                  )
-                }
-              >
-                Select products
-              </Btn>
-            }
-          >
-            <div className="kb-overline" style={{ marginBottom: 4 }}>
-              {`Products (${c.triggerProducts.length})`}
-            </div>
-            {refVariantList(
-              c.triggerProducts,
-              (r) => patch({ triggerProducts: r }),
-              "Variants that qualify",
-            )}
-            <div className="kb-divider" />
-            <div className="kb-between" style={{ marginBottom: 4 }}>
-              <span className="kb-overline">{`Collections (${c.triggerCollections.length})`}</span>
-              <Btn
-                size="tiny"
-                onClick={() =>
-                  pick("collection", c.triggerCollections, (refs) =>
-                    patch({ triggerCollections: refs }),
-                  )
-                }
-              >
-                Select collections
-              </Btn>
-            </div>
-            {collectionList(c.triggerCollections, (r) =>
-              patch({ triggerCollections: r }),
-            )}
-
-            <div className="kb-divider" />
-            <div className="kb-overline" style={{ marginBottom: 8 }}>
-              Rules
-            </div>
+          <Panel title="Trigger — buy any of these">
             <div className="kb-stack kb-stack--tight">
               <Switch
-                label="All products — every product in the store"
+                label="All products in the store"
                 checked={c.allProducts}
                 onChange={(v) => patch({ allProducts: v })}
               />
               {!c.allProducts ? (
                 <>
-                  <Field
-                    label="Product tags"
-                    help="Products with any of these tags."
+                  <ScopeSection
+                    label={`Products (${c.triggerProducts.length})`}
+                    action={
+                      <Btn
+                        size="tiny"
+                        onClick={() =>
+                          pick("product", c.triggerProducts, (refs) =>
+                            patch({ triggerProducts: refs }),
+                          )
+                        }
+                      >
+                        + Add products
+                      </Btn>
+                    }
                   >
-                    <TokenInput
-                      id="trig-tags"
-                      values={c.triggerTags}
-                      onChange={(v) => patch({ triggerTags: v })}
-                      placeholder="Type a tag and press Enter"
-                      suggestions={suggest.tags}
-                    />
-                  </Field>
-                  <Field
-                    label="Brands (vendor)"
-                    help="Products from any of these brands."
+                    {c.triggerProducts.length
+                      ? refVariantList(
+                          c.triggerProducts,
+                          (r) => patch({ triggerProducts: r }),
+                          "Variants that qualify",
+                        )
+                      : null}
+                  </ScopeSection>
+                  <ScopeSection
+                    label={`Collections (${c.triggerCollections.length})`}
+                    action={
+                      <Btn
+                        size="tiny"
+                        onClick={() =>
+                          pick("collection", c.triggerCollections, (refs) =>
+                            patch({ triggerCollections: refs }),
+                          )
+                        }
+                      >
+                        + Add collections
+                      </Btn>
+                    }
                   >
-                    <TokenInput
-                      id="trig-vendors"
-                      values={c.triggerVendors}
-                      onChange={(v) => patch({ triggerVendors: v })}
-                      placeholder="e.g. DZOFILM"
-                      suggestions={suggest.vendors}
-                    />
-                  </Field>
-                  <Field
-                    label="Product types"
-                    help="Products of any of these types."
-                  >
-                    <TokenInput
-                      id="trig-types"
-                      values={c.triggerTypes}
-                      onChange={(v) => patch({ triggerTypes: v })}
-                      placeholder="e.g. Cine Lens"
-                      suggestions={suggest.types}
-                    />
-                  </Field>
+                    {c.triggerCollections.length
+                      ? collectionList(c.triggerCollections, (r) =>
+                          patch({ triggerCollections: r }),
+                        )
+                      : null}
+                  </ScopeSection>
+                  <FilterChips
+                    idPrefix="trig"
+                    tags={c.triggerTags}
+                    vendors={c.triggerVendors}
+                    types={c.triggerTypes}
+                    suggest={suggest}
+                    hint="Products matching any filter qualify — by tag, brand or product type."
+                    onChange={(f) =>
+                      patch({
+                        triggerTags: f.tags,
+                        triggerVendors: f.vendors,
+                        triggerTypes: f.types,
+                      })
+                    }
+                  />
                 </>
               ) : null}
-            </div>
 
-            <div className="kb-divider" />
-            <div className="kb-between" style={{ marginBottom: 4 }}>
-              <span className="kb-overline">Exclude</span>
-              <Btn
-                size="tiny"
-                onClick={() =>
-                  pick("product", c.excludeProducts, (refs) =>
-                    patch({
-                      excludeProducts: refs.map(
-                        ({ variantIds: _v, ...r }) => r,
-                      ),
-                    }),
-                  )
+              <ExcludeBlock
+                open={
+                  showExclude ||
+                  c.excludeProducts.length +
+                    c.excludeCollections.length +
+                    c.excludeTags.length +
+                    c.excludeVendors.length +
+                    c.excludeTypes.length >
+                    0
                 }
+                onOpen={() => setShowExclude(true)}
               >
-                Select products
-              </Btn>
-            </div>
-            <p className="kb-sub" style={{ margin: "0 0 8px" }}>
-              Carves products out of collections, tags, brands, types and All
-              products. Products listed directly above always qualify.
-            </p>
-            <div className="kb-stack kb-stack--tight">
-              <Field label="Exclude products with these tags">
-                <TokenInput
-                  id="ex-tags"
-                  values={c.excludeTags}
-                  onChange={(v) => patch({ excludeTags: v })}
-                  placeholder="e.g. clearance"
-                  suggestions={suggest.tags}
+                <ScopeSection
+                  label={`Products (${c.excludeProducts.length})`}
+                  action={
+                    <Btn
+                      size="tiny"
+                      onClick={() =>
+                        pick("product", c.excludeProducts, (refs) =>
+                          patch({
+                            excludeProducts: refs.map(({ variantIds: _v, ...r }) => r),
+                          }),
+                        )
+                      }
+                    >
+                      + Add products
+                    </Btn>
+                  }
+                >
+                  {c.excludeProducts.length
+                    ? collectionList(c.excludeProducts, (r) => patch({ excludeProducts: r }))
+                    : null}
+                </ScopeSection>
+                <ScopeSection
+                  label={`Collections (${c.excludeCollections.length})`}
+                  action={
+                    <Btn
+                      size="tiny"
+                      onClick={() =>
+                        pick("collection", c.excludeCollections, (refs) =>
+                          patch({ excludeCollections: refs }),
+                        )
+                      }
+                    >
+                      + Add collections
+                    </Btn>
+                  }
+                >
+                  {c.excludeCollections.length
+                    ? collectionList(c.excludeCollections, (r) =>
+                        patch({ excludeCollections: r }),
+                      )
+                    : null}
+                </ScopeSection>
+                <FilterChips
+                  idPrefix="ex"
+                  tags={c.excludeTags}
+                  vendors={c.excludeVendors}
+                  types={c.excludeTypes}
+                  suggest={suggest}
+                  hint="Leave out products with any of these tags, brands or types."
+                  onChange={(f) =>
+                    patch({
+                      excludeTags: f.tags,
+                      excludeVendors: f.vendors,
+                      excludeTypes: f.types,
+                    })
+                  }
                 />
-              </Field>
-              {collectionList(c.excludeProducts, (r) =>
-                patch({ excludeProducts: r }),
-              )}
+              </ExcludeBlock>
             </div>
           </Panel>
 
           <CoveragePreview c={c} isNew={isNew} />
 
-          <Panel
-            title="Gift — get free"
-            actions={
-              <Btn
-                size="tiny"
-                onClick={() =>
-                  pick("product", c.giftProducts, (refs) =>
-                    patch({ giftProducts: refs }),
+          <Panel title="Gift — get free">
+            <ScopeSection
+              label={`Gift products (${c.giftProducts.length})`}
+              action={
+                <Btn
+                  size="tiny"
+                  onClick={() =>
+                    pick("product", c.giftProducts, (refs) =>
+                      patch({ giftProducts: refs }),
+                    )
+                  }
+                >
+                  + Add gifts
+                </Btn>
+              }
+            >
+              {c.giftProducts.length
+                ? refVariantList(
+                    c.giftProducts,
+                    (r) => patch({ giftProducts: r }),
+                    "Variants offered free",
+                    true,
                   )
-                }
-              >
-                Select gifts
-              </Btn>
-            }
-          >
-            <div className="kb-overline" style={{ marginBottom: 4 }}>
-              {`Gift products (${c.giftProducts.length})`}
-            </div>
-            {refVariantList(
-              c.giftProducts,
-              (r) => patch({ giftProducts: r }),
-              "Variants offered free",
-              true,
-            )}
+                : null}
+            </ScopeSection>
           </Panel>
         </div>
 
@@ -931,6 +945,9 @@ const triggerKey = (c: GiftCampaign) =>
     c.allProducts,
     c.excludeTags,
     c.excludeProducts.map((p) => p.id),
+    c.excludeCollections.map((p) => p.id),
+    c.excludeVendors,
+    c.excludeTypes,
   ]);
 
 type PreviewResult = {
@@ -1030,5 +1047,167 @@ function CoveragePreview({ c, isNew }: { c: GiftCampaign; isNew: boolean }) {
         </div>
       ) : null}
     </Panel>
+  );
+}
+
+/** A labelled row inside the trigger / exclude builder, button on the right. */
+function ScopeSection({
+  label,
+  action,
+  children,
+}: {
+  label: string;
+  action: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="kb-scope">
+      <div className="kb-between">
+        <span className="kb-overline">{label}</span>
+        {action}
+      </div>
+      {children ? <div style={{ marginTop: 4 }}>{children}</div> : null}
+    </div>
+  );
+}
+
+/** Exclusions: a single link until used, then the same builder as triggers. */
+function ExcludeBlock({
+  open,
+  onOpen,
+  children,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  children: ReactNode;
+}) {
+  if (!open) {
+    return (
+      <div className="kb-exclude kb-exclude--closed">
+        <Btn size="tiny" variant="link" onClick={onOpen}>
+          + Exclude products, collections, tags, brands or types
+        </Btn>
+      </div>
+    );
+  }
+  return (
+    <div className="kb-exclude">
+      <div className="kb-exclude__title">
+        Exclude
+        <span className="kb-sub">
+          {" "}
+          — leaves products out of collections, filters and All products. Products
+          added directly above always qualify.
+        </span>
+      </div>
+      <div className="kb-stack kb-stack--tight">{children}</div>
+    </div>
+  );
+}
+
+type FilterKind = "tag" | "vendor" | "type";
+const FILTER_LABEL: Record<FilterKind, string> = { tag: "Tag", vendor: "Brand", type: "Type" };
+
+/** Tag / brand / type conditions as removable chips with one "Add filter" row. */
+function FilterChips({
+  idPrefix,
+  tags,
+  vendors,
+  types,
+  suggest,
+  hint,
+  onChange,
+}: {
+  idPrefix: string;
+  tags: string[];
+  vendors: string[];
+  types: string[];
+  suggest: { tags: string[]; vendors: string[]; types: string[] };
+  hint: string;
+  onChange: (f: { tags: string[]; vendors: string[]; types: string[] }) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [kind, setKind] = useState<FilterKind>("tag");
+  const [value, setValue] = useState("");
+  const current = { tags, vendors, types };
+  const listKey = { tag: "tags", vendor: "vendors", type: "types" } as const;
+  const chips = [
+    ...tags.map((v) => ({ kind: "tag" as FilterKind, v })),
+    ...vendors.map((v) => ({ kind: "vendor" as FilterKind, v })),
+    ...types.map((v) => ({ kind: "type" as FilterKind, v })),
+  ];
+  const add = () => {
+    const v = value.trim();
+    if (!v) return;
+    const k = listKey[kind];
+    if (!current[k].some((x) => x.toLowerCase() === v.toLowerCase())) {
+      onChange({ ...current, [k]: [...current[k], v] });
+    }
+    setValue("");
+  };
+  const remove = (k: FilterKind, v: string) =>
+    onChange({ ...current, [listKey[k]]: current[listKey[k]].filter((x) => x !== v) });
+  const options = suggest[listKey[kind]];
+  return (
+    <div className="kb-scope">
+      <div className="kb-between">
+        <span className="kb-overline">{`Filters (${chips.length})`}</span>
+        {!adding ? (
+          <Btn size="tiny" onClick={() => setAdding(true)}>
+            + Add filter
+          </Btn>
+        ) : null}
+      </div>
+      {chips.length ? (
+        <div className="kb-chips" style={{ marginTop: 6 }}>
+          {chips.map((ch) => (
+            <span key={`${ch.kind}:${ch.v}`} className="kb-token">
+              <span className="kb-muted">{FILTER_LABEL[ch.kind]}:</span>&nbsp;{ch.v}
+              <button type="button" aria-label={`Remove ${ch.v}`} onClick={() => remove(ch.kind, ch.v)}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : !adding ? (
+        <div className="kb-sub" style={{ marginTop: 2 }}>{hint}</div>
+      ) : null}
+      {adding ? (
+        <div className="kb-filteradd">
+          <Select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as FilterKind)}
+            style={{ width: 130 }}
+          >
+            <option value="tag">Tag</option>
+            <option value="vendor">Brand</option>
+            <option value="type">Product type</option>
+          </Select>
+          <Input
+            list={`${idPrefix}-${kind}-list`}
+            value={value}
+            placeholder={kind === "tag" ? "e.g. sale" : kind === "vendor" ? "e.g. DZOFILM" : "e.g. Cine Lens"}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+          />
+          <datalist id={`${idPrefix}-${kind}-list`}>
+            {options.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
+          <Btn size="tiny" variant="primary" onClick={add}>
+            Add
+          </Btn>
+          <Btn size="tiny" variant="ghost" onClick={() => setAdding(false)}>
+            Done
+          </Btn>
+        </div>
+      ) : null}
+    </div>
   );
 }

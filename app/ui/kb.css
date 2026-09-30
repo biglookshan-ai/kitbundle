@@ -1239,3 +1239,34 @@ button.kb-title:hover {
   font: inherit;
   color: var(--ink);
 }
+
+/* ---- Trigger / exclude builder ---- */
+.kb-scope {
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.kb-scope:first-of-type {
+  border-top: 0;
+}
+.kb-filteradd {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.kb-exclude {
+  margin-top: 6px;
+  padding: 10px 12px 4px;
+  border: 1px dashed #d6d9dc;
+  border-radius: 8px;
+  background: #fbfbfb;
+}
+.kb-exclude--closed {
+  padding: 6px 0 0;
+  border: 0;
+  background: none;
+}
+.kb-exclude__title {
+  font-weight: 600;
+}

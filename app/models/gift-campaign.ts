@@ -72,6 +72,9 @@ export type GiftCampaign = {
    */
   excludeTags: string[];
   excludeProducts: Ref[];
+  excludeCollections: Ref[];
+  excludeVendors: string[];
+  excludeTypes: string[];
   giftProducts: Ref[]; // the gift set
 };
 
@@ -89,7 +92,9 @@ export function hasTrigger(c: GiftCampaign): boolean {
 
 /** Short human summary of what triggers a campaign ("2 products, tag: sale"). */
 export function triggerSummary(c: GiftCampaign): string {
-  if (c.allProducts) return "All products";
+  if (c.allProducts && !(c.excludeProducts.length + c.excludeCollections.length + c.excludeTags.length + c.excludeVendors.length + c.excludeTypes.length))
+    return "All products";
+  if (c.allProducts) return "All products (with exclusions)";
   const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
   const parts: string[] = [];
   if (c.triggerProducts.length) parts.push(n(c.triggerProducts.length, "product"));
@@ -97,7 +102,15 @@ export function triggerSummary(c: GiftCampaign): string {
   if (c.triggerTags.length) parts.push(n(c.triggerTags.length, "tag"));
   if (c.triggerVendors.length) parts.push(n(c.triggerVendors.length, "brand"));
   if (c.triggerTypes.length) parts.push(n(c.triggerTypes.length, "type"));
-  return parts.join(", ") || "No trigger";
+  let out = parts.join(", ") || "No trigger";
+  const ex =
+    c.excludeProducts.length +
+    c.excludeCollections.length +
+    c.excludeTags.length +
+    c.excludeVendors.length +
+    c.excludeTypes.length;
+  if (ex) out += ` (${ex} exclusion${ex === 1 ? "" : "s"})`;
+  return out;
 }
 
 /** Compact read-only view of a gift a product triggers, for the product editor. */
@@ -188,6 +201,9 @@ export function emptyCampaign(): GiftCampaign {
     allProducts: false,
     excludeTags: [],
     excludeProducts: [],
+    excludeCollections: [],
+    excludeVendors: [],
+    excludeTypes: [],
     giftProducts: [],
   };
 }
@@ -291,6 +307,9 @@ export function rowToCampaign(row: any): GiftCampaign {
     allProducts: !!row.allProducts,
     excludeTags: parseStrings(row.excludeTagsJson),
     excludeProducts: parseRefs(row.excludeProductsJson),
+    excludeCollections: parseRefs(row.excludeCollectionsJson),
+    excludeVendors: parseStrings(row.excludeVendorsJson),
+    excludeTypes: parseStrings(row.excludeTypesJson),
     giftProducts: parseRefs(row.giftProductsJson).map((g) => ({
       ...g,
       // Older campaigns had one quantity for every gift; seed each gift with it.
