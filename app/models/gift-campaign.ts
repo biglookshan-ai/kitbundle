@@ -27,7 +27,10 @@ export type Ref = {
 export type GiftCampaign = {
   id: string; // camp_xxxx
   title: string;
+  /** false = paused. */
   enabled: boolean;
+  /** Saved but never published — nothing on the storefront. */
+  draft: boolean;
   startsAt: string; // ISO-8601 or ""
   endsAt: string; // ISO-8601 or ""
   /**
@@ -99,7 +102,7 @@ export function triggerSummary(c: GiftCampaign): string {
 export type ProductGiftInfo = {
   id: string;
   title: string;
-  state: "disabled" | "scheduled" | "active" | "ended";
+  state: CampaignState;
   badge: string;
   perQualifying: number;
   gifts: { title: string; image: string | null }[];
@@ -155,6 +158,7 @@ export function emptyCampaign(): GiftCampaign {
     id: newCampaignId(),
     title: "",
     enabled: true,
+    draft: false,
     startsAt: "",
     endsAt: "",
     perQualifying: 1,
@@ -177,12 +181,15 @@ export function emptyCampaign(): GiftCampaign {
   };
 }
 
-/** Live state of a campaign's schedule. */
+export type CampaignState = "draft" | "paused" | "scheduled" | "active" | "ended";
+
+/** Live state of a campaign (draft / paused are manual; the rest follow the dates). */
 export function campaignState(
-  c: Pick<GiftCampaign, "enabled" | "startsAt" | "endsAt">,
-): "disabled" | "scheduled" | "active" | "ended" {
-  if (!c.enabled) return "disabled";
-  const now = Date.now();
+  c: Pick<GiftCampaign, "enabled" | "startsAt" | "endsAt"> & { draft?: boolean },
+  now = Date.now(),
+): CampaignState {
+  if (c.draft) return "draft";
+  if (!c.enabled) return "paused";
   const s = c.startsAt ? Date.parse(c.startsAt) : NaN;
   const e = c.endsAt ? Date.parse(c.endsAt) : NaN;
   if (!Number.isNaN(e) && now >= e) return "ended";
@@ -240,6 +247,7 @@ export function rowToCampaign(row: any): GiftCampaign {
     id: row.id,
     title: row.title ?? "",
     enabled: !!row.enabled,
+    draft: !!row.draft,
     startsAt: row.startsAt ? new Date(row.startsAt).toISOString() : "",
     endsAt: row.endsAt ? new Date(row.endsAt).toISOString() : "",
     // Legacy All-mode rows ignored perQualifying (one of each gift per unit).

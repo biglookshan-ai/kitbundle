@@ -7,6 +7,10 @@ import {
 } from "@remix-run/node";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { startGiftScheduler } from "./modules/gifts/scheduler.server";
+
+// Gifts: in-app timer that switches campaigns on / off at their start / end.
+startGiftScheduler();
 
 export const streamTimeout = 5000;
 

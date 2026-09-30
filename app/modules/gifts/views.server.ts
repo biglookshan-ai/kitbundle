@@ -6,7 +6,8 @@ import prisma from "../../db.server";
 import { listCampaigns } from "../../models/gift-campaign.server";
 import { campaignState, overlapWinners } from "../../models/gift-campaign";
 
-export type CampaignState = "active" | "scheduled" | "ended" | "disabled";
+export type { CampaignState } from "../../models/gift-campaign";
+import type { CampaignState } from "../../models/gift-campaign";
 
 export type CampaignMeta = {
   id: string;

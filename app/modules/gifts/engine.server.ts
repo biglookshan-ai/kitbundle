@@ -22,6 +22,7 @@ import {
   GIFT_TRIGGER_KEY,
   rowToCampaign,
   rewardRule,
+  campaignState,
   type GiftCampaign,
 } from "../../models/gift-campaign";
 
@@ -509,7 +510,9 @@ export function syncAll(
       })).map(
       rowToCampaign,
     );
-    const enabled = campaigns.filter((c) => c.enabled);
+    // Only campaigns live NOW go into stamps; the scheduler re-syncs when a
+    // start / end passes (the Function's date gate stays as a backstop).
+    const enabled = campaigns.filter((c) => campaignState(c) === "active");
     const tz = await shopTimezone(admin);
     const ctx = newCtx(admin);
 
@@ -660,7 +663,9 @@ export function syncProduct(
       if (m) members.set(c.id, m);
     }
 
-    const enabled = campaigns.filter((c) => c.enabled);
+    // Only campaigns live NOW go into stamps; the scheduler re-syncs when a
+    // start / end passes (the Function's date gate stays as a backstop).
+    const enabled = campaigns.filter((c) => campaignState(c) === "active");
     const needsTz = enabled.some((c) => members.has(c.id));
     const tz = needsTz ? await shopTimezone(admin) : "UTC";
     const entries = new Map(enabled.map((c) => [c.id, campaignEntry(c, tz)]));

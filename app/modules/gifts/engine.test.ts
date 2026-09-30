@@ -5,55 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /* ---------------- in-memory prisma ---------------- */
 type Row = Record<string, any>;
-const { db, table } = vi.hoisted(() => {
-  const db: Record<string, Record<string, any>[]> = {};
-  const match = (r: Record<string, any>, where: Record<string, any> = {}) =>
-    Object.entries(where).every(([k, v]) => {
-      if (k === "shop_productId") return r.shop === v.shop && r.productId === v.productId;
-      if (v && typeof v === "object" && "in" in v) return v.in.includes(r[k]);
-      return r[k] === v;
-    });
-  const table = (name: string) => ({
-    findMany: async (a: Record<string, any> = {}) => {
-      let rows = (db[name] ??= []).filter((r) => match(r, a.where));
-      if (a.orderBy?.createdAt === "desc") rows = [...rows].reverse();
-      if (a.skip) rows = rows.slice(a.skip);
-      return rows;
-    },
-    findFirst: async (a: Record<string, any> = {}) => (await table(name).findMany(a))[0] ?? null,
-    count: async (a: Record<string, any> = {}) => (db[name] ??= []).filter((r) => match(r, a.where)).length,
-    create: async (a: Record<string, any>) => {
-      (db[name] ??= []).push({ createdAt: new Date(), ...a.data });
-    },
-    createMany: async (a: Record<string, any>) => {
-      (db[name] ??= []).push(...a.data);
-    },
-    deleteMany: async (a: Record<string, any> = {}) => {
-      db[name] = (db[name] ??= []).filter((r) => !match(r, a.where));
-    },
-    updateMany: async (a: Record<string, any>) => {
-      for (const r of (db[name] ??= []).filter((r) => match(r, a.where))) Object.assign(r, a.data);
-    },
-    upsert: async (a: Record<string, any>) => {
-      const r = (db[name] ??= []).find((x) => match(x, a.where));
-      if (r) Object.assign(r, a.update);
-      else db[name].push({ ...a.create });
-    },
-  });
-  return { db, table };
-});
-vi.mock("../../db.server", () => ({
-  default: {
-    giftCampaign: table("giftCampaign"),
-    giftCoverage: table("giftCoverage"),
-    giftStamp: table("giftStamp"),
-    giftSyncLog: table("giftSyncLog"),
-    $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
-  },
+vi.mock("../../db.server", async () => ({
+  default: (await import("./__test__/memory-db")).prismaMock,
 }));
 vi.mock("../../shopify.server", () => ({ unauthenticated: { admin: vi.fn() } }));
 
 import { previewCoverage, syncAll, syncProduct } from "./engine.server";
+import { db } from "./__test__/memory-db";
+import { schedulerTick } from "./scheduler.server";
+import { unauthenticated } from "../../shopify.server";
 import { rowToCampaign } from "../../models/gift-campaign";
 
 /* ---------------- fake store ---------------- */
@@ -119,6 +79,7 @@ const campaign = (id: string, extra: Row) => ({
   shop: "s",
   title: id,
   enabled: true,
+  draft: false,
   startsAt: null,
   endsAt: null,
   perQualifying: 1,
@@ -243,5 +204,44 @@ describe("gift sync engine", () => {
     expect(p.added).toBe(1);
     expect(p.removed).toBe(2);
     expect(writes).toEqual([]); // nothing written
+  });
+
+  it("only campaigns live now are stamped (scheduled, ended, paused, draft are not)", async () => {
+    const day = 86_400_000;
+    const B = db.giftCampaign.find((c) => c.id === "B")!;
+    B.startsAt = new Date(Date.now() + day); // scheduled
+    const A = db.giftCampaign.find((c) => c.id === "A")!;
+    A.endsAt = new Date(Date.now() - day); // ended
+    const C = db.giftCampaign.find((c) => c.id === "C")!;
+    C.draft = true;
+    await syncAll(admin, "s");
+    expect(ids(P(1))).toEqual([]);
+    expect(ids(P(3))).toEqual([]);
+    expect(stamps[P(4)]).toBeUndefined();
+  });
+
+  it("scheduler: first tick syncs, idle ticks do nothing, a passed start re-syncs", async () => {
+    vi.mocked(unauthenticated.admin).mockResolvedValue({ admin } as any);
+    const t0 = Date.now();
+    const B = db.giftCampaign.find((c) => c.id === "B")!;
+    B.startsAt = new Date(t0 + 5 * 60_000); // starts in 5 minutes
+    await schedulerTick(new Date(t0));
+    expect(ids(P(3))).toEqual([]); // not started yet
+    expect(db.giftSchedulerState[0].lastResult).toMatch(/updated/);
+
+    writes = [];
+    await schedulerTick(new Date(t0 + 60_000)); // nothing crossed
+    expect(writes).toEqual([]);
+    expect(db.giftSchedulerState[0].lastResult).toBe("nothing due");
+
+    // 10 minutes later the start has passed → B appears on its products.
+    vi.useFakeTimers({ now: t0 + 10 * 60_000, toFake: ["Date"] });
+    try {
+      await schedulerTick(new Date(t0 + 10 * 60_000));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(ids(P(3))).toEqual(["B"]);
+    expect(db.giftSchedulerState[0].lockedUntil).toBeNull();
   });
 });

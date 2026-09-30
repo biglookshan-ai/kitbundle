@@ -25,7 +25,12 @@ import {
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
-import { GiftsShell, STATE_TONE, STATE_LABEL } from "../modules/gifts/ui";
+import {
+  GiftsShell,
+  STATE_TONE,
+  STATE_LABEL,
+  statusSentence,
+} from "../modules/gifts/ui";
 import { previewCoverage } from "../modules/gifts/engine.server";
 import {
   PageHead,
@@ -601,13 +606,21 @@ export default function GiftCampaignEditor() {
           <Panel title="Status">
             <div className="kb-stack kb-stack--tight">
               <div className="kb-between">
-                <Switch
-                  label="Enabled"
-                  checked={c.enabled}
-                  onChange={(v) => patch({ enabled: v })}
-                />
+                <Select
+                  style={{ width: "auto" }}
+                  value={c.draft ? "draft" : c.enabled ? "published" : "paused"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    patch({ draft: v === "draft", enabled: v !== "paused" });
+                  }}
+                >
+                  <option value="published">Published</option>
+                  <option value="paused">Paused</option>
+                  <option value="draft">Draft</option>
+                </Select>
                 <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
               </div>
+              <div className="kb-sub">{statusSentence(c, state)}</div>
               <Field
                 label="Starts (optional)"
                 help="Blank = starts immediately."
@@ -620,7 +633,10 @@ export default function GiftCampaignEditor() {
                   }
                 />
               </Field>
-              <Field label="Ends (optional)" help="Server-enforced end.">
+              <Field
+                label="Ends (optional)"
+                help="Starts and ends automatically, within about 10 minutes of these times."
+              >
                 <Input
                   type="datetime-local"
                   value={toLocalInput(c.endsAt)}

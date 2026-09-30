@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -7,7 +8,13 @@ import {
   listCampaigns,
   deleteCampaign,
   resyncAll,
+  duplicateCampaign,
 } from "../models/gift-campaign.server";
+import { canCreateCampaign } from "../models/plan.server";
+import {
+  runSchedulerNow,
+  schedulerStatus,
+} from "../modules/gifts/scheduler.server";
 import {
   campaignState,
   rewardSummary,
@@ -16,7 +23,14 @@ import {
 } from "../models/gift-campaign";
 import prisma from "../db.server";
 import { lastSync } from "../modules/gifts/engine.server";
-import { GiftsShell, STATE_TONE, STATE_LABEL, fmtWhen } from "../modules/gifts/ui";
+import {
+  GiftsShell,
+  STATE_TONE,
+  STATE_LABEL,
+  fmtWhen,
+  fmtRelative,
+  timingHint,
+} from "../modules/gifts/ui";
 import {
   PageHead,
   Stats,
@@ -33,7 +47,7 @@ import {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const [campaigns, counts, sync] = await Promise.all([
+  const [campaigns, counts, sync, timer] = await Promise.all([
     listCampaigns(session.shop),
     prisma.giftCoverage.groupBy({
       by: ["campaignId"],
@@ -41,17 +55,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       _count: { _all: true },
     }),
     lastSync(session.shop),
+    schedulerStatus(session.shop),
   ]);
   // How many products each campaign currently covers (from the gifts index).
   const coverage: Record<string, number> = {};
   for (const r of counts) coverage[r.campaignId] = r._count._all;
-  return { campaigns, coverage, sync };
+  return { campaigns, coverage, sync, timer };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, billing } = await authenticate.admin(request);
   const form = await request.formData();
   const intent = form.get("intent");
+  if (intent === "duplicate") {
+    const gate = await canCreateCampaign(billing, session.shop);
+    if (!gate.ok) return { ok: false, error: gate.error, message: null };
+    const r = await duplicateCampaign(admin, session.shop, String(form.get("id") || ""));
+    if (!r.ok || !r.id) return { ok: false, error: r.errors.join("; "), message: null };
+    return redirect(`/app/gifts/${r.id}`);
+  }
+  if (intent === "run-timer") {
+    const t = await runSchedulerNow(session.shop);
+    const failed = /^(failed|errors)/.test(t.lastResult);
+    return {
+      ok: !failed,
+      error: failed ? t.lastResult : null,
+      message: failed ? null : `Schedule checked · ${t.lastResult}`,
+    };
+  }
   if (intent === "delete") {
     const id = String(form.get("id") || "");
     const r = await deleteCampaign(admin, session.shop, id);
@@ -132,10 +163,10 @@ function RefChips({
   );
 }
 
-type Status = "all" | "active" | "scheduled" | "ended";
+type Status = "all" | "active" | "scheduled" | "paused" | "draft" | "ended";
 
 export default function GiftCampaigns() {
-  const { campaigns, coverage, sync } = useLoaderData<typeof loader>();
+  const { campaigns, coverage, sync, timer } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
   const busy = fetcher.state !== "idle";
@@ -219,6 +250,8 @@ export default function GiftCampaigns() {
               { value: "all", label: "All" },
               { value: "active", label: "Active" },
               { value: "scheduled", label: "Scheduled" },
+              { value: "paused", label: "Paused" },
+              { value: "draft", label: "Draft" },
               { value: "ended", label: "Ended" },
             ]}
           />
@@ -245,6 +278,26 @@ export default function GiftCampaigns() {
             }`}
           </span>
         ) : null}
+      </div>
+      <div className="kb-summary" style={{ paddingTop: 0 }}>
+        <span
+          title="Campaigns switch on and off at their start / end times, checked every 10 minutes."
+          style={/^(failed|errors)/.test(timer.lastResult) ? { color: "var(--danger)" } : undefined}
+        >
+          {`Auto schedule: ${
+            timer.lastRunAt
+              ? `checked ${fmtRelative(timer.lastRunAt)} (${timer.lastResult})`
+              : "waiting for first check"
+          }${timer.nextBoundary ? ` · next change ${fmtWhen(timer.nextBoundary)}` : ""}`}
+        </span>
+        <Btn
+          size="tiny"
+          variant="link"
+          loading={busy && fetcher.formData?.get("intent") === "run-timer"}
+          onClick={() => fetcher.submit({ intent: "run-timer" }, { method: "POST" })}
+        >
+          Run now
+        </Btn>
       </div>
 
       <List cols="minmax(0,1fr) auto">
@@ -288,6 +341,7 @@ export default function GiftCampaigns() {
                       {c.title || "Untitled campaign"}
                     </span>
                     <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
+                    {timingHint(c, state) ? <Pill tone="info">{timingHint(c, state)}</Pill> : null}
                     {c.exclusive ? <Pill tone="warn">Exclusive</Pill> : null}
                     {c.priority ? <Pill>{`Priority ${c.priority}`}</Pill> : null}
                   </div>
@@ -326,6 +380,20 @@ export default function GiftCampaigns() {
                 <div className="kb-inline" style={{ alignSelf: "start", paddingTop: 2 }}>
                   <Btn size="tiny" to={`/app/gifts/${c.id}`}>
                     Edit
+                  </Btn>
+                  <Btn
+                    size="tiny"
+                    title="Copy as a draft (no dates) — for a series of promotions"
+                    loading={
+                      busy &&
+                      fetcher.formData?.get("intent") === "duplicate" &&
+                      fetcher.formData?.get("id") === c.id
+                    }
+                    onClick={() =>
+                      fetcher.submit({ intent: "duplicate", id: c.id }, { method: "POST" })
+                    }
+                  >
+                    Duplicate
                   </Btn>
                   <Btn
                     size="tiny"

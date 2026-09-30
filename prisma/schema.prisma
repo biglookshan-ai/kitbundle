@@ -65,7 +65,8 @@ model GiftCampaign {
   id            String    @id // camp_xxxx — also the node metafield id + line tag
   shop          String
   title         String    @default("")
-  enabled       Boolean   @default(true)
+  enabled       Boolean   @default(true) // false = paused
+  draft         Boolean   @default(false) // never published yet
   startsAt      DateTime?
   endsAt        DateTime?
   perQualifying Int       @default(1) // free gifts per qualifying unit (buy 2 -> 2)
@@ -152,6 +153,18 @@ model GiftStamp {
   updatedAt DateTime @updatedAt
 
   @@id([shop, productId])
+}
+
+// Gifts module — in-app scheduler bookkeeping, one row per shop. The timer
+// re-syncs when a campaign start/end passes (checkout precision ~10 min) and
+// runs a daily full reconcile; `lockedUntil` stops overlapping runs.
+model GiftSchedulerState {
+  shop        String    @id
+  lastRunAt   DateTime?
+  lastFullAt  DateTime?
+  lockedUntil DateTime?
+  lastResult  String    @default("")
+  updatedAt   DateTime  @updatedAt @default(now())
 }
 
 // Per-shop app settings (opt-in behaviors). One row per shop.

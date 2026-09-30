@@ -5,6 +5,7 @@ import {
   rowToCampaign,
   campaignState,
   cleanStrings,
+  newCampaignId,
   type GiftCampaign,
   type ProductGiftInfo,
 } from "./gift-campaign";
@@ -123,6 +124,7 @@ export async function saveCampaign(
     shop,
     title: c.title,
     enabled: c.enabled,
+    draft: !!c.draft,
     startsAt: c.startsAt ? new Date(c.startsAt) : null,
     endsAt: c.endsAt ? new Date(c.endsAt) : null,
     perQualifying: Math.max(1, c.perQualifying || 1),
@@ -199,4 +201,34 @@ export async function resyncAll(
 ): Promise<{ ok: boolean; errors: string[]; changed: number }> {
   const r = await syncAll(admin, shop, "full");
   return { ok: r.errors.length === 0, errors: r.errors, changed: r.changed };
+}
+
+/**
+ * Copy a campaign (for a series of promotions): same triggers, gifts and rules,
+ * saved as a DRAFT with no dates so it can't go live by accident.
+ */
+export async function duplicateCampaign(
+  admin: AdminGraphql,
+  shop: string,
+  id: string,
+): Promise<{ ok: boolean; id?: string; errors: string[] }> {
+  const row = await prisma.giftCampaign.findFirst({ where: { shop, id } });
+  if (!row) return { ok: false, errors: ["Campaign not found."] };
+  const { id: _id, createdAt: _c, updatedAt: _u, nodeId: _n, ...rest } = row;
+  const newId = newCampaignId();
+  await prisma.giftCampaign.create({
+    data: {
+      ...rest,
+      id: newId,
+      title: `Copy of ${row.title || "Untitled campaign"}`,
+      draft: true,
+      startsAt: null,
+      endsAt: null,
+      nodeId: null,
+      rulesVersion: 2,
+    },
+  });
+  // Drafts don't touch the storefront; this just indexes its coverage.
+  const r = await syncAll(admin, shop, "duplicate");
+  return { ok: true, id: newId, errors: r.errors };
 }

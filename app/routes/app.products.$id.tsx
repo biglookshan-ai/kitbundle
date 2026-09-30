@@ -744,7 +744,8 @@ const GIFT_STATE_PILL: Record<
   active: { label: "Active", tone: "ok" },
   scheduled: { label: "Scheduled", tone: "warn" },
   ended: { label: "Ended", tone: undefined },
-  disabled: { label: "Off", tone: undefined },
+  paused: { label: "Paused", tone: undefined },
+  draft: { label: "Draft", tone: undefined },
 };
 
 /** ④ Read-only card: which gift campaigns give a free gift with this product. */

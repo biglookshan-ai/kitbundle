@@ -1116,3 +1116,107 @@ button.kb-title:hover {
   font-weight: 600;
   line-height: 1.3;
 }
+
+/* ---- Gift calendar (month timeline) ---- */
+.kb-cal {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.kb-cal__title {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+.kb-cal__grid {
+  display: grid;
+  min-width: 900px;
+  grid-auto-rows: minmax(40px, auto);
+  align-items: center;
+}
+.kb-cal__corner,
+.kb-cal__day {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  background: #f6f7f8;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.kb-cal__corner {
+  justify-content: flex-start;
+  padding-left: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.kb-cal__day.is-weekend {
+  background: #eff1f3;
+}
+.kb-cal__day.is-today {
+  background: var(--brand);
+  color: #fff;
+}
+.kb-cal__name {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 10px 6px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+.kb-cal__name .kb-title {
+  font-size: 13px;
+}
+.kb-cal__todayline {
+  align-self: stretch;
+  justify-self: center;
+  width: 2px;
+  background: rgba(28, 34, 45, 0.18);
+  pointer-events: none;
+}
+.kb-cal__bar {
+  position: relative;
+  z-index: 1;
+}
+.kb-cal__bar {
+  grid-row: span 1;
+  height: 24px;
+  margin: 0 2px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 24px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-cal__bar--active { background: #d7eedc; color: var(--ok); }
+.kb-cal__bar--scheduled { background: #dde6fb; color: var(--info); }
+.kb-cal__bar--paused { background: #fbe9c2; color: var(--warn); }
+.kb-cal__bar--ended,
+.kb-cal__bar--draft {
+  background: #eceef0;
+  color: var(--muted);
+}
+.kb-cal__bar--draft {
+  border: 1px dashed #c3c7cc;
+}
+.kb-cal__bar.is-open-start {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: 0;
+}
+.kb-cal__bar.is-open-end {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-right: 0;
+}

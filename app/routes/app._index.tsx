@@ -28,7 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     products: overview.products,
     stats: overview.stats,
-    campaignCount: campaigns.filter((c) => c.enabled).length,
+    campaignCount: campaigns.filter((c) => c.enabled && !c.draft).length,
     discountActive: ensured.ok,
   };
 };

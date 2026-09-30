@@ -13,6 +13,7 @@ export const GIFT_TABS: TabItem[] = [
   { label: "Products", to: "/app/gifts/products" },
   { label: "Gifts", to: "/app/gifts/items" },
   { label: "Brands", to: "/app/gifts/brands" },
+  { label: "Calendar", to: "/app/gifts/calendar" },
 ];
 
 /** Frame for every Gifts page: KitBundle · Free gifts + the section tabs. */
@@ -30,16 +31,64 @@ export const STATE_TONE: Record<
 > = {
   active: "ok",
   scheduled: "info",
-  ended: "warn",
-  disabled: undefined,
+  paused: "warn",
+  ended: undefined,
+  draft: undefined,
 };
 
 export const STATE_LABEL: Record<CampaignMeta["state"], string> = {
   active: "Active",
   scheduled: "Scheduled",
+  paused: "Paused",
   ended: "Ended",
-  disabled: "Disabled",
+  draft: "Draft",
 };
+
+/** "in 3 days" / "5 hours ago" — coarse, for schedules. */
+export function fmtRelative(iso: string, now = Date.now()) {
+  const ms = Date.parse(iso) - now;
+  const abs = Math.abs(ms);
+  const unit =
+    abs < 3_600_000
+      ? { n: Math.max(1, Math.round(abs / 60_000)), u: "min" }
+      : abs < 86_400_000 * 2
+        ? { n: Math.round(abs / 3_600_000), u: "hour" }
+        : { n: Math.round(abs / 86_400_000), u: "day" };
+  const txt = `${unit.n} ${unit.u}${unit.n === 1 || unit.u === "min" ? "" : "s"}`;
+  return ms >= 0 ? `in ${txt}` : `${txt} ago`;
+}
+
+/** Short schedule pill for the list: starts / ends within a week. */
+export function timingHint(
+  c: { startsAt: string; endsAt: string },
+  state: CampaignMeta["state"],
+): string | null {
+  const week = 7 * 86_400_000;
+  const soon = (iso: string) => iso && Math.abs(Date.parse(iso) - Date.now()) < week;
+  if (state === "scheduled" && soon(c.startsAt)) return `Starts ${fmtRelative(c.startsAt)}`;
+  if (state === "active" && soon(c.endsAt)) return `Ends ${fmtRelative(c.endsAt)}`;
+  return null;
+}
+
+/** One sentence on where a campaign stands (editor Status panel). */
+export function statusSentence(
+  c: { startsAt: string; endsAt: string },
+  state: CampaignMeta["state"],
+): string {
+  const at = (iso: string) => `${fmtWhen(iso)} (${fmtRelative(iso)})`;
+  switch (state) {
+    case "draft":
+      return "Draft — not on the storefront. Choose Published to go live.";
+    case "paused":
+      return "Paused — not on the storefront until you publish it again.";
+    case "scheduled":
+      return `Starts ${at(c.startsAt)}${c.endsAt ? `, ends ${fmtWhen(c.endsAt)}` : ""}.`;
+    case "ended":
+      return `Ended ${at(c.endsAt)}.`;
+    default:
+      return c.endsAt ? `Live now — ends ${at(c.endsAt)}.` : "Live now — no end date.";
+  }
+}
 
 /** Campaign pills, coloured by state; each opens the campaign editor. */
 export function CampaignPills({ campaigns }: { campaigns: CampaignMeta[] }) {
