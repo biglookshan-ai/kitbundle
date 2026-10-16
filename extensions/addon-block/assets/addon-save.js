@@ -3018,11 +3018,20 @@
   // Short, ASCII-only name of the main product this gift rides along with —
   // it ends up in the cart/order discount label, which may be printed on a
   // packing slip, so no emoji or fancy punctuation and keep it brief.
+  // Readable "which product is this gift for": the main product title
+  // (shortened) plus the selected variant, e.g.
+  // "with PDMOVIE SMART FUSION Autofocus Control… – Smart Fusion + Motor".
   function giftForLabel(ctx) {
-    var t = (ctx.mainData && ctx.mainData.title) || "";
-    t = String(t).replace(/\s+/g, " ").trim();
-    if (t.length > 45) t = t.slice(0, 45).replace(/[\s,(-]+$/, "") + "...";
-    return t;
+    var d = ctx.mainData || {};
+    var t = String(d.title || "").replace(/\s+/g, " ").trim();
+    // Cut at a word boundary so it never ends mid-word.
+    if (t.length > 42) t = t.slice(0, 43).replace(/\s+\S*$/, "").replace(/[\s,(-]+$/, "") + "…";
+    var vid = String(readMainVariantId() || "");
+    var v = (d.variants || []).filter(function (x) {
+      return String(x.id) === vid;
+    })[0];
+    var vt = v && v.title && v.title !== "Default Title" ? " – " + v.title : "";
+    return t ? "with " + t + vt : "";
   }
 
   // Line item properties that mark a free gift. `_cgp_free_for` ties the gift
@@ -3363,10 +3372,14 @@
               if (!v) v = data && firstAvailable(data);
               it.id = v && v.id;
               it.properties = {
+                // Required: tells the discount Function which campaign this
+                // gift belongs to (hidden from shoppers).
                 _cgp_gift: it._giftCampId,
-                // Which main this gift came with (hidden; order-level tracing).
-                _cgp_gift_for: giftForLabel(ctx),
               };
+              // Visible on the cart, checkout, order, emails and packing apps:
+              // why this line is free and which product it came with.
+              var forLabel = giftForLabel(ctx);
+              it.properties["Free gift"] = forLabel || "with your purchase";
               // Time-limited gift: a VISIBLE property, so the end date shows on
               // the cart line, at checkout, on the order and the packing slip —
               // and if it lapses, the line explains why it's no longer free.

@@ -628,8 +628,8 @@ export function run(input) {
       if (fq > 0) {
         // Short and plain ASCII: checkout upper-cases discount labels, so
         // anything longer wraps onto two lines, and emoji can print as garbage.
-        // Which main a gift came with is still recorded on the line itself
-        // (`_cgp_gift_for`) for order-level tracing.
+        // Which main a gift came with is on the line itself as the visible
+        // "Free gift" property ("with <product> – <variant>").
         discounts.push({
           message: "FREE GIFT",
           targets: [{ cartLine: { id: line.id, quantity: fq } }],
