@@ -1376,3 +1376,19 @@ button.kb-title:hover {
   border-top: 1px dashed var(--line-soft);
   background: #fafbfb;
 }
+
+/* Campaign change history (editor sidebar). */
+.kb-history {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.kb-history__item {
+  padding: 8px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.kb-history__item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}

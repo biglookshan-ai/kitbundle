@@ -10,7 +10,8 @@ import {
   type GiftCampaign,
   type ProductGiftInfo,
 } from "./gift-campaign";
-import { syncAll } from "../modules/gifts/engine.server";
+import { syncAll, shopTimezone } from "../modules/gifts/engine.server";
+import { describeChanges, describeNew, logEvent } from "../modules/gifts/history.server";
 import { rescheduleGiftTimer } from "../modules/gifts/scheduler.server";
 
 type AdminGraphql = {
@@ -167,6 +168,20 @@ export async function saveCampaign(
     update: data,
   });
 
+  // Change history (best effort — never blocks the save).
+  try {
+    const tz = await shopTimezone(admin);
+    const saved = rowToCampaign({ ...(prev ?? {}), ...data, id: c.id });
+    if (prev) {
+      const lines = describeChanges(rowToCampaign(prev), saved, tz);
+      await logEvent(shop, c.id, c.title, "updated", lines.length ? lines : ["Saved (no changes)"]);
+    } else {
+      await logEvent(shop, c.id, c.title, "created", describeNew(saved, tz));
+    }
+  } catch (e) {
+    console.error("[gifts] history failed", e);
+  }
+
   // 3. Re-sync stamps + the coverage index (only changed products are written;
   //    products that dropped out of this campaign are cleared).
   const r = await syncAll(admin, shop, "save");
@@ -199,6 +214,7 @@ export async function deleteCampaign(
 
   // Forget the row first so the sync recomputes WITHOUT this campaign.
   await prisma.giftCampaign.delete({ where: { id } });
+  await logEvent(shop, id, row.title, "deleted", ["Campaign deleted"]);
   const r = await syncAll(admin, shop, "delete");
   rescheduleGiftTimer();
   errors.push(...r.errors);
@@ -238,6 +254,9 @@ export async function duplicateCampaign(
       nodeId: null,
     },
   });
+  await logEvent(shop, newId, `Copy of ${row.title || "Untitled campaign"}`, "duplicated", [
+    `Copied from “${row.title || "Untitled campaign"}” as a draft (dates cleared)`,
+  ]);
   // Drafts don't touch the storefront; this just indexes its coverage.
   const r = await syncAll(admin, shop, "duplicate");
   rescheduleGiftTimer();

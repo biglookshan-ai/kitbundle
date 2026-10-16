@@ -31,9 +31,11 @@ import {
   STATE_TONE,
   STATE_LABEL,
   statusSentence,
+  fmtWhen,
 } from "../modules/gifts/ui";
 import { previewCoverage } from "../modules/gifts/engine.server";
 import { listPool } from "../modules/gifts/pool.server";
+import { listEvents } from "../modules/gifts/history.server";
 import {
   PageHead,
   Panel,
@@ -169,7 +171,27 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     handle: p.handle,
     image: p.image,
   }));
-  return { campaign: c, isNew: !campaign, variantMap, suggest, covers, overlaps, pool };
+  const [times, history] = campaign
+    ? await Promise.all([
+        prisma.giftCampaign.findFirst({
+          where: { shop: session.shop, id: campaign.id },
+          select: { createdAt: true, updatedAt: true },
+        }),
+        listEvents(session.shop, campaign.id),
+      ])
+    : [null, []];
+  return {
+    campaign: c,
+    isNew: !campaign,
+    variantMap,
+    suggest,
+    covers,
+    overlaps,
+    pool,
+    createdAt: times?.createdAt?.toISOString() ?? null,
+    updatedAt: times?.updatedAt?.toISOString() ?? null,
+    history,
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -251,6 +273,9 @@ export default function GiftCampaignEditor() {
     covers,
     overlaps,
     pool,
+    createdAt,
+    updatedAt,
+    history,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -452,6 +477,11 @@ export default function GiftCampaignEditor() {
               >
                 {`Covers ${covers} product${covers === 1 ? "" : "s"}`}
               </Link>
+            ) : null}
+            {createdAt ? (
+              <span className="kb-muted">
+                {`Created ${fmtWhen(createdAt)}${updatedAt ? ` · last updated ${fmtWhen(updatedAt)}` : ""}`}
+              </span>
             ) : null}
             <span>
               {`Triggers: ${triggerSummary(c)} · ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
@@ -742,6 +772,33 @@ export default function GiftCampaignEditor() {
           <Panel title="If a product is in several campaigns">
             <OverlapSettings c={c} patch={patch} overlaps={overlaps} />
           </Panel>
+
+          {!isNew ? (
+            <Panel title="History">
+              {history.length ? (
+                <div className="kb-history">
+                  {history.map((h) => (
+                    <div key={h.id} className="kb-history__item">
+                      <div className="kb-between">
+                        <b style={{ textTransform: "capitalize" }}>{h.action}</b>
+                        <span className="kb-sub">{fmtWhen(h.at)}</span>
+                      </div>
+                      {h.lines.map((l, i) => (
+                        <div key={i} className="kb-sub">
+                          {l}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="kb-sub" style={{ margin: 0 }}>
+                  No changes recorded yet — history starts from 16 Oct 2026. Before
+                  that only the created / last updated times are known.
+                </p>
+              )}
+            </Panel>
+          ) : null}
 
           <Panel title="Storefront">
             <div className="kb-stack kb-stack--tight">

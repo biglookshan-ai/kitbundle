@@ -186,6 +186,20 @@ model GiftPoolItem {
   @@index([shop])
 }
 
+// Gifts module — change history per campaign (who/what/when), newest first in
+// the editor. Kept after a campaign is deleted so the record survives.
+model GiftCampaignEvent {
+  id         String   @id @default(cuid())
+  shop       String
+  campaignId String
+  title      String   @default("") // campaign title at the time
+  action     String   // created | updated | duplicated | deleted
+  summary    String   @default("") // human-readable list of what changed
+  createdAt  DateTime @default(now())
+
+  @@index([shop, campaignId, createdAt])
+}
+
 // Per-shop app settings (opt-in behaviors). One row per shop.
 model ShopSettings {
   shop      String  @id

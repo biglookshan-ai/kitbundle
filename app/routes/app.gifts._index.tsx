@@ -52,7 +52,7 @@ import {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const [campaigns, counts, sync, timer] = await Promise.all([
+  const [campaigns, counts, sync, timer, stamps] = await Promise.all([
     listCampaigns(session.shop),
     prisma.giftCoverage.groupBy({
       by: ["campaignId"],
@@ -61,11 +61,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
     lastSync(session.shop),
     schedulerStatus(session.shop),
+    prisma.giftCampaign.findMany({
+      where: { shop: session.shop },
+      select: { id: true, createdAt: true, updatedAt: true },
+    }),
   ]);
+  const times: Record<string, { createdAt: string; updatedAt: string }> = {};
+  for (const t of stamps)
+    times[t.id] = { createdAt: t.createdAt.toISOString(), updatedAt: t.updatedAt.toISOString() };
   // How many products each campaign currently covers (from the gifts index).
   const coverage: Record<string, number> = {};
   for (const r of counts) coverage[r.campaignId] = r._count._all;
-  return { campaigns, coverage, sync, timer };
+  return { campaigns, coverage, sync, timer, times };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -183,7 +190,7 @@ function RefChips({
 type Status = "all" | "active" | "scheduled" | "paused" | "draft" | "ended";
 
 export default function GiftCampaigns() {
-  const { campaigns, coverage, sync, timer } = useLoaderData<typeof loader>();
+  const { campaigns, coverage, sync, timer, times } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
   const busy = fetcher.state !== "idle";
@@ -354,6 +361,10 @@ export default function GiftCampaigns() {
               rewardSummary(c),
               c.endsAt ? `ends ${fmtDate(c.endsAt)}` : null,
               c.startsAt && state === "scheduled" ? `starts ${fmtDate(c.startsAt)}` : null,
+              times[c.id] ? `created ${fmtDate(times[c.id].createdAt)}` : null,
+              times[c.id] && times[c.id].updatedAt !== times[c.id].createdAt
+                ? `updated ${fmtDate(times[c.id].updatedAt)}`
+                : null,
             ]
               .filter(Boolean)
               .join(" · ");
