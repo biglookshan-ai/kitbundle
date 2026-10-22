@@ -87,6 +87,9 @@ model GiftCampaign {
   // recognised however it was added to the cart). 2026-10-22, Smart Fusion × lenses.
   kind          String    @default("gift")
   dealPercent   Int       @default(10)
+  // Deal only: collections whose products are ALSO discounted (on top of
+  // giftProductsJson), expanded into the trigger stamps' giftIds at sync time.
+  rewardCollectionsJson String @default("[]")
   // JSON arrays of refs { id, title, handle, image }.
   triggerProductsJson    String @default("[]")
   triggerCollectionsJson String @default("[]")

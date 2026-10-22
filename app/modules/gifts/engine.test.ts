@@ -160,6 +160,13 @@ describe("gift sync engine", () => {
     ]);
     expect(e[1].giftIds).toEqual(["99"]);
     expect(rowToCampaign({ ...db.giftCampaign[1] }).kind).toBe("deal");
+    // A deal's reward collections are expanded into giftIds (every product in them).
+    db.giftCampaign = [
+      campaign("DEAL2", { triggerVendorsJson: '["dzofilm"]', kind: "deal", dealPercent: 10, giftProductsJson: "[]",
+        rewardCollectionsJson: JSON.stringify([{ id: C1, title: "Lenses", handle: "lenses" }]) }),
+    ];
+    await syncAll(admin, "s");
+    expect(JSON.parse(stamps[P(3)])[0].giftIds.sort()).toEqual(["1", "2"]);
     expect(rowToCampaign({ ...db.giftCampaign[1], dealPercent: 500 }).dealPercent).toBe(99);
   });
 

@@ -84,6 +84,12 @@ export type GiftCampaign = {
   kind: "gift" | "deal";
   /** Deal only: % off the reward products (1–99). */
   dealPercent: number;
+  /**
+   * Deal only: collections whose products are also discounted (every product
+   * and variant in them), e.g. "Smart Fusion" or "Lens adapters". Expanded into
+   * the stamp's `giftIds` at sync time, so new products join automatically.
+   */
+  rewardCollections: Ref[];
 };
 
 /** Deal percentage clamped to 1–99. */
@@ -176,7 +182,9 @@ export function rewardRule(c: GiftCampaign): { k: number; q: number; n: number }
 export function rewardSummary(c: GiftCampaign): string {
   if (c.kind === "deal") {
     const n = c.giftProducts.length;
-    return `${dealPct(c)}% off ${n} product${n === 1 ? "" : "s"} · one per item bought`;
+    const m = c.rewardCollections.length;
+    const what = [n ? `${n} product${n === 1 ? "" : "s"}` : "", m ? `${m} collection${m === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ") || "nothing yet";
+    return `${dealPct(c)}% off ${what} · one per item bought`;
   }
   const { k, n } = rewardRule(c);
   const qtys = c.giftProducts.map(giftQty);
@@ -224,6 +232,7 @@ export function emptyCampaign(): GiftCampaign {
     giftProducts: [],
     kind: "gift",
     dealPercent: 10,
+    rewardCollections: [],
   };
 }
 
@@ -336,5 +345,6 @@ export function rowToCampaign(row: any): GiftCampaign {
     })),
     kind: row.kind === "deal" ? "deal" : "gift",
     dealPercent: dealPct({ dealPercent: row.dealPercent ?? 10 }),
+    rewardCollections: parseRefs(row.rewardCollectionsJson),
   };
 }

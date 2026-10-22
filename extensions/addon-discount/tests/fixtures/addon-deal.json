@@ -1,0 +1,92 @@
+{
+  "payload": {
+    "export": "run",
+    "target": "purchase.product-discount.run",
+    "input": {
+      "shop": {
+        "localTime": {
+          "date": "2026-10-22"
+        }
+      },
+      "discountNode": {
+        "metafield": null,
+        "giftMeta": null
+      },
+      "cart": {
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/1",
+            "quantity": 2,
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "1500"
+              }
+            },
+            "cgpGrp": null,
+            "cgpFor": null,
+            "cgpFree": null,
+            "cgpLo": null,
+            "cgpBid": null,
+            "cgpGift": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/11",
+              "product": {
+                "id": "gid://shopify/Product/1001",
+                "addonConfig": null,
+                "giftTrigger": {
+                  "value": "[{\"id\": \"camp_deal\", \"kind\": \"deal\", \"pct\": 10, \"giftIds\": [\"2001\"], \"giftVariants\": {}, \"rewardMode\": \"all\", \"startDate\": \"2026-10-01\", \"endDate\": \"2026-12-31\", \"priority\": 0, \"exclusive\": false}]"
+                }
+              }
+            }
+          },
+          {
+            "id": "gid://shopify/CartLine/2",
+            "quantity": 3,
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "650"
+              }
+            },
+            "cgpGrp": null,
+            "cgpFor": null,
+            "cgpFree": null,
+            "cgpLo": null,
+            "cgpBid": null,
+            "cgpGift": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/21",
+              "product": {
+                "id": "gid://shopify/Product/2001",
+                "addonConfig": null,
+                "giftTrigger": null
+              }
+            }
+          }
+        ]
+      }
+    },
+    "output": {
+      "discountApplicationStrategy": "ALL",
+      "discounts": [
+        {
+          "message": "Bundle offer 10% off",
+          "targets": [
+            {
+              "cartLine": {
+                "id": "gid://shopify/CartLine/2",
+                "quantity": 2
+              }
+            }
+          ],
+          "value": {
+            "percentage": {
+              "value": "10.0"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

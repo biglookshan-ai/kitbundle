@@ -149,6 +149,7 @@ export async function saveCampaign(
     hideWhenSoldOut: !!c.hideWhenSoldOut,
     kind: c.kind === "deal" ? "deal" : "gift",
     dealPercent: dealPct(c),
+    rewardCollectionsJson: JSON.stringify(c.kind === "deal" ? c.rewardCollections ?? [] : []),
     triggerProductsJson: JSON.stringify(c.triggerProducts),
     triggerCollectionsJson: JSON.stringify(c.triggerCollections),
     triggerTagsJson: JSON.stringify(cleanStrings(c.triggerTags)),

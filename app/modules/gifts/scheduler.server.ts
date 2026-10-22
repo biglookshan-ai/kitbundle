@@ -68,7 +68,10 @@ async function runShop(shop: string, now: Date, force = false) {
       !!state?.lastFullAt &&
       now.getTime() - state.lastFullAt.getTime() > DEAL_MS &&
       (await prisma.giftCampaign.count({
-        where: { shop, kind: "deal", enabled: true, draft: false, NOT: { triggerCollectionsJson: "[]" } },
+        where: {
+          shop, kind: "deal", enabled: true, draft: false,
+          OR: [{ NOT: { triggerCollectionsJson: "[]" } }, { NOT: { rewardCollectionsJson: "[]" } }],
+        },
       })) > 0;
     // Stores that uninstalled the app (no offline session) are skipped quietly.
     const installed = await prisma.session.count({ where: { shop, isOnline: false } });

@@ -24,6 +24,7 @@ import {
   rewardRule,
   giftQty,
   dealPct,
+  rewardSummary,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -234,8 +235,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         "Add at least one trigger: products, collections, tags, brands, types or all products.",
     };
   }
-  if (campaign.giftProducts.length === 0) {
-    return { ok: false, error: "Add at least one gift product." };
+  if (campaign.kind === "deal" ? campaign.giftProducts.length + (campaign.rewardCollections?.length ?? 0) === 0 : campaign.giftProducts.length === 0) {
+    return { ok: false, error: campaign.kind === "deal" ? "Add at least one discounted product or collection." : "Add at least one gift product." };
   }
   // Saving also re-syncs product stamps and the gifts index.
   const r = await saveCampaign(admin, session.shop, campaign);
@@ -485,7 +486,7 @@ export default function GiftCampaignEditor() {
               </span>
             ) : null}
             <span>
-              {`Triggers: ${triggerSummary(c)} · ${c.kind === "deal" ? `${c.giftProducts.length} discounted product${c.giftProducts.length === 1 ? "" : "s"} (${dealPct(c)}% off)` : `${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}`}
+              {`Triggers: ${triggerSummary(c)} · ${c.kind === "deal" ? rewardSummary(c) : `${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}`}
             </span>
           </span>
         }
@@ -689,6 +690,30 @@ export default function GiftCampaignEditor() {
                   )
                 : null}
             </ScopeSection>
+            {c.kind === "deal" ? (
+              <ScopeSection
+                label={`Collections (${c.rewardCollections.length})`}
+                action={
+                  <Btn
+                    size="tiny"
+                    onClick={() =>
+                      pick("collection", c.rewardCollections, (refs) => patch({ rewardCollections: refs }))
+                    }
+                  >
+                    + Add collections
+                  </Btn>
+                }
+              >
+                {c.rewardCollections.length ? (
+                  collectionList(c.rewardCollections, (r) => patch({ rewardCollections: r }))
+                ) : (
+                  <p className="kb-sub" style={{ margin: 0 }}>
+                    Every product (and every variant) in these collections is discounted too — products added to the
+                    collection later join automatically.
+                  </p>
+                )}
+              </ScopeSection>
+            ) : null}
             {c.kind !== "deal" && pool.some((p) => !c.giftProducts.some((g) => g.id === p.id)) ? (
               <div className="kb-scope">
                 <div className="kb-between">

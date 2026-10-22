@@ -138,7 +138,7 @@ function campaignWindow(
  * which would put thousands of ids on every product for an all-products
  * campaign; it's gone.)
  */
-function campaignEntry(c: GiftCampaign, tz: string) {
+function campaignEntry(c: GiftCampaign, tz: string, rewardIds: string[] = []) {
   const rule = rewardRule(c);
   const giftVariants: Record<string, string[]> = {};
   for (const g of c.giftProducts) {
@@ -152,7 +152,8 @@ function campaignEntry(c: GiftCampaign, tz: string) {
     id: c.id,
     gifts: c.giftProducts.map((g) => g.handle).filter(Boolean),
     // Numeric gift product ids — the discount Function matches gift lines by id.
-    giftIds: c.giftProducts.map((g) => gidTail(g.id)).filter(Boolean),
+    // (A deal's reward collections are expanded into the same list.)
+    giftIds: [...new Set([...c.giftProducts.map((g) => gidTail(g.id)), ...rewardIds])].filter(Boolean),
     // { productIdTail: [variantIdTail] } for gifts that restrict variants.
     giftVariants,
     // Reward rule: k different gifts; each gift's own quantity per unit bought.
@@ -521,6 +522,18 @@ export type SyncResult = { scanned: number; changed: number; errors: string[] };
 /* Full sync                                                           */
 /* ------------------------------------------------------------------ */
 
+/** Deal campaigns' reward collections → numeric product-id tails (per campaign). */
+async function rewardIdsFor(ctx: ReturnType<typeof newCtx>, campaigns: GiftCampaign[]) {
+  const out = new Map<string, string[]>();
+  for (const c of campaigns) {
+    if (c.kind !== "deal" || !c.rewardCollections?.length) continue;
+    const ids: string[] = [];
+    for (const coll of c.rewardCollections) ids.push(...(await ctx.collection(coll.id)).map(gidTail));
+    out.set(c.id, [...new Set(ids)]);
+  }
+  return out;
+}
+
 export function syncAll(
   admin: AdminGraphql,
   shop: string,
@@ -572,7 +585,8 @@ export function syncAll(
     const coverageIds = campaigns.flatMap((c) => [...members.get(c.id)!.keys()]);
     await ctx.fill([...new Set([...union, ...giftIds, ...coverageIds])]);
 
-    const entries = new Map(enabled.map((c) => [c.id, campaignEntry(c, tz)]));
+    const rewards = await rewardIdsFor(ctx, enabled);
+    const entries = new Map(enabled.map((c) => [c.id, campaignEntry(c, tz, rewards.get(c.id))]));
     const toWrite = new Map<string, any[]>();
     const gone: string[] = [];
     for (const id of union) {
@@ -691,7 +705,10 @@ export function syncProduct(
     const enabled = campaigns.filter((c) => campaignState(c) === "active");
     const needsTz = enabled.some((c) => members.has(c.id));
     const tz = needsTz ? await shopTimezone(admin) : "UTC";
-    const entries = new Map(enabled.map((c) => [c.id, campaignEntry(c, tz)]));
+    const rewards = needsTz
+      ? await rewardIdsFor(newCtx(admin), enabled.filter((c) => members.has(c.id)))
+      : new Map<string, string[]>();
+    const entries = new Map(enabled.map((c) => [c.id, campaignEntry(c, tz, rewards.get(c.id))]));
     const desired = desiredFor(enabled, entries, (cid) => members.get(cid));
 
     // Compare against the LIVE value (also heals any drift in GiftStamp).
@@ -805,9 +822,10 @@ export async function queueProductSync(shop: string, productId: string) {
 export async function queueCollectionSync(shop: string, collectionId: string) {
   const rows = await prisma.giftCampaign.findMany({
     where: { shop },
-    select: { triggerCollectionsJson: true },
+    select: { triggerCollectionsJson: true, rewardCollectionsJson: true },
   });
-  if (!rows.some((r) => r.triggerCollectionsJson.includes(`"${collectionId}"`))) return;
+  // Trigger collections, and deals' reward collections (their members are in the stamps).
+  if (!rows.some((r) => r.triggerCollectionsJson.includes(`"${collectionId}"`) || r.rewardCollectionsJson.includes(`"${collectionId}"`))) return;
   schedule(shop, (q) => {
     q.full = true;
     q.ids.clear();
