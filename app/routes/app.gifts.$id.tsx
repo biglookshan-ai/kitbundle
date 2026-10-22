@@ -23,6 +23,7 @@ import {
   rowToCampaign,
   rewardRule,
   giftQty,
+  dealPct,
   type GiftCampaign,
   type Ref,
 } from "../models/gift-campaign";
@@ -484,7 +485,7 @@ export default function GiftCampaignEditor() {
               </span>
             ) : null}
             <span>
-              {`Triggers: ${triggerSummary(c)} · ${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}
+              {`Triggers: ${triggerSummary(c)} · ${c.kind === "deal" ? `${c.giftProducts.length} discounted product${c.giftProducts.length === 1 ? "" : "s"} (${dealPct(c)}% off)` : `${c.giftProducts.length} gift${c.giftProducts.length === 1 ? "" : "s"}`}`}
             </span>
           </span>
         }
@@ -663,9 +664,9 @@ export default function GiftCampaignEditor() {
 
           <CoveragePreview c={c} isNew={isNew} />
 
-          <Panel title="Gift — get free">
+          <Panel title={c.kind === "deal" ? `Discounted products — get ${dealPct(c)}% off` : "Gift — get free"}>
             <ScopeSection
-              label={`Gift products (${c.giftProducts.length})`}
+              label={`${c.kind === "deal" ? "Discounted products" : "Gift products"} (${c.giftProducts.length})`}
               action={
                 <Btn
                   size="tiny"
@@ -675,7 +676,7 @@ export default function GiftCampaignEditor() {
                     )
                   }
                 >
-                  + Add gifts
+                  {c.kind === "deal" ? "+ Add products" : "+ Add gifts"}
                 </Btn>
               }
             >
@@ -683,12 +684,12 @@ export default function GiftCampaignEditor() {
                 ? refVariantList(
                     c.giftProducts,
                     (r) => patch({ giftProducts: r }),
-                    "Variants offered free",
-                    true,
+                    c.kind === "deal" ? "Variants discounted" : "Variants offered free",
+                    c.kind !== "deal",
                   )
                 : null}
             </ScopeSection>
-            {pool.some((p) => !c.giftProducts.some((g) => g.id === p.id)) ? (
+            {c.kind !== "deal" && pool.some((p) => !c.giftProducts.some((g) => g.id === p.id)) ? (
               <div className="kb-scope">
                 <div className="kb-between">
                   <span className="kb-overline">From the gift pool</span>
@@ -766,7 +767,47 @@ export default function GiftCampaignEditor() {
           </Panel>
 
           <Panel title="Reward">
-            <RewardSettings c={c} patch={patch} legacyFixed={initial.rewardMode === "fixed"} />
+            <div className="kb-stack kb-stack--tight">
+              <div className="kb-radios">
+                {([
+                  ["gift", "Free gift", "The reward products are free."],
+                  ["deal", "Add-on deal (% off)", "The reward products get a discount when bought with a trigger product."],
+                ] as const).map(([k, t, d]) => (
+                  <label key={k} className={`kb-radio${c.kind === k ? " is-on" : ""}`}>
+                    <input type="radio" name="kind" checked={c.kind === k} onChange={() => patch({ kind: k })} />
+                    <span>
+                      <b>{t}</b>
+                      <span className="kb-sub">{d}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {c.kind === "deal" ? (
+                <>
+                  <Field label="Discount" help="Off each discounted product, at checkout.">
+                    <div className="kb-inline" style={{ flexWrap: "nowrap" }}>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={99}
+                        style={{ width: 80 }}
+                        value={String(c.dealPercent)}
+                        onChange={(e) => patch({ dealPercent: Math.min(99, Math.max(1, Math.floor(Number(e.target.value)) || 1)) })}
+                      />
+                      <span>% off</span>
+                    </div>
+                  </Field>
+                  <div className="kb-box kb-small">
+                    Each trigger product bought unlocks <b>one</b> discounted product (the most expensive one in the cart
+                    first). It applies however the product was added — from its own page, a collection page or the
+                    search — as long as a trigger product is in the same cart. Example: 2 lenses + 3 Smart Fusion kits →
+                    2 kits get {dealPct(c)}% off.
+                  </div>
+                </>
+              ) : (
+                <RewardSettings c={c} patch={patch} legacyFixed={initial.rewardMode === "fixed"} />
+              )}
+            </div>
           </Panel>
 
           <Panel title="If a product is in several campaigns">
@@ -800,6 +841,14 @@ export default function GiftCampaignEditor() {
             </Panel>
           ) : null}
 
+          {c.kind === "deal" ? (
+            <Panel title="Storefront">
+              <p className="kb-sub" style={{ margin: 0 }}>
+                Add-on deals don't add a picker to the product page — the discount is applied at checkout. Promote the
+                deal with the product-page cards and landing page in the Promo Dashboard (联合推广).
+              </p>
+            </Panel>
+          ) : (
           <Panel title="Storefront">
             <div className="kb-stack kb-stack--tight">
               <Field label="Badge text" help="Shown on product / search.">
@@ -831,6 +880,7 @@ export default function GiftCampaignEditor() {
               </div>
             </div>
           </Panel>
+          )}
         </div>
       </div>
     </GiftsShell>

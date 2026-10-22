@@ -246,7 +246,13 @@
     var anyAddon = groups.some(function (g) {
       return g && !g.archived && !g.hidden;
     });
-    if (!anyAddon && !giftsInWindow().length) return;
+    if (!anyAddon && !giftsInWindow().length) {
+      // Also clear the "Loading…" placeholder (e.g. a product whose stamp only
+      // carries add-on deals, which the checkout applies on its own).
+      var idle = root.querySelector("[data-cgp-loading]");
+      if (idle) idle.style.display = "none";
+      return;
+    }
 
     // Inventory map (handle -> total available, null = untracked). Emitted by
     // Liquid because the AJAX product JSON omits inventory_quantity.
@@ -4091,6 +4097,9 @@
     } catch (e) {
       raw = null;
     }
+    // Add-on deals (kind "deal", % off a reward) aren't free gifts: the gift
+    // picker ignores them (the discount Function applies them at checkout).
+    if (raw && raw.length) raw = raw.filter(function (e) { return e && e.kind !== "deal"; });
     if (!raw || !raw.length) return;
     // Normalise the product's gift_trigger entries into the campaign shape used
     // by the promo UI + the commit's gift-add (accepts both `triggers`/`gifts`

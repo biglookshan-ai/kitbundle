@@ -9,6 +9,7 @@ import {
   giftQty,
   type GiftCampaign,
   type ProductGiftInfo,
+  dealPct,
 } from "./gift-campaign";
 import { syncAll, shopTimezone } from "../modules/gifts/engine.server";
 import { describeChanges, describeNew, logEvent } from "../modules/gifts/history.server";
@@ -146,6 +147,8 @@ export async function saveCampaign(
     badgeText: c.badgeText,
     subtitle: c.subtitle ?? "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,
+    kind: c.kind === "deal" ? "deal" : "gift",
+    dealPercent: dealPct(c),
     triggerProductsJson: JSON.stringify(c.triggerProducts),
     triggerCollectionsJson: JSON.stringify(c.triggerCollections),
     triggerTagsJson: JSON.stringify(cleanStrings(c.triggerTags)),

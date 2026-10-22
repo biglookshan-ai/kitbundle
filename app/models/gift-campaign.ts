@@ -75,8 +75,21 @@ export type GiftCampaign = {
   excludeCollections: Ref[];
   excludeVendors: string[];
   excludeTypes: string[];
-  giftProducts: Ref[]; // the gift set
+  giftProducts: Ref[]; // the gift set (for a deal: the discounted products)
+  /**
+   * "gift" = the reward products are free (classic gift with purchase).
+   * "deal" = add-on deal: each product bought unlocks ONE reward unit at
+   * `dealPercent`% off, however that reward was added to the cart.
+   */
+  kind: "gift" | "deal";
+  /** Deal only: % off the reward products (1–99). */
+  dealPercent: number;
 };
+
+/** Deal percentage clamped to 1–99. */
+export function dealPct(c: Pick<GiftCampaign, "dealPercent">): number {
+  return Math.min(99, Math.max(1, Math.round(Number(c.dealPercent)) || 10));
+}
 
 /** True when the campaign has at least one way to trigger. */
 export function hasTrigger(c: GiftCampaign): boolean {
@@ -161,6 +174,10 @@ export function rewardRule(c: GiftCampaign): { k: number; q: number; n: number }
 
 /** Plain-English reward summary ("Pick 2 of 5 gifts · some ×2"). */
 export function rewardSummary(c: GiftCampaign): string {
+  if (c.kind === "deal") {
+    const n = c.giftProducts.length;
+    return `${dealPct(c)}% off ${n} product${n === 1 ? "" : "s"} · one per item bought`;
+  }
   const { k, n } = rewardRule(c);
   const qtys = c.giftProducts.map(giftQty);
   const extra = qtys.some((x) => x > 1)
@@ -205,6 +222,8 @@ export function emptyCampaign(): GiftCampaign {
     excludeVendors: [],
     excludeTypes: [],
     giftProducts: [],
+    kind: "gift",
+    dealPercent: 10,
   };
 }
 
@@ -315,5 +334,7 @@ export function rowToCampaign(row: any): GiftCampaign {
       // Older campaigns had one quantity for every gift; seed each gift with it.
       qty: g.qty ?? legacyQ,
     })),
+    kind: row.kind === "deal" ? "deal" : "gift",
+    dealPercent: dealPct({ dealPercent: row.dealPercent ?? 10 }),
   };
 }

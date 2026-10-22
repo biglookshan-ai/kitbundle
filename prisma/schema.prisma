@@ -82,6 +82,11 @@ model GiftCampaign {
   badgeText     String    @default("")
   subtitle      String    @default("") // storefront prompt above the gift picker
   hideWhenSoldOut Boolean @default(false) // hide sold-out gifts / the group
+  // "gift" = the reward products are free; "deal" = add-on deal: the reward
+  // products get `dealPercent`% off (one discounted unit per qualifying unit,
+  // recognised however it was added to the cart). 2026-10-22, Smart Fusion × lenses.
+  kind          String    @default("gift")
+  dealPercent   Int       @default(10)
   // JSON arrays of refs { id, title, handle, image }.
   triggerProductsJson    String @default("[]")
   triggerCollectionsJson String @default("[]")

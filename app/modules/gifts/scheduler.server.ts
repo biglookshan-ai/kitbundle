@@ -23,6 +23,10 @@ const BACKSTOP_MS = 30 * 60 * 1000;
 const FIRST_TICK_MS = 45 * 1000;
 const AFTER_BOUNDARY_MS = 3000;
 const DAILY_MS = 24 * 60 * 60 * 1000;
+// Add-on deals triggered by a collection: the Promo Dashboard re-syncs that
+// collection's members every hour (联合推广), and adding products to a manual
+// collection doesn't reliably fire collections/update — so re-check hourly.
+const DEAL_MS = 60 * 60 * 1000;
 const LOCK_MS = 15 * 60 * 1000;
 
 /** Campaign start/end instants that fall in (from, to]. */
@@ -60,14 +64,20 @@ async function runShop(shop: string, now: Date, force = false) {
     const since = state?.lastRunAt ?? null;
     const crossed = since ? await boundariesBetween(shop, since, now) : 1;
     const daily = !state?.lastFullAt || now.getTime() - state.lastFullAt.getTime() > DAILY_MS;
+    const dealDue =
+      !!state?.lastFullAt &&
+      now.getTime() - state.lastFullAt.getTime() > DEAL_MS &&
+      (await prisma.giftCampaign.count({
+        where: { shop, kind: "deal", enabled: true, draft: false, NOT: { triggerCollectionsJson: "[]" } },
+      })) > 0;
     // Stores that uninstalled the app (no offline session) are skipped quietly.
     const installed = await prisma.session.count({ where: { shop, isOnline: false } });
     if (!installed) {
       result = "skipped: app not installed";
-    } else if (force || crossed || daily) {
+    } else if (force || crossed || daily || dealDue) {
       full = true;
       const { admin } = await unauthenticated.admin(shop);
-      const r = await syncAll(admin, shop, force ? "timer-now" : crossed ? "timer" : "daily");
+      const r = await syncAll(admin, shop, force ? "timer-now" : crossed ? "timer" : daily ? "daily" : "deal-hourly");
       result = r.errors.length
         ? `errors: ${r.errors.join("; ").slice(0, 500)}`
         : `${r.changed} product${r.changed === 1 ? "" : "s"} updated`;

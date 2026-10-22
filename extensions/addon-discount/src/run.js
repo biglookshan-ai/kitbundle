@@ -495,6 +495,19 @@ export function run(input) {
   // absent here (or with an empty set) offers ALL its variants free.
   /** @type {Map<string, Map<string, Set<string>>>} */
   const giftVariantsByCamp = new Map();
+  // ADD-ON DEALS (stamp entries with kind "deal", 2026-10-22): the reward
+  // products get `pct`% off — ONE discounted unit per qualifying unit, pooled
+  // across the deal's reward products. Unlike gifts, a reward line needs no
+  // `_cgp_gift` property: it's recognised by product id, so a reward added from
+  // its OWN product page still gets the deal when a trigger is in the cart.
+  /** @type {Map<string, number>} */ // deal -> qualifying units
+  const dealQual = new Map();
+  /** @type {Map<string, number>} */
+  const dealPctByCamp = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const dealIdsByCamp = new Map();
+  /** @type {Map<string, Map<string, Set<string>>>} */
+  const dealVariantsByCamp = new Map();
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
@@ -529,6 +542,25 @@ export function run(input) {
     // are given (among the campaigns live today).
     for (const e of overlapWinners(valid)) {
       const cid = e.id;
+      if (e.kind === "deal") {
+        dealQual.set(cid, (dealQual.get(cid) ?? 0) + q);
+        if (!dealPctByCamp.has(cid)) dealPctByCamp.set(cid, Math.min(99, Math.max(0, Math.round(Number(e.pct)) || 0)));
+        if (!dealIdsByCamp.has(cid))
+          dealIdsByCamp.set(cid, new Set((Array.isArray(e.giftIds) ? e.giftIds : []).map(String)));
+        if (!dealVariantsByCamp.has(cid)) {
+          /** @type {Map<string, Set<string>>} */
+          const vmap = new Map();
+          const gv = e && e.giftVariants;
+          if (gv && typeof gv === "object") {
+            for (const k of Object.keys(gv)) {
+              const arr = Array.isArray(gv[k]) ? gv[k].map(String) : [];
+              if (arr.length) vmap.set(String(k), new Set(arr));
+            }
+          }
+          dealVariantsByCamp.set(cid, vmap);
+        }
+        continue;
+      }
       giftQual.set(cid, (giftQual.get(cid) ?? 0) + q);
       if (!giftRule.has(cid)) giftRule.set(cid, giftRuleOf(e));
       if (!giftIdsByCamp.has(cid))
@@ -603,6 +635,60 @@ export function run(input) {
     }
   }
 
+  // 2d. ADD-ON DEAL allocation. Candidates = any line of a deal's reward product
+  //     (plain, or added by the storefront deal picker), except free gifts of a
+  //     gift campaign and bundle / add-on parts (those keep their own pricing).
+  //     The MOST EXPENSIVE reward units get the deal first; a line takes one
+  //     deal only (the best %).
+  /** @type {Map<string, {qty: number, pct: number}>} */ // cart line id -> units + %
+  const dealQty = new Map();
+  {
+    const camps = [...dealQual.keys()].sort(
+      (a, b) => (dealPctByCamp.get(b) ?? 0) - (dealPctByCamp.get(a) ?? 0),
+    );
+    for (const cid of camps) {
+      const pct = dealPctByCamp.get(cid) ?? 0;
+      let left = dealQual.get(cid) ?? 0;
+      if (pct <= 0 || left <= 0) continue;
+      const ids = dealIdsByCamp.get(cid);
+      const vmap = dealVariantsByCamp.get(cid);
+      const cands = [];
+      for (const line of lines) {
+        const gc = /** @type {any} */ (line)?.cgpGift?.value;
+        if (gc && !dealQual.has(gc)) continue; // a free gift of a gift campaign
+        if (
+          /** @type {any} */ (line)?.cgpFor?.value ||
+          /** @type {any} */ (line)?.cgpGrp?.value ||
+          /** @type {any} */ (line)?.cgpFree?.value
+        )
+          continue;
+        if (dealQty.has(line.id)) continue; // already took a (better) deal
+        const tail = gidTail(/** @type {any} */ (line?.merchandise)?.product?.id);
+        if (!ids || !ids.has(tail)) continue;
+        if (vmap && vmap.size > 0) {
+          const allowed = vmap.get(tail);
+          if (allowed && allowed.size > 0) {
+            const vid = /** @type {any} */ (line?.merchandise)?.id;
+            if (!vid || !allowed.has(gidTail(vid))) continue; // off-list variant
+          }
+        }
+        cands.push({
+          id: line.id,
+          qty: Number(line?.quantity) || 0,
+          cost: Number(/** @type {any} */ (line)?.cost?.amountPerQuantity?.amount) || 0,
+        });
+      }
+      cands.sort((a, b) => b.cost - a.cost);
+      for (const c of cands) {
+        if (left <= 0) break;
+        const take = Math.min(left, c.qty);
+        if (take <= 0) continue;
+        dealQty.set(c.id, { qty: take, pct });
+        left -= take;
+      }
+    }
+  }
+
   // 3. Apply.
   /** @type {FunctionRunResult["discounts"]} */
   const discounts = [];
@@ -620,6 +706,18 @@ export function run(input) {
     const addonFor = /** @type {any} */ (line)?.cgpFor?.value;
     const free = /** @type {any} */ (line)?.cgpFree?.value;
     const bid = /** @type {any} */ (line)?.cgpBid?.value;
+
+    // ADD-ON DEAL reward line: units + % pre-computed in 2d.
+    const deal = dealQty.get(line.id);
+    if (deal && deal.qty > 0) {
+      // Short plain ASCII (checkout upper-cases discount labels).
+      discounts.push({
+        message: `Bundle offer ${deal.pct}% off`,
+        targets: [{ cartLine: { id: line.id, quantity: deal.qty } }],
+        value: { percentage: { value: deal.pct.toFixed(1) } },
+      });
+      continue;
+    }
 
     // CAMPAIGN GIFT line: free quantity was pre-computed round-robin above.
     const giftCamp = /** @type {any} */ (line)?.cgpGift?.value;

@@ -147,6 +147,22 @@ describe("gift sync engine", () => {
     expect(JSON.parse(via!.viaJson)).toEqual(["Collection: Lenses"]);
   });
 
+  it("add-on deal campaigns stamp kind + pct; gift campaigns don't", async () => {
+    db.giftCampaign = [
+      campaign("G", { triggerVendorsJson: '["dzofilm"]' }),
+      campaign("DEAL", { triggerVendorsJson: '["dzofilm"]', kind: "deal", dealPercent: 15 }),
+    ];
+    await syncAll(admin, "s");
+    const e = JSON.parse(stamps[P(3)]);
+    expect(e.map((x: any) => [x.id, x.kind ?? null, x.pct ?? null])).toEqual([
+      ["G", null, null],
+      ["DEAL", "deal", 15],
+    ]);
+    expect(e[1].giftIds).toEqual(["99"]);
+    expect(rowToCampaign({ ...db.giftCampaign[1] }).kind).toBe("deal");
+    expect(rowToCampaign({ ...db.giftCampaign[1], dealPercent: 500 }).dealPercent).toBe(99);
+  });
+
   it("writes only changed products on the next run", async () => {
     await syncAll(admin, "s");
     writes = [];

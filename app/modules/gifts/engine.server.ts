@@ -24,6 +24,7 @@ import {
   rewardRule,
   campaignState,
   giftQty,
+  dealPct,
   type GiftCampaign,
 } from "../../models/gift-campaign";
 
@@ -169,6 +170,9 @@ function campaignEntry(c: GiftCampaign, tz: string) {
     subtitle: c.subtitle || "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,
     rewardMode: c.rewardMode,
+    // Add-on deal (2026-10-22): the reward products get `pct`% off, one unit per
+    // qualifying unit, recognised by product id however they were added.
+    ...(c.kind === "deal" ? { kind: "deal", pct: dealPct(c) } : {}),
     startsAt: c.startsAt || "",
     endsAt: c.endsAt || "",
   };
