@@ -105,6 +105,34 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       c.title = `Free ${p.title}`;
     }
   }
+  // "Set up the discount" from the Promo Dashboard (联合推广, 2026-10-23): open a
+  // NEW add-on deal already filled in — trigger = the compatible-products
+  // collection, discounted = the promoted products' collection, the % and a title.
+  // The merchant only reviews and saves.
+  const sp = new URL(request.url).searchParams;
+  if (!campaign && sp.get("deal") === "1") {
+    const ids = [sp.get("trigger"), sp.get("reward")].filter((x): x is string => !!x && /^gid:\/\/shopify\/Collection\/\d+$/.test(x));
+    const r = ids.length
+      ? await admin.graphql(
+          `#graphql
+            query SeedDealCollections($ids: [ID!]!) { nodes(ids: $ids) { ... on Collection { id title handle image { url } } } }`,
+          { variables: { ids } },
+        )
+      : null;
+    const nodes: any[] = r ? ((await r.json())?.data?.nodes ?? []).filter(Boolean) : [];
+    const ref = (id: string | null) => {
+      const n = nodes.find((x) => x?.id === id);
+      return n ? [{ id: n.id, title: n.title, handle: n.handle, image: n.image?.url ?? null }] : [];
+    };
+    c.kind = "deal";
+    c.dealPercent = Math.min(99, Math.max(1, Math.round(Number(sp.get("pct"))) || 10));
+    c.title = (sp.get("title") || "").slice(0, 120) || "Add-on deal";
+    c.triggerCollections = ref(sp.get("trigger"));
+    c.rewardCollections = ref(sp.get("reward"));
+    c.rewardMode = "all";
+    c.badgeText = "";
+    c.subtitle = "";
+  }
   // Variants of each gift AND trigger product, so the editor can offer
   // per-variant selection on both sides.
   const productIds = [
