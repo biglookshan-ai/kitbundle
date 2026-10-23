@@ -170,6 +170,22 @@ describe("gift sync engine", () => {
     expect(rowToCampaign({ ...db.giftCampaign[1], dealPercent: 500 }).dealPercent).toBe(99);
   });
 
+  it("the scheduler's deal query matches deals with trigger or reward collections", async () => {
+    const { prismaMock } = await import("./__test__/memory-db");
+    db.giftCampaign = [
+      campaign("A1", { kind: "deal", rewardCollectionsJson: "[]" }),
+      campaign("A2", { kind: "deal", rewardCollectionsJson: JSON.stringify([{ id: C1 }]) }),
+      campaign("A3", { kind: "gift", rewardCollectionsJson: JSON.stringify([{ id: C1 }]) }),
+    ];
+    db.giftCampaign[0].triggerCollectionsJson = "[]";
+    db.giftCampaign[1].triggerCollectionsJson = "[]";
+    const n = await prismaMock.giftCampaign.count({
+      where: { shop: "s", kind: "deal", enabled: true, draft: false,
+        OR: [{ NOT: { triggerCollectionsJson: "[]" } }, { NOT: { rewardCollectionsJson: "[]" } }] },
+    });
+    expect(n).toBe(1);
+  });
+
   it("writes only changed products on the next run", async () => {
     await syncAll(admin, "s");
     writes = [];

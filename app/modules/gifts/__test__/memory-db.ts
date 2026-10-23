@@ -23,6 +23,7 @@ function fieldMatch(value: any, cond: any): boolean {
 export function match(r: Row, where: Row = {}): boolean {
   return Object.entries(where).every(([k, v]) => {
     if (k === "OR") return (v as Row[]).some((w) => match(r, w));
+    if (k === "NOT") return !match(r, v as Row); // e.g. the scheduler's "has reward / trigger collections" check
     if (k === "shop_productId") return r.shop === v.shop && r.productId === v.productId;
     return fieldMatch(r[k], v);
   });
