@@ -23,6 +23,7 @@ type Prod = { id: string; tags: string[]; vendor: string; productType: string; c
 let products: Prod[];
 let stamps: Record<string, string>;
 let writes: string[];
+let variantOpts: Record<string, Array<{ id: string; values: string[] }>>; // product gid → variants
 
 const node = (p: Prod) => ({
   id: p.id,
@@ -63,6 +64,13 @@ const admin = {
           : null,
       });
     }
+    if (query.includes("GiftVariantOptions"))
+      return reply({
+        nodes: v.ids.map((id: string) => ({
+          id,
+          variants: { nodes: (variantOpts[id] ?? []).map((x) => ({ id: `gid://shopify/ProductVariant/${x.id}`, selectedOptions: x.values.map((value) => ({ value })) })) },
+        })),
+      });
     if (query.includes("GiftStamps")) {
       for (const m of v.metafields) {
         stamps[m.ownerId] = m.value;
@@ -114,6 +122,7 @@ beforeEach(() => {
   ];
   stamps = {};
   writes = [];
+  variantOpts = {};
   db.giftCampaign = [
     campaign("A", { triggerTagsJson: '["sale"]', excludeTagsJson: '["clearance"]' }),
     campaign("B", { triggerVendorsJson: '["dzofilm"]' }),
@@ -314,4 +323,25 @@ describe("gift sync engine", () => {
     const r = await syncProduct(admin, "s", P(1));
     expect(r.changed).toBe(0);
   });
+
+  it("excludeOptions: variants with those option values don't trigger — full sync and webhook agree", async () => {
+    products.push({ id: P(5), tags: [], vendor: "DZOFILM", productType: "Lens", colls: [] });
+    variantOpts = {
+      [P(1)]: [{ id: "11", values: ["E Mount", "Blue"] }, { id: "12", values: ["RF", "Blue"] }, { id: "13", values: ["L-Mount", "Amber"] }],
+      [P(3)]: [{ id: "31", values: ["PL"] }, { id: "32", values: ["EF"] }],
+      [P(5)]: [{ id: "51", values: ["Canon RF"] }, { id: "52", values: ["Nikon Z"] }],
+    };
+    db.giftCampaign = [
+      campaign("DEAL", { triggerVendorsJson: '["dzofilm"]', kind: "deal", dealPercent: 10, excludeOptionsJson: '["RF","L","X","Z"]' }),
+    ];
+    await syncAll(admin, "s");
+    expect(JSON.parse(stamps[P(1)])[0].triggerVariants).toEqual(["11"]); // RF and L-Mount left out
+    expect(JSON.parse(stamps[P(3)])[0].triggerVariants).toBeUndefined(); // nothing excluded = every variant
+    expect(stamps[P(5)]).toBeUndefined(); // only mirrorless variants = not a trigger at all
+    writes = [];
+    await syncProduct(admin, "s", P(1));
+    await syncProduct(admin, "s", P(5));
+    expect(writes).toEqual([]); // the webhook path computes the same
+  });
 });
+

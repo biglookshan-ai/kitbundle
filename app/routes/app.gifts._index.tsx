@@ -140,6 +140,7 @@ function excludeText(c: GiftCampaign): string {
   return [
     ...c.excludeTags.map((t) => `tag “${t}”`),
     ...c.excludeVendors.map((v) => `brand “${v}”`),
+    ...(c.excludeOptions ?? []).map((v) => `variants “${v}”`),
     ...c.excludeTypes.map((t) => `type “${t}”`),
     ...c.excludeCollections.map((x) => `collection “${x.title || "Untitled"}”`),
     ...(c.excludeProducts.length ? [n(c.excludeProducts.length, "product")] : []),

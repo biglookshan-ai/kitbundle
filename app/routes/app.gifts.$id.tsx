@@ -129,6 +129,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     c.title = (sp.get("title") || "").slice(0, 120) || "Add-on deal";
     c.triggerCollections = ref(sp.get("trigger"));
     c.rewardCollections = ref(sp.get("reward"));
+    // Variants whose options match these don't count (e.g. mirrorless mounts RF / L / X / Z).
+    c.excludeOptions = (sp.get("exopt") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 30);
     c.rewardMode = "all";
     c.badgeText = "";
     c.subtitle = "";
@@ -625,7 +627,8 @@ export default function GiftCampaignEditor() {
                     c.excludeCollections.length +
                     c.excludeTags.length +
                     c.excludeVendors.length +
-                    c.excludeTypes.length >
+                    c.excludeTypes.length +
+                    (c.excludeOptions?.length ?? 0) >
                     0
                 }
                 onOpen={() => setShowExclude(true)}
@@ -686,6 +689,10 @@ export default function GiftCampaignEditor() {
                       excludeTypes: f.types,
                     })
                   }
+                />
+                <OptionValueChips
+                  values={c.excludeOptions ?? []}
+                  onChange={(v) => patch({ excludeOptions: v })}
                 />
               </ExcludeBlock>
             </div>
@@ -1159,6 +1166,7 @@ const triggerKey = (c: GiftCampaign) =>
     c.excludeCollections.map((p) => p.id),
     c.excludeVendors,
     c.excludeTypes,
+    c.excludeOptions ?? [],
   ]);
 
 type PreviewResult = {
@@ -1320,6 +1328,61 @@ type FilterKind = "tag" | "vendor" | "type";
 const FILTER_LABEL: Record<FilterKind, string> = { tag: "Tag", vendor: "Brand", type: "Type" };
 
 /** Tag / brand / type conditions as removable chips with one "Add filter" row. */
+/**
+ * Variant carve-out: option values (e.g. mirrorless mounts "RF", "L", "X", "Z")
+ * whose variants don't count. The product still qualifies with its other variants.
+ */
+function OptionValueChips({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
+  const [value, setValue] = useState("");
+  const add = () => {
+    const parts = value.split(",").map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) return;
+    const next = [...values];
+    for (const p of parts) if (!next.some((x) => x.toLowerCase() === p.toLowerCase())) next.push(p);
+    onChange(next);
+    setValue("");
+  };
+  return (
+    <div className="kb-scope">
+      <div className="kb-between">
+        <span className="kb-overline">{`Variants with these option values (${values.length})`}</span>
+      </div>
+      {values.length ? (
+        <div className="kb-chips" style={{ marginTop: 6 }}>
+          {values.map((v) => (
+            <span key={v} className="kb-token">
+              {v}
+              <button type="button" aria-label={`Remove ${v}`} onClick={() => onChange(values.filter((x) => x !== v))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="kb-filteradd">
+        <Input
+          value={value}
+          placeholder="e.g. RF, L, X, Z — press Enter"
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Btn size="tiny" variant="primary" onClick={add}>
+          Add
+        </Btn>
+      </div>
+      <p className="kb-sub" style={{ marginTop: 4 }}>
+        A product&apos;s variants whose options include any of these (e.g. mirrorless mounts) don&apos;t qualify —
+        the product still qualifies with its other variants. &ldquo;Mount&rdquo; is ignored, so RF matches &ldquo;RF Mount&rdquo;.
+      </p>
+    </div>
+  );
+}
+
 function FilterChips({
   idPrefix,
   tags,

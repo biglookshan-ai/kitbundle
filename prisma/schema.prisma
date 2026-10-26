@@ -105,6 +105,10 @@ model GiftCampaign {
   excludeCollectionsJson String  @default("[]")
   excludeVendorsJson     String  @default("[]")
   excludeTypesJson       String  @default("[]")
+  // Variant-level carve-out (2026-10-26, Smart Fusion × lenses): variants whose
+  // option values match any of these (e.g. mirrorless mounts "RF", "L", "X", "Z")
+  // don't trigger — the product still triggers with its other variants.
+  excludeOptionsJson     String  @default("[]")
   nodeId        String? // gid://shopify/DiscountAutomaticNode/<n>
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

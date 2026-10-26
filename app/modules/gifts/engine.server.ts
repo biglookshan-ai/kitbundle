@@ -27,6 +27,7 @@ import {
   dealPct,
   type GiftCampaign,
 } from "../../models/gift-campaign";
+import { allowedVariants, mergeTriggerVariants, type VariantOptions } from "./option-exclude";
 
 type AdminGraphql = {
   graphql: (query: string, options?: { variables?: any }) => Promise<Response>;
@@ -350,6 +351,64 @@ function directMember(c: GiftCampaign, id: string): Member | null {
   return tv.length ? { via: ["Direct"], triggerVariants: tv } : { via: ["Direct"] };
 }
 
+/* ------------------------------------------------------------------ */
+/* Variant carve-out by option value (excludeOptions)                  */
+/* ------------------------------------------------------------------ */
+
+/** Option values of each product's variants (product gid → variants). */
+async function fetchVariantOptions(admin: AdminGraphql, ids: string[]) {
+  const out = new Map<string, VariantOptions[]>();
+  for (let i = 0; i < ids.length; i += 10) {
+    const json = await gql(
+      admin,
+      `#graphql
+        query GiftVariantOptions($ids: [ID!]!) {
+          nodes(ids: $ids) { ... on Product { id variants(first: 50) { nodes { id selectedOptions { value } } } } }
+        }`,
+      { ids: ids.slice(i, i + 10) },
+    );
+    for (const n of json?.data?.nodes ?? []) {
+      if (!n?.id) continue;
+      out.set(
+        n.id,
+        (n.variants?.nodes ?? []).map((v: any) => ({
+          id: gidTail(v.id),
+          options: (v.selectedOptions ?? []).map((o: any) => String(o?.value ?? "")),
+        })),
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Campaigns with `excludeOptions` (e.g. mirrorless mounts): restrict each member
+ * to its allowed variants (`triggerVariants`, enforced by the Function and read by
+ * the storefront); a product with no allowed variant left stops triggering.
+ * `members` = campaign id → product gid → Member (mutated in place).
+ */
+async function applyOptionExclusions(
+  admin: AdminGraphql,
+  campaigns: GiftCampaign[],
+  members: Map<string, Map<string, Member>>,
+) {
+  const need = campaigns.filter((c) => (c.excludeOptions?.length ?? 0) > 0 && members.get(c.id)?.size);
+  if (!need.length) return;
+  const ids = new Set<string>();
+  for (const c of need) for (const id of members.get(c.id)!.keys()) ids.add(id);
+  const vars = await fetchVariantOptions(admin, [...ids]);
+  for (const c of need) {
+    const m = members.get(c.id)!;
+    for (const [id, mem] of [...m]) {
+      const vs = vars.get(id);
+      if (!vs) continue;
+      const tv = mergeTriggerVariants(mem.triggerVariants, allowedVariants(vs, c.excludeOptions));
+      if (tv && tv.length === 0) m.delete(id);
+      else if (tv !== mem.triggerVariants) m.set(id, { ...mem, triggerVariants: tv });
+    }
+  }
+}
+
 /** Does one product trigger this campaign? (Webhook path.) */
 function matchProduct(
   c: GiftCampaign,
@@ -554,6 +613,7 @@ export function syncAll(
 
     const members = new Map<string, Map<string, Member>>();
     for (const c of campaigns) members.set(c.id, await resolveCampaign(ctx, c));
+    await applyOptionExclusions(admin, campaigns, members);
 
     // Products to (re)stamp: everything an ENABLED campaign triggers now ∪
     // everything we stamped non-empty before (so products that dropped out get
@@ -698,6 +758,18 @@ export function syncProduct(
     for (const c of campaigns) {
       const m = matchProduct(c, productId, facts, collectionIds);
       if (m) members.set(c.id, m);
+    }
+    // Variant carve-out (excludeOptions) for this one product.
+    {
+      const byCamp = new Map<string, Map<string, Member>>(
+        [...members].map(([cid, m]) => [cid, new Map([[productId, m]])]),
+      );
+      await applyOptionExclusions(admin, campaigns, byCamp);
+      for (const [cid, mm] of byCamp) {
+        const m = mm.get(productId);
+        if (m) members.set(cid, m);
+        else members.delete(cid);
+      }
     }
 
     // Only campaigns live NOW go into stamps; the scheduler re-syncs when a

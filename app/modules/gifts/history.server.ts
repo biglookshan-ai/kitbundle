@@ -65,6 +65,7 @@ export function describeChanges(prev: GiftCampaign, next: GiftCampaign, tz: stri
   out.push(...refDiff("Excluded collections", prev.excludeCollections, next.excludeCollections));
   out.push(...listDiff("Excluded tags", prev.excludeTags, next.excludeTags));
   out.push(...listDiff("Excluded brands", prev.excludeVendors, next.excludeVendors));
+  out.push(...listDiff("Excluded variant options", prev.excludeOptions ?? [], next.excludeOptions ?? []));
   out.push(...listDiff("Excluded types", prev.excludeTypes, next.excludeTypes));
   out.push(...refDiff("Gifts", prev.giftProducts, next.giftProducts));
   for (const g of next.giftProducts) {

@@ -75,6 +75,12 @@ export type GiftCampaign = {
   excludeCollections: Ref[];
   excludeVendors: string[];
   excludeTypes: string[];
+  /**
+   * Variant carve-out: a trigger product's variants whose option values match
+   * any of these (e.g. "RF", "L", "X", "Z" mirrorless mounts) don't count; the
+   * product still triggers with its other variants (written as `triggerVariants`).
+   */
+  excludeOptions: string[];
   giftProducts: Ref[]; // the gift set (for a deal: the discounted products)
   /**
    * "gift" = the reward products are free (classic gift with purchase).
@@ -111,7 +117,7 @@ export function hasTrigger(c: GiftCampaign): boolean {
 
 /** Short human summary of what triggers a campaign ("2 products, tag: sale"). */
 export function triggerSummary(c: GiftCampaign): string {
-  if (c.allProducts && !(c.excludeProducts.length + c.excludeCollections.length + c.excludeTags.length + c.excludeVendors.length + c.excludeTypes.length))
+  if (c.allProducts && !(c.excludeProducts.length + c.excludeCollections.length + c.excludeTags.length + c.excludeVendors.length + c.excludeTypes.length + (c.excludeOptions?.length ?? 0)))
     return "All products";
   if (c.allProducts) return "All products (with exclusions)";
   const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
@@ -127,7 +133,8 @@ export function triggerSummary(c: GiftCampaign): string {
     c.excludeCollections.length +
     c.excludeTags.length +
     c.excludeVendors.length +
-    c.excludeTypes.length;
+    c.excludeTypes.length +
+    (c.excludeOptions?.length ?? 0);
   if (ex) out += ` (${ex} exclusion${ex === 1 ? "" : "s"})`;
   return out;
 }
@@ -229,6 +236,7 @@ export function emptyCampaign(): GiftCampaign {
     excludeCollections: [],
     excludeVendors: [],
     excludeTypes: [],
+    excludeOptions: [],
     giftProducts: [],
     kind: "gift",
     dealPercent: 10,
@@ -338,6 +346,7 @@ export function rowToCampaign(row: any): GiftCampaign {
     excludeCollections: parseRefs(row.excludeCollectionsJson),
     excludeVendors: parseStrings(row.excludeVendorsJson),
     excludeTypes: parseStrings(row.excludeTypesJson),
+    excludeOptions: parseStrings(row.excludeOptionsJson),
     giftProducts: parseRefs(row.giftProductsJson).map((g) => ({
       ...g,
       // Older campaigns had one quantity for every gift; seed each gift with it.

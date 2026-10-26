@@ -16,6 +16,12 @@
 - (待定)App Store 提审:目前仅自家店使用,是否上架待用户决定
 
 ## 🏁 最近完成
+- **2026-10-26 按选项值排除款式(Smart Fusion × 兼容镜头:无反卡口不算)**:
+  - 🚫 活动的「Exclude」里新增「Variants with these option values」(比如 RF、L、X、Z、MFT、EF-M、DL):产品里选项值命中的款式不算触发,产品的其他款式照样算;全部款式都命中的产品不算
+  - 🔁 同步时读触发产品的款式选项(只读),把允许的款式写进产品标记的 `triggerVariants` —— 折扣程序本来就认它(别的款式不打折),**不用重新部署 Function**;主题读同一份决定镜头页卡片显示 / 隐藏
+  - 🔤 匹配不分大小写、忽略「Mount」、按整词(L 匹配 L-Mount / Leica L,不匹配 PL;EF-M 不匹配 EF)
+  - 🔗 网站更新中心一键开加购优惠可带 `exopt=RF,L,…` 预填
+  - 🗃 迁移 `20261026000000_gift_exclude_options`(GiftCampaign 加 excludeOptionsJson);测试:匹配规则 3 个 + 引擎全量 / 单产品同步一致 1 个
 - **2026-10-23 从网站更新中心一键设加购优惠** —— 网站更新中心(联合推广)里点「在 KitBundle 设置折扣」,直接打开一个**已经填好**的新加购优惠:
   - 🔗 带过来的参数:`?deal=1&pct=&title=&trigger=<兼容产品合集>&reward=<推广产品合集>`,类型自动选 Add-on deal、触发 = 兼容产品合集、打折 = 推广产品合集、全部款式参与
   - 👀 只是预填,人检查后点保存才生效;合集 id 只认 `gid://shopify/Collection/<数字>`,查不到的合集留空

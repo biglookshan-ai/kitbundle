@@ -161,6 +161,7 @@ export async function saveCampaign(
     excludeCollectionsJson: JSON.stringify(c.excludeCollections ?? []),
     excludeVendorsJson: JSON.stringify(cleanStrings(c.excludeVendors)),
     excludeTypesJson: JSON.stringify(cleanStrings(c.excludeTypes)),
+    excludeOptionsJson: JSON.stringify(cleanStrings(c.excludeOptions ?? [])),
     giftProductsJson: JSON.stringify(
       c.giftProducts.map((g) => ({ ...g, qty: giftQty(g) })),
     ),
