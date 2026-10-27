@@ -22,6 +22,9 @@ query RunInput {
         amountPerQuantity {
           amount
         }
+        compareAtAmountPerQuantity {
+          amount
+        }
       }
       cgpGrp: attribute(key: "_cgp_grp") {
         value

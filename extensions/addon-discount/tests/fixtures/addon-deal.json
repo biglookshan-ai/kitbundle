@@ -20,7 +20,8 @@
             "cost": {
               "amountPerQuantity": {
                 "amount": "1500"
-              }
+              },
+              "compareAtAmountPerQuantity": null
             },
             "cgpGrp": null,
             "cgpFor": null,
@@ -46,7 +47,8 @@
             "cost": {
               "amountPerQuantity": {
                 "amount": "650"
-              }
+              },
+              "compareAtAmountPerQuantity": null
             },
             "cgpGrp": null,
             "cgpFor": null,

@@ -36,6 +36,14 @@ describe("add-on deals", () => {
     reset();
     expect(deals([lens(1), item(11, 1, 600)])).toEqual({ L2: [1, "10.0"] });
   });
+  it("reward already on sale → label says extra; not on sale → plain", () => {
+    reset();
+    const sale = { cost: { amountPerQuantity: { amount: "65" }, compareAtAmountPerQuantity: { amount: "99" } } };
+    const msg = (lines) => out(lines).find((d) => /^Bundle offer/.test(d.message))?.message;
+    expect(msg([lens(1), item(11, 1, 65, sale)])).toBe("Bundle offer: extra 10% off");
+    reset();
+    expect(msg([lens(1), item(11, 1, 600)])).toBe("Bundle offer 10% off");
+  });
   it("no trigger in the cart → full price", () => {
     reset();
     expect(deals([item(11, 1, 600)])).toEqual({});

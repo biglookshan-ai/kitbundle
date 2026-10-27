@@ -710,9 +710,12 @@ export function run(input) {
     // ADD-ON DEAL reward line: units + % pre-computed in 2d.
     const deal = dealQty.get(line.id);
     if (deal && deal.qty > 0) {
-      // Short plain ASCII (checkout upper-cases discount labels).
+      // Short plain ASCII (checkout upper-cases discount labels). Reward already
+      // on sale (compare-at above its price) → the deal comes on top: "extra".
+      const unit = Number(line?.cost?.amountPerQuantity?.amount) || 0;
+      const was = Number(/** @type {any} */ (line)?.cost?.compareAtAmountPerQuantity?.amount) || 0;
       discounts.push({
-        message: `Bundle offer ${deal.pct}% off`,
+        message: was > unit ? `Bundle offer: extra ${deal.pct}% off` : `Bundle offer ${deal.pct}% off`,
         targets: [{ cartLine: { id: line.id, quantity: deal.qty } }],
         value: { percentage: { value: deal.pct.toFixed(1) } },
       });
