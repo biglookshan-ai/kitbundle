@@ -16,6 +16,9 @@
 - (待定)App Store 提审:目前仅自家店使用,是否上架待用户决定
 
 ## 🏁 最近完成
+- **2026-10-27 加购优惠的结账折扣名写「extra」**(版本 kitbundle-119,用户自己跑的 app deploy):
+  - 🏷️ 打折的产品本身在打折(有划线原价)时,结账 / 购物车的折扣名是「Bundle offer: extra 10% off」;没在打折还是「Bundle offer 10% off」。折扣程序多读一个购物车行的划线价 `compareAtAmountPerQuantity`
+  - ✅ 实测:Smart Fusion £65(原价 £99)+ 镜头 → 购物车显示「Bundle offer: extra 10% off」,£58.50;一支镜头只打一件;前台模块 addon-save.js / .css 发布后照常加载
 - **2026-10-26 按选项值排除款式(Smart Fusion × 兼容镜头:无反卡口不算)**:
   - 🚫 活动的「Exclude」里新增「Variants with these option values」(比如 RF、L、X、Z、MFT、EF-M、DL):产品里选项值命中的款式不算触发,产品的其他款式照样算;全部款式都命中的产品不算
   - 🔁 同步时读触发产品的款式选项(只读),把允许的款式写进产品标记的 `triggerVariants` —— 折扣程序本来就认它(别的款式不打折),**不用重新部署 Function**;主题读同一份决定镜头页卡片显示 / 隐藏
