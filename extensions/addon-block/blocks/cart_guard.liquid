@@ -1,0 +1,14 @@
+{%- comment -%}
+  KitBundle cart guard (app embed, site-wide). Keeps gifts / included parts
+  one-to-one with the product they came with: removing or reducing that
+  product removes or reduces them. Included parts aren't links in the cart.
+{%- endcomment -%}
+<script src="{{ 'cart-guard.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "KitBundle cart guard",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}

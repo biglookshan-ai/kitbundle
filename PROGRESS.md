@@ -16,6 +16,10 @@
 - (待定)App Store 提审:目前仅自家店使用,是否上架待用户决定
 
 ## 🏁 最近完成
+- **2026-11-05 包含项不能点 + 购物车守卫**(代码已推,**待 app deploy**):
+  - 🚫 产品页「Includes」里的配件不再是链接(图和名字都点不进产品页)
+  - 🛡 新 App embed「KitBundle cart guard」(主题编辑器 → App embeds 打开一次):主产品删掉 / 减少后,对应的赠品 / 包含项自动删掉 / 减到相符数量;购物车里包含项的产品链接去掉
+  - 🏷 赠品行多三个隐藏属性 `_cgp_main`(主产品款式 id)/ `_cgp_per`(每件主产品配几件)/ `_cgp_inc`(包含项);只管本版本之后加进购物车的行,旧行照旧(结账校验仍兜底)
 - **2026-11-05 赠品「包含项」+「不单独销售」**(kitbundle-120):
   - 🧾 活动可选「Included with the product」:产品页显示「Includes」(不显示价格 / FREE / No thanks),购物车行写「Included with: …」,结账折扣名 INCLUDED
   - 🔒「Not sold separately」:同步给赠品产品打标记(custom.kb_gift_only + seo.hidden),它自己的产品页去掉加购按钮;新增**结账校验程序 gift-guard**:没有足够的主产品就下不了单(规则同折扣:日期、允许的款式、多活动优先级),快速结账也拦

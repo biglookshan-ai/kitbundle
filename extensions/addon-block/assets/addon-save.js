@@ -3388,6 +3388,12 @@
               var gcampInc = (giftCampaigns || []).filter(function (x) {
                 return x.id === it._giftCampId;
               })[0];
+              // For the site-wide cart guard: which main variant this gift came
+              // with and how many per main unit, so removing / reducing the main
+              // removes / reduces its gifts (one set per item bought).
+              it.properties._cgp_main = String(readMainVariantId() || "");
+              it.properties._cgp_per = String(gcampInc ? giftQtyOf(gcampInc, it.handle) : 1);
+              if (gcampInc && gcampInc.included) it.properties._cgp_inc = "1";
               if (gcampInc && gcampInc.included) {
                 it.properties["Included with"] = (forLabel || "").replace(/^with /, "") || "your purchase";
               } else {
