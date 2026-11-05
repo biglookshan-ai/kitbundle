@@ -3918,11 +3918,16 @@
           var stop = function (e) {
             e.stopPropagation();
           };
-          var thumb = el("a", "cgp-free__thumb");
-          thumb.href = href;
-          thumb.target = "_blank";
-          thumb.rel = "noopener";
-          thumb.addEventListener("click", stop);
+          // "Included" items aren't sold on their own: plain image + name, no
+          // link to their (button-less) product page.
+          var linkable = !c.included;
+          var thumb = el(linkable ? "a" : "span", "cgp-free__thumb");
+          if (linkable) {
+            thumb.href = href;
+            thumb.target = "_blank";
+            thumb.rel = "noopener";
+            thumb.addEventListener("click", stop);
+          }
           var img =
             data && (data.featured_image || (data.images && data.images[0]));
           if (img) {
@@ -3936,13 +3941,15 @@
 
           var info = el("div", "cgp-free__info");
           var nameRow = el("div", "cgp-free__name-row");
-          var nameEl = el("a", "cgp-free__name");
+          var nameEl = el(linkable ? "a" : "span", "cgp-free__name");
           // Internal parts are often named "#…"; shoppers shouldn't see the "#".
           nameEl.textContent = String((data && data.title) || h).replace(/^[#\s]+/, "") || h;
-          nameEl.href = href;
-          nameEl.target = "_blank";
-          nameEl.rel = "noopener";
-          nameEl.addEventListener("click", stop);
+          if (linkable) {
+            nameEl.href = href;
+            nameEl.target = "_blank";
+            nameEl.rel = "noopener";
+            nameEl.addEventListener("click", stop);
+          }
           nameRow.appendChild(nameEl);
           // Struck original price so the customer sees the gift's value
           // (updates to the chosen variant when a variant picker is shown).
