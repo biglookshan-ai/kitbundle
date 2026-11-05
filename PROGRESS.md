@@ -16,6 +16,11 @@
 - (待定)App Store 提审:目前仅自家店使用,是否上架待用户决定
 
 ## 🏁 最近完成
+- **2026-11-05 赠品「包含项」+「不单独销售」**(kitbundle-120):
+  - 🧾 活动可选「Included with the product」:产品页显示「Includes」(不显示价格 / FREE / No thanks),购物车行写「Included with: …」,结账折扣名 INCLUDED
+  - 🔒「Not sold separately」:同步给赠品产品打标记(custom.kb_gift_only + seo.hidden),它自己的产品页去掉加购按钮;新增**结账校验程序 gift-guard**:没有足够的主产品就下不了单(规则同折扣:日期、允许的款式、多活动优先级),快速结账也拦
+  - ⚠️ 需在 Shopify 设置 → 结账 → Checkout rules 里启用「KitBundle gift guard」一次
+  - 对客文案去掉内部「#」前缀,行属性用括号代替破折号
 - **2026-10-27 加购优惠的结账折扣名写「extra」**(版本 kitbundle-119,用户自己跑的 app deploy):
   - 🏷️ 打折的产品本身在打折(有划线原价)时,结账 / 购物车的折扣名是「Bundle offer: extra 10% off」;没在打折还是「Bundle offer 10% off」。折扣程序多读一个购物车行的划线价 `compareAtAmountPerQuantity`
   - ✅ 实测:Smart Fusion £65(原价 £99)+ 镜头 → 购物车显示「Bundle offer: extra 10% off」,£58.50;一支镜头只打一件;前台模块 addon-save.js / .css 发布后照常加载
