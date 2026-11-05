@@ -962,11 +962,15 @@ export default function GiftCampaignEditor() {
               </Field>
               <Field
                 label="Picker prompt"
-                help="Shown above the gift options on the product page. Customers can also pick “No thanks”."
+                help={
+                  c.rewardMode === "choice"
+                    ? "Shown above the gift options on the product page. Customers can also pick “No thanks”."
+                    : "Optional line above the gifts. Leave empty to show nothing (every gift is added, nothing to choose)."
+                }
               >
                 <Input
                   value={c.subtitle}
-                  placeholder="Choose your free gift:"
+                  placeholder={c.rewardMode === "choice" ? "Choose your free gift:" : "(none)"}
                   onChange={(e) => patch({ subtitle: e.target.value })}
                 />
               </Field>

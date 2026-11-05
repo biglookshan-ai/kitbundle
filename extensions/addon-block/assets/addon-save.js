@@ -3811,8 +3811,12 @@
             c.included ? "Includes" : c.badge || "🎁 Free gift",
           ),
         );
+        // Only "Customer chooses" needs the pick prompt; when every gift is
+        // given (or included) show a line only if the merchant wrote their own.
         var subText = String(c.subtitle || "").trim();
-        if (!c.included || (subText && subText !== "Choose your free gift:")) {
+        var picks = !c.included && c.rewardMode === "choice";
+        if (subText === "Choose your free gift:" && !picks) subText = "";
+        if (picks || subText) {
           section.appendChild(
             el("div", "cgp-free__sub", subText || "Choose your free gift:"),
           );
