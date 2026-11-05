@@ -10,6 +10,25 @@
   {%- assign has_gifts = true -%}
 {%- endif -%}
 
+{%- comment -%}
+  "Not sold separately" (set by KitBundle on parts given with another product,
+  often £0): no add-to-cart here. The checkout rule blocks it on its own too.
+{%- endcomment -%}
+{%- assign kb_gift_only = product.metafields.custom.kb_gift_only -%}
+{%- if kb_gift_only != blank -%}
+  <style>
+    form[action*="/cart/add"] [name="add"],
+    form[action*="/cart/add"] .product-form__submit,
+    form[action*="/cart/add"] .product-form__quantity,
+    form[action*="/cart/add"] quantity-input,
+    .product-form__quantity,
+    .shopify-payment-button { display: none !important; }
+  </style>
+  <div class="cgp-gift-only">
+    Included with {{ kb_gift_only.value.with | default: 'another product' | escape }}. Not sold separately.
+  </div>
+{%- endif -%}
+
 {%- if has_addon or has_gifts -%}
   <div
     class="cgp-addon"

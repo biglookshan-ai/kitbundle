@@ -388,6 +388,8 @@ export default function GiftCampaigns() {
                       </Link>
                       <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill>
                       {timingHint(c, state) ? <Pill tone="info">{timingHint(c, state)}</Pill> : null}
+                      {c.kind !== "deal" && c.presentation === "included" ? <Pill tone="info">Included</Pill> : null}
+                      {c.kind !== "deal" && c.notSoldSeparately ? <Pill>Not sold separately</Pill> : null}
                       {c.exclusive ? <Pill tone="warn">Exclusive</Pill> : null}
                       {c.priority ? <Pill>{`Priority ${c.priority}`}</Pill> : null}
                     </div>

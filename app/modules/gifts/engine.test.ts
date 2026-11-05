@@ -23,6 +23,8 @@ type Prod = { id: string; tags: string[]; vendor: string; productType: string; c
 let products: Prod[];
 let stamps: Record<string, string>;
 let writes: string[];
+// Other product metafields written by the engine: "gid ns.key" → value.
+let meta: Record<string, string>;
 let variantOpts: Record<string, Array<{ id: string; values: string[] }>>; // product gid → variants
 
 const node = (p: Prod) => ({
@@ -78,6 +80,16 @@ const admin = {
       }
       return reply({ metafieldsSet: { userErrors: [] } });
     }
+    if (query.includes("GiftOnlySeo"))
+      return reply({ nodes: v.ids.map((id: string) => ({ id, seo: meta[`${id} seo.hidden`] ? { value: meta[`${id} seo.hidden`] } : null })) });
+    if (query.includes("GiftOnlySet")) {
+      for (const m of v.metafields) meta[`${m.ownerId} ${m.namespace}.${m.key}`] = m.value;
+      return reply({ metafieldsSet: { userErrors: [] } });
+    }
+    if (query.includes("GiftOnlyDel")) {
+      for (const m of v.metafields) delete meta[`${m.ownerId} ${m.namespace}.${m.key}`];
+      return reply({ metafieldsDelete: { userErrors: [] } });
+    }
     throw new Error(`unexpected query ${query.slice(0, 60)}`);
   },
 };
@@ -122,6 +134,7 @@ beforeEach(() => {
   ];
   stamps = {};
   writes = [];
+  meta = {};
   variantOpts = {};
   db.giftCampaign = [
     campaign("A", { triggerTagsJson: '["sale"]', excludeTagsJson: '["clearance"]' }),
@@ -343,5 +356,31 @@ describe("gift sync engine", () => {
     await syncProduct(admin, "s", P(5));
     expect(writes).toEqual([]); // the webhook path computes the same
   });
-});
 
+  it("marks 'not sold separately' gifts, hides them from search, and cleans up", async () => {
+    const A = db.giftCampaign.find((c) => c.id === "A")!;
+    A.notSoldSeparately = true;
+    A.presentation = "included";
+    await syncAll(admin, "s");
+    const g = P(99);
+    expect(JSON.parse(meta[`${g} custom.kb_gift_only`])).toEqual({ with: "A" });
+    expect(meta[`${g} seo.hidden`]).toBe("1");
+    expect(JSON.parse(stamps[P(1)]).find((e: any) => e.id === "A").included).toBe(true);
+    // Turning it off removes both marks.
+    A.notSoldSeparately = false;
+    await syncAll(admin, "s");
+    expect(meta[`${g} custom.kb_gift_only`]).toBeUndefined();
+    expect(meta[`${g} seo.hidden`]).toBeUndefined();
+    expect(db.giftOnlyMark.length).toBe(0);
+  });
+
+  it("leaves a merchant's own seo.hidden alone", async () => {
+    meta[`${P(99)} seo.hidden`] = "1";
+    const A = db.giftCampaign.find((c) => c.id === "A")!;
+    A.notSoldSeparately = true;
+    await syncAll(admin, "s");
+    A.notSoldSeparately = false;
+    await syncAll(admin, "s");
+    expect(meta[`${P(99)} seo.hidden`]).toBe("1");
+  });
+});

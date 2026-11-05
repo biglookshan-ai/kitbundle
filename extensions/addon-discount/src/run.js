@@ -489,6 +489,9 @@ export function run(input) {
   const giftQual = new Map();
   /** @type {Map<string, {k: number, q: number, qmap: Record<string, number>}>} */
   const giftRule = new Map();
+  // Campaigns shown as "included" (part of the product, not a gift).
+  /** @type {Set<string>} */
+  const includedCamps = new Set();
   /** @type {Map<string, Set<string>>} */
   const giftIdsByCamp = new Map();
   // Per campaign: product-id-tail -> Set of offered variant-id-tails. A product
@@ -563,6 +566,7 @@ export function run(input) {
       }
       giftQual.set(cid, (giftQual.get(cid) ?? 0) + q);
       if (!giftRule.has(cid)) giftRule.set(cid, giftRuleOf(e));
+      if (e.included) includedCamps.add(cid);
       if (!giftIdsByCamp.has(cid))
         giftIdsByCamp.set(
           cid,
@@ -732,7 +736,7 @@ export function run(input) {
         // Which main a gift came with is on the line itself as the visible
         // "Free gift" property ("with <product> – <variant>").
         discounts.push({
-          message: "FREE GIFT",
+          message: includedCamps.has(giftCamp) ? "INCLUDED" : "FREE GIFT",
           targets: [{ cartLine: { id: line.id, quantity: fq } }],
           value: { percentage: { value: "100.0" } },
         });

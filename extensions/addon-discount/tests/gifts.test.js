@@ -149,4 +149,14 @@ describe("gift rules", () => {
     ];
     expect(freeOf(lines)).toEqual({ L2: 4, L3: 2 });
   });
+
+  it("'included' campaigns label the line INCLUDED instead of FREE GIFT", () => {
+    reset();
+    const out = run({
+      shop: { localTime: { date: "2026-11-05" } },
+      discountNode: { metafield: null, giftMeta: null },
+      cart: { lines: [main(1, [{ id: "c1", rewardMode: "all", giftIds: ["11"], included: true }]), gift(11, 1, 50)] },
+    });
+    expect(out.discounts.map((d) => d.message)).toEqual(["INCLUDED"]);
+  });
 });

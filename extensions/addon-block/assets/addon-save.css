@@ -2477,3 +2477,23 @@ a.cgp-modal__cname:hover {
   opacity: 0.35;
   cursor: not-allowed;
 }
+
+/* "Included" items: part of the product, nothing to tick. */
+.cgp-free--included .cgp-free__row {
+  cursor: default;
+}
+.cgp-free__qty {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cgp-muted);
+}
+
+/* "Not sold separately" note on a gift-only product page. */
+.cgp-gift-only {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: var(--cgp-r-panel, 6px);
+  background: #f9f9f9;
+  font-size: 14px;
+  color: inherit;
+}

@@ -86,6 +86,12 @@ model GiftCampaign {
   // products get `dealPercent`% off (one discounted unit per qualifying unit,
   // recognised however it was added to the cart). 2026-10-22, Smart Fusion × lenses.
   kind          String    @default("gift")
+  // Gift only: "gift" = shown as a free gift the shopper can decline;
+  // "included" = shown as part of the product ("Includes"), no price, no opt-out.
+  presentation  String    @default("gift")
+  // Gift only: the reward products can't be bought on their own — the checkout
+  // rule blocks them unless the cart has enough of a qualifying product.
+  notSoldSeparately Boolean @default(false)
   dealPercent   Int       @default(10)
   // Deal only: collections whose products are ALSO discounted (on top of
   // giftProductsJson), expanded into the trigger stamps' giftIds at sync time.
@@ -210,6 +216,18 @@ model GiftCampaignEvent {
   createdAt  DateTime @default(now())
 
   @@index([shop, campaignId, createdAt])
+}
+
+// Gifts module — products marked "not sold separately" (custom.kb_gift_only on
+// the product). `seoHiddenSet` = we also set seo.hidden, so we remove it again
+// when the mark goes (and leave a merchant's own setting alone).
+model GiftOnlyMark {
+  shop         String
+  productId    String
+  seoHiddenSet Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+
+  @@id([shop, productId])
 }
 
 // Per-shop app settings (opt-in behaviors). One row per shop.

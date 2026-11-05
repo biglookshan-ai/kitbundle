@@ -175,6 +175,8 @@ function campaignEntry(c: GiftCampaign, tz: string, rewardIds: string[] = []) {
     // Add-on deal (2026-10-22): the reward products get `pct`% off, one unit per
     // qualifying unit, recognised by product id however they were added.
     ...(c.kind === "deal" ? { kind: "deal", pct: dealPct(c) } : {}),
+    // Shown as part of the product ("Includes"), no price, can't be declined.
+    ...(c.kind !== "deal" && c.presentation === "included" ? { included: true } : {}),
     startsAt: c.startsAt || "",
     endsAt: c.endsAt || "",
   };
@@ -593,6 +595,128 @@ async function rewardIdsFor(ctx: ReturnType<typeof newCtx>, campaigns: GiftCampa
   return out;
 }
 
+/* ------------------------------------------------------------------ */
+/* "Not sold separately" gift products                                 */
+/* ------------------------------------------------------------------ */
+
+const GIFT_ONLY_NS = "custom";
+const GIFT_ONLY_KEY = "kb_gift_only";
+
+/** "PDMOVIE SMART FUSION…" or "A or B" / "A, B or more" — what to buy it with. */
+function withText(cs: GiftCampaign[]): string {
+  const names = [
+    ...new Set(
+      cs.flatMap((c) => [
+        ...c.triggerProducts.map((p) => p.title),
+        ...c.triggerCollections.map((x) => x.title),
+        ...(c.allProducts ? ["any product"] : []),
+      ]),
+    ),
+  ].filter(Boolean);
+  if (!names.length) return cs[0]?.title || "a qualifying product";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} or ${names[1]}`;
+  return `${names[0]}, ${names[1]} or more`;
+}
+
+/**
+ * Gift products of "not sold separately" campaigns get `custom.kb_gift_only`
+ * ({ with: "…" }): the checkout rule blocks them without enough qualifying
+ * items, and the product page hides its add button. Also hidden from search
+ * (seo.hidden) unless the merchant had already set that. Marks are removed
+ * once no campaign needs them. Applies whatever the campaign's status: a
+ * £0 part must never be buyable on its own.
+ */
+async function syncGiftOnly(
+  admin: AdminGraphql,
+  shop: string,
+  campaigns: GiftCampaign[],
+): Promise<string[]> {
+  const byProduct = new Map<string, GiftCampaign[]>();
+  for (const c of campaigns) {
+    if (c.kind === "deal" || !c.notSoldSeparately) continue;
+    for (const g of c.giftProducts) {
+      const arr = byProduct.get(g.id) ?? [];
+      arr.push(c);
+      byProduct.set(g.id, arr);
+    }
+  }
+  const marks = await prisma.giftOnlyMark.findMany({ where: { shop } });
+  const marked = new Map(marks.map((m) => [m.productId, m]));
+  if (!byProduct.size && !marks.length) return [];
+  const errors: string[] = [];
+
+  // New marks: remember whether seo.hidden was already set by someone else.
+  const fresh = [...byProduct.keys()].filter((id) => !marked.has(id));
+  const hadHidden = new Set<string>();
+  for (let i = 0; i < fresh.length; i += 50) {
+    const json = await gql(
+      admin,
+      `#graphql
+        query GiftOnlySeo($ids: [ID!]!) {
+          nodes(ids: $ids) { ... on Product { id seo: metafield(namespace: "seo", key: "hidden") { value } } }
+        }`,
+      { ids: fresh.slice(i, i + 50) },
+    );
+    for (const n of json?.data?.nodes ?? []) if (n?.seo?.value) hadHidden.add(n.id);
+  }
+
+  const sets: any[] = [];
+  for (const [id, cs] of byProduct) {
+    sets.push({
+      ownerId: id,
+      namespace: GIFT_ONLY_NS,
+      key: GIFT_ONLY_KEY,
+      type: "json",
+      value: JSON.stringify({ with: withText(cs) }),
+    });
+    if (!marked.has(id) && !hadHidden.has(id)) {
+      sets.push({ ownerId: id, namespace: "seo", key: "hidden", type: "number_integer", value: "1" });
+    }
+  }
+  for (let i = 0; i < sets.length; i += 25) {
+    const json = await gql(
+      admin,
+      `#graphql
+        mutation GiftOnlySet($metafields: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $metafields) { userErrors { message } }
+        }`,
+      { metafields: sets.slice(i, i + 25) },
+    );
+    errors.push(...(json?.data?.metafieldsSet?.userErrors ?? []).map((e: any) => e.message));
+  }
+  for (const id of fresh) {
+    await prisma.giftOnlyMark.create({
+      data: { shop, productId: id, seoHiddenSet: !hadHidden.has(id) },
+    });
+  }
+
+  // Marks no campaign needs any more.
+  const gone = marks.filter((m) => !byProduct.has(m.productId));
+  const dels: any[] = [];
+  for (const m of gone) {
+    dels.push({ ownerId: m.productId, namespace: GIFT_ONLY_NS, key: GIFT_ONLY_KEY });
+    if (m.seoHiddenSet) dels.push({ ownerId: m.productId, namespace: "seo", key: "hidden" });
+  }
+  for (let i = 0; i < dels.length; i += 25) {
+    const json = await gql(
+      admin,
+      `#graphql
+        mutation GiftOnlyDel($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) { userErrors { message } }
+        }`,
+      { metafields: dels.slice(i, i + 25) },
+    );
+    errors.push(...(json?.data?.metafieldsDelete?.userErrors ?? []).map((e: any) => e.message));
+  }
+  if (gone.length) {
+    await prisma.giftOnlyMark.deleteMany({
+      where: { shop, productId: { in: gone.map((m) => m.productId) } },
+    });
+  }
+  return errors;
+}
+
 export function syncAll(
   admin: AdminGraphql,
   shop: string,
@@ -693,6 +817,9 @@ export function syncAll(
       prisma.giftCoverage.deleteMany({ where: { shop } }),
       prisma.giftCoverage.createMany({ data, skipDuplicates: true }),
     ]);
+
+    // "Not sold separately" markers on gift products (checkout rule + page).
+    errors.push(...(await syncGiftOnly(admin, shop, campaigns)));
 
     await log(shop, kind, union.size, toWrite.size, errors);
     // Keep the log short.

@@ -1,0 +1,35 @@
+# Gift guard: "not sold separately" gift products need enough qualifying items.
+query CartValidationsGenerateRunInput {
+  shop {
+    localTime {
+      date
+    }
+  }
+  cart {
+    lines {
+      quantity
+      cgpGift: attribute(key: "_cgp_gift") {
+        value
+      }
+      cgpFor: attribute(key: "_addon_for") {
+        value
+      }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          id
+          product {
+            id
+            title
+            giftOnly: metafield(namespace: "custom", key: "kb_gift_only") {
+              value
+            }
+            giftTrigger: metafield(namespace: "custom", key: "gift_trigger") {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}

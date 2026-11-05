@@ -3026,7 +3026,7 @@
   // packing slip, so no emoji or fancy punctuation and keep it brief.
   // Readable "which product is this gift for": the main product title
   // (shortened) plus the selected variant, e.g.
-  // "with PDMOVIE SMART FUSION Autofocus Control… – Smart Fusion + Motor".
+  // "with PDMOVIE SMART FUSION Autofocus Control… (Smart Fusion + Motor)".
   function giftForLabel(ctx) {
     var d = ctx.mainData || {};
     var t = String(d.title || "").replace(/\s+/g, " ").trim();
@@ -3036,7 +3036,7 @@
     var v = (d.variants || []).filter(function (x) {
       return String(x.id) === vid;
     })[0];
-    var vt = v && v.title && v.title !== "Default Title" ? " – " + v.title : "";
+    var vt = v && v.title && v.title !== "Default Title" ? " (" + v.title + ")" : "";
     return t ? "with " + t + vt : "";
   }
 
@@ -3385,7 +3385,14 @@
               // Visible on the cart, checkout, order, emails and packing apps:
               // why this line is free and which product it came with.
               var forLabel = giftForLabel(ctx);
-              it.properties["Free gift"] = forLabel || "with your purchase";
+              var gcampInc = (giftCampaigns || []).filter(function (x) {
+                return x.id === it._giftCampId;
+              })[0];
+              if (gcampInc && gcampInc.included) {
+                it.properties["Included with"] = (forLabel || "").replace(/^with /, "") || "your purchase";
+              } else {
+                it.properties["Free gift"] = forLabel || "with your purchase";
+              }
               // Time-limited gift: a VISIBLE property, so the end date shows on
               // the cart line, at checkout, on the order and the packing slip —
               // and if it lapses, the line explains why it's no longer free.
@@ -3790,13 +3797,20 @@
         if (!idx.length) return;
         any = true;
 
-        var section = el("div", "cgp-free");
+        var section = el("div", "cgp-free" + (c.included ? " cgp-free--included" : ""));
         section.appendChild(
-          el("div", "cgp-free__heading", c.badge || "🎁 Free gift"),
+          el(
+            "div",
+            "cgp-free__heading",
+            c.included ? "Includes" : c.badge || "🎁 Free gift",
+          ),
         );
-        section.appendChild(
-          el("div", "cgp-free__sub", c.subtitle || "Choose your free gift:"),
-        );
+        var subText = String(c.subtitle || "").trim();
+        if (!c.included || (subText && subText !== "Choose your free gift:")) {
+          section.appendChild(
+            el("div", "cgp-free__sub", subText || "Choose your free gift:"),
+          );
+        }
         // Time-limited offer: say plainly when it ends.
         if (c.endsLabel) {
           section.appendChild(
@@ -3863,8 +3877,10 @@
 
           // "all" mode: every gift is included (a static check, not a radio);
           // other modes: a radio so the customer picks / declines.
-          var selector;
-          if (c.rewardMode === "all") {
+          var selector = null;
+          if (c.included) {
+            // Part of the product: nothing to tick or untick.
+          } else if (c.rewardMode === "all") {
             var includedNow = giftChoice[c.id] !== GIFT_DECLINE;
             selector = el("span", "cgp-check" + (includedNow ? " is-on" : ""));
             selector.setAttribute("aria-label", "Included free");
@@ -3894,7 +3910,7 @@
               notifyGiftChange();
             });
           }
-          row.appendChild(selector);
+          if (selector) row.appendChild(selector);
 
           // Image + title link to the product page (new tab). stopPropagation
           // keeps the click from toggling the radio.
@@ -3921,7 +3937,8 @@
           var info = el("div", "cgp-free__info");
           var nameRow = el("div", "cgp-free__name-row");
           var nameEl = el("a", "cgp-free__name");
-          nameEl.textContent = (data && data.title) || h;
+          // Internal parts are often named "#…"; shoppers shouldn't see the "#".
+          nameEl.textContent = String((data && data.title) || h).replace(/^[#\s]+/, "") || h;
           nameEl.href = href;
           nameEl.target = "_blank";
           nameEl.rel = "noopener";
@@ -3941,15 +3958,23 @@
           info.appendChild(nameRow);
           // Second line: FREE tag first, then the struck value at the same size.
           var metaRow = el("div", "cgp-free__meta-row");
-          metaRow.appendChild(
-            el(
-              "span",
-              "cgp-free__badge",
-              giftQtyOf(c, h) > 1 ? "FREE ×" + giftQtyOf(c, h) : "FREE",
-            ),
-          );
-          metaRow.appendChild(giftPriceSpan);
-          info.appendChild(metaRow);
+          if (c.included) {
+            // Included: no price, no FREE tag; just the quantity when > 1.
+            if (giftQtyOf(c, h) > 1) {
+              metaRow.appendChild(el("span", "cgp-free__qty", "× " + giftQtyOf(c, h)));
+              info.appendChild(metaRow);
+            }
+          } else {
+            metaRow.appendChild(
+              el(
+                "span",
+                "cgp-free__badge",
+                giftQtyOf(c, h) > 1 ? "FREE ×" + giftQtyOf(c, h) : "FREE",
+              ),
+            );
+            metaRow.appendChild(giftPriceSpan);
+            info.appendChild(metaRow);
+          }
 
           // Variant picker — offer only the variants the merchant chose for this
           // gift (all variants when none are restricted). A single offered variant
@@ -4022,63 +4047,67 @@
           row.appendChild(info);
         });
 
-        // Opt-out row — the customer can decline the free gift entirely.
-        var declineRow = el("label", "cgp-free__row cgp-free__row--decline");
-        list.appendChild(declineRow);
-        var declineInput = el("input", "cgp-free__radio");
-        declineInputRef = declineInput;
-        if (multi) {
-          // Declines every pick; unticking restores the default picks.
-          declineInput.type = "checkbox";
-          declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
-          list.classList.toggle("is-declined", declineInput.checked);
-          declineInput.addEventListener("change", function () {
-            giftChoice[c.id] = declineInput.checked
-              ? GIFT_DECLINE
-              : shownHandles.slice(0, limit);
+        // Opt-out row — the customer can decline the free gift entirely
+        // (not for "included" items: they're part of the product).
+        if (!c.included) {
+          // Opt-out row — the customer can decline the free gift entirely.
+          var declineRow = el("label", "cgp-free__row cgp-free__row--decline");
+          list.appendChild(declineRow);
+          var declineInput = el("input", "cgp-free__radio");
+          declineInputRef = declineInput;
+          if (multi) {
+            // Declines every pick; unticking restores the default picks.
+            declineInput.type = "checkbox";
+            declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
             list.classList.toggle("is-declined", declineInput.checked);
-            syncMulti();
-            notifyGiftChange();
-          });
-        } else if (c.rewardMode === "all") {
-          // A single checkbox that declines the whole set (gifts are otherwise
-          // all included — there's no per-gift radio to opt out of).
-          declineInput.type = "checkbox";
-          declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
-          var applyDeclineState = function (declined) {
-            // Reflect the whole-set decline on every gift's included-check + row.
-            giftCheckEls.forEach(function (chk) {
-              chk.classList.toggle("is-on", !declined);
+            declineInput.addEventListener("change", function () {
+              giftChoice[c.id] = declineInput.checked
+                ? GIFT_DECLINE
+                : shownHandles.slice(0, limit);
+              list.classList.toggle("is-declined", declineInput.checked);
+              syncMulti();
+              notifyGiftChange();
             });
-            list.classList.toggle("is-declined", declined);
-          };
-          applyDeclineState(declineInput.checked);
-          declineInput.addEventListener("change", function () {
-            giftChoice[c.id] = declineInput.checked
-              ? GIFT_DECLINE
-              : handles[0] || "";
+          } else if (c.rewardMode === "all") {
+            // A single checkbox that declines the whole set (gifts are otherwise
+            // all included — there's no per-gift radio to opt out of).
+            declineInput.type = "checkbox";
+            declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
+            var applyDeclineState = function (declined) {
+              // Reflect the whole-set decline on every gift's included-check + row.
+              giftCheckEls.forEach(function (chk) {
+                chk.classList.toggle("is-on", !declined);
+              });
+              list.classList.toggle("is-declined", declined);
+            };
             applyDeclineState(declineInput.checked);
-            notifyGiftChange();
-          });
-        } else {
-          declineInput.type = "radio";
-          declineInput.name = groupName;
-          declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
-          declineInput.addEventListener("change", function () {
-            if (declineInput.checked) giftChoice[c.id] = GIFT_DECLINE;
-            notifyGiftChange();
-          });
+            declineInput.addEventListener("change", function () {
+              giftChoice[c.id] = declineInput.checked
+                ? GIFT_DECLINE
+                : handles[0] || "";
+              applyDeclineState(declineInput.checked);
+              notifyGiftChange();
+            });
+          } else {
+            declineInput.type = "radio";
+            declineInput.name = groupName;
+            declineInput.checked = giftChoice[c.id] === GIFT_DECLINE;
+            declineInput.addEventListener("change", function () {
+              if (declineInput.checked) giftChoice[c.id] = GIFT_DECLINE;
+              notifyGiftChange();
+            });
+          }
+          declineRow.appendChild(declineInput);
+          declineRow.appendChild(
+            el(
+              "span",
+              "cgp-free__decline",
+              c.rewardMode === "all" || multi
+                ? "No thanks — I don't want the free gifts"
+                : "No thanks — I don't want the free gift",
+            ),
+          );
         }
-        declineRow.appendChild(declineInput);
-        declineRow.appendChild(
-          el(
-            "span",
-            "cgp-free__decline",
-            c.rewardMode === "all" || multi
-              ? "No thanks — I don't want the free gifts"
-              : "No thanks — I don't want the free gift",
-          ),
-        );
 
         syncMulti();
         host.appendChild(section);
@@ -4107,7 +4136,10 @@
     giftCampaigns = raw.map(function (e) {
       return {
         id: e.id,
-        rewardMode: e.rewardMode || "fixed",
+        // "Included" campaigns: shown as part of the product, every item, no
+        // opt-out (and no price / FREE tag).
+        included: !!e.included,
+        rewardMode: e.included ? "all" : e.rewardMode || "fixed",
         perQualifying: Number(e.perQualifying) || 1,
         // Unified rule (same fallbacks as the discount Function): k different
         // gifts in choice mode; q of each gift per qualifying unit. Older stamps:

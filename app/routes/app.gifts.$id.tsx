@@ -911,6 +911,49 @@ export default function GiftCampaignEditor() {
           ) : (
           <Panel title="Storefront">
             <div className="kb-stack kb-stack--tight">
+              <div className="kb-lfield__label">How it's shown on the product page</div>
+              <div className="kb-radios">
+                {(
+                  [
+                    { value: "gift", title: "Free gift", desc: "Shown as a free gift with a FREE tag. Customers can choose “No thanks”." },
+                    { value: "included", title: "Included with the product", desc: "Shown under “Includes”: no price, no FREE tag, can't be removed." },
+                  ] as const
+                ).map((m) => (
+                  <label key={m.value} className={`kb-radio${(c.presentation ?? "gift") === m.value ? " is-on" : ""}`}>
+                    <input
+                      type="radio"
+                      name="presentation"
+                      checked={(c.presentation ?? "gift") === m.value}
+                      onChange={() => patch({ presentation: m.value })}
+                    />
+                    <span>
+                      <b>{m.title}</b>
+                      <span className="kb-sub">{m.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div>
+                <Checkbox
+                  label="Not sold separately"
+                  checked={!!c.notSoldSeparately}
+                  onChange={(v) => patch({ notSoldSeparately: v })}
+                />
+                <div className="kb-sub" style={{ marginTop: 4 }}>
+                  For parts that only come with another product (for example £0 items).
+                  Checkout blocks them unless the cart has enough qualifying products,
+                  their own page loses its add-to-cart button, and they're hidden from
+                  search. Needs the “KitBundle gift guard” rule switched on once in
+                  Shopify: Settings → Checkout → Checkout rules.
+                </div>
+                {c.notSoldSeparately && c.rewardMode === "choice" && c.chooseCount < c.giftProducts.length ? (
+                  <div className="kb-field__error" style={{ marginTop: 4 }}>
+                    With “Customer chooses”, checkout only limits the quantity of each
+                    item, not how many different ones. Use “Give every gift” for parts
+                    that must not be bought on their own.
+                  </div>
+                ) : null}
+              </div>
               <Field label="Badge text" help="Shown on product / search.">
                 <Input
                   value={c.badgeText}

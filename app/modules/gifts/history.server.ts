@@ -80,6 +80,10 @@ export function describeChanges(prev: GiftCampaign, next: GiftCampaign, tz: stri
           ? `Reward: customer chooses ${next.chooseCount}`
           : "Reward: first gift only",
     );
+  if ((prev.presentation ?? "gift") !== (next.presentation ?? "gift"))
+    out.push(next.presentation === "included" ? "Shown as included (no price, can't be declined)" : "Shown as a free gift");
+  if (!!prev.notSoldSeparately !== !!next.notSoldSeparately)
+    out.push(next.notSoldSeparately ? "Gifts can't be bought on their own" : "Gifts can be bought on their own again");
   if (prev.priority !== next.priority) out.push(`Priority ${prev.priority} → ${next.priority}`);
   if (prev.exclusive !== next.exclusive)
     out.push(next.exclusive ? "Set to exclusive (doesn't combine)" : "Now combines with other campaigns");

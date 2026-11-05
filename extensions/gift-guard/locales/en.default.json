@@ -1,0 +1,4 @@
+{
+  "name": "KitBundle gift guard",
+  "description": "Blocks checkout when a 'not sold separately' gift is in the cart without enough qualifying products."
+}
