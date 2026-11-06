@@ -147,16 +147,12 @@ function findBundleById(config, bid) {
   return null;
 }
 
-/**
- * Cart/order-facing bundle label: "Name · CODE". Carried in the discount MESSAGE
- * (not a static line property) so the name + code appear only while the kit is
- * complete and vanish the instant the discount stops applying (broken kit).
+/*
+ * Discount names customers see (cart, checkout, order, emails), 11/6: "Bundle & Save N%" (bundle and its limited offer),
+ * "Add-on & Save N%", "Combo deal: extra N%" / "Combo deal N%", "Free gift", "Included". The bundle's own name and
+ * code stay internal: the product block adds them to each bundle line as the hidden property _cgp_kit (staff see it on
+ * the order in admin; customers don't).
  */
-function bundleLabel(group) {
-  const name = (group && group.title) || "Bundle";
-  const code = group && group.code;
-  return code ? `${name} · ${code}` : name;
-}
 
 /** Find the bundle group with this offerId inside a main's config. */
 function findBundleByOffer(config, offerId) {
@@ -341,7 +337,7 @@ export function run(input) {
       if (q <= 0) continue;
       allowance -= q;
       giftDiscounts.push({
-        message: "FREE GIFT",
+        message: "Free gift",
         targets: [{ cartLine: { id: line.id, quantity: q } }],
         value: { percentage: { value: "100.0" } },
       });
@@ -405,7 +401,7 @@ export function run(input) {
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       limited.push({
-        message: `${bundleLabel(group)} · limited ${deep}% off`,
+        message: `Bundle & Save ${deep}%`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: deep.toFixed(1) } },
       });
@@ -719,7 +715,7 @@ export function run(input) {
       const unit = Number(line?.cost?.amountPerQuantity?.amount) || 0;
       const was = Number(/** @type {any} */ (line)?.cost?.compareAtAmountPerQuantity?.amount) || 0;
       discounts.push({
-        message: was > unit ? `Bundle offer: extra ${deal.pct}% off` : `Bundle offer ${deal.pct}% off`,
+        message: was > unit ? `Combo deal: extra ${deal.pct}%` : `Combo deal ${deal.pct}%`,
         targets: [{ cartLine: { id: line.id, quantity: deal.qty } }],
         value: { percentage: { value: deal.pct.toFixed(1) } },
       });
@@ -736,7 +732,7 @@ export function run(input) {
         // Which main a gift came with is on the line itself as the visible
         // "Free gift" property ("with <product> – <variant>").
         discounts.push({
-          message: includedCamps.has(giftCamp) ? "INCLUDED" : "FREE GIFT",
+          message: includedCamps.has(giftCamp) ? "Included" : "Free gift",
           targets: [{ cartLine: { id: line.id, quantity: fq } }],
           value: { percentage: { value: "100.0" } },
         });
@@ -767,7 +763,7 @@ export function run(input) {
           const qty = Math.min(lineQty, cap);
           if (pct > 0 && qty > 0) {
             discounts.push({
-              message: `${bundleLabel(group)} · ${pct}% off`,
+              message: `Bundle & Save ${pct}%`,
               targets: [{ cartLine: { id: line.id, quantity: qty } }],
               value: { percentage: { value: pct.toFixed(1) } },
             });
@@ -828,7 +824,7 @@ export function run(input) {
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       discounts.push({
-        message: `${bundleLabel(bestGroup)} · ${best}% off`,
+        message: `Bundle & Save ${best}%`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: best.toFixed(1) } },
       });
@@ -839,7 +835,7 @@ export function run(input) {
       if (rem <= 0) continue; // not eligible, or the free unit is used up
       freeRemaining.set(pid, rem - 1);
       discounts.push({
-        message: "FREE GIFT",
+        message: "Free gift",
         targets: [{ cartLine: { id: line.id, quantity: 1 } }],
         value: { percentage: { value: "100.0" } },
       });
@@ -857,7 +853,7 @@ export function run(input) {
       remaining.set(pid, rem - qty);
       const capped = clampPercent(e.percent);
       discounts.push({
-        message: `Add-on ${capped}% off`,
+        message: `Add-on & Save ${capped}%`,
         targets: [{ cartLine: { id: line.id, quantity: qty } }],
         value: { percentage: { value: capped.toFixed(1) } },
       });

@@ -31,7 +31,7 @@ const freeOf = (lines) => {
   });
   return Object.fromEntries(
     out.discounts
-      .filter((d) => d.message === "FREE GIFT")
+      .filter((d) => d.message === "Free gift")
       .map((d) => [d.targets[0].cartLine.id, d.targets[0].cartLine.quantity]),
   );
 };
@@ -150,13 +150,13 @@ describe("gift rules", () => {
     expect(freeOf(lines)).toEqual({ L2: 4, L3: 2 });
   });
 
-  it("'included' campaigns label the line INCLUDED instead of FREE GIFT", () => {
+  it("'included' campaigns label the line Included instead of Free gift", () => {
     reset();
     const out = run({
       shop: { localTime: { date: "2026-11-05" } },
       discountNode: { metafield: null, giftMeta: null },
       cart: { lines: [main(1, [{ id: "c1", rewardMode: "all", giftIds: ["11"], included: true }]), gift(11, 1, 50)] },
     });
-    expect(out.discounts.map((d) => d.message)).toEqual(["INCLUDED"]);
+    expect(out.discounts.map((d) => d.message)).toEqual(["Included"]);
   });
 });

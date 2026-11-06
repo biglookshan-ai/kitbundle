@@ -73,7 +73,7 @@
       "discountApplicationStrategy": "ALL",
       "discounts": [
         {
-          "message": "Bundle offer 10% off",
+          "message": "Combo deal 10%",
           "targets": [
             {
               "cartLine": {

@@ -27,7 +27,7 @@ const out = (lines, date = "2026-10-22") =>
 const deals = (lines, date) =>
   Object.fromEntries(
     out(lines, date)
-      .filter((d) => /^Bundle offer/.test(d.message))
+      .filter((d) => /^Combo deal/.test(d.message))
       .map((d) => [d.targets[0].cartLine.id, [d.targets[0].cartLine.quantity, d.value.percentage.value]]),
   );
 
@@ -39,10 +39,10 @@ describe("add-on deals", () => {
   it("reward already on sale → label says extra; not on sale → plain", () => {
     reset();
     const sale = { cost: { amountPerQuantity: { amount: "65" }, compareAtAmountPerQuantity: { amount: "99" } } };
-    const msg = (lines) => out(lines).find((d) => /^Bundle offer/.test(d.message))?.message;
-    expect(msg([lens(1), item(11, 1, 65, sale)])).toBe("Bundle offer: extra 10% off");
+    const msg = (lines) => out(lines).find((d) => /^Combo deal/.test(d.message))?.message;
+    expect(msg([lens(1), item(11, 1, 65, sale)])).toBe("Combo deal: extra 10%");
     reset();
-    expect(msg([lens(1), item(11, 1, 600)])).toBe("Bundle offer 10% off");
+    expect(msg([lens(1), item(11, 1, 600)])).toBe("Combo deal 10%");
   });
   it("no trigger in the cart → full price", () => {
     reset();
@@ -81,7 +81,7 @@ describe("add-on deals", () => {
     reset();
     const gift = { id: "g1", rewardMode: "all", qtyPerGift: 1, giftIds: ["50"] };
     const d = out([lens(1, [DEAL, gift]), item(11, 1, 600), item(50, 1, 20, { cgpGift: { value: "g1" } })]);
-    expect(d.find((x) => x.message === "FREE GIFT")?.targets[0].cartLine.id).toBe("L3");
-    expect(d.find((x) => /^Bundle offer/.test(x.message))?.targets[0].cartLine.id).toBe("L2");
+    expect(d.find((x) => x.message === "Free gift")?.targets[0].cartLine.id).toBe("L3");
+    expect(d.find((x) => /^Combo deal/.test(x.message))?.targets[0].cartLine.id).toBe("L2");
   });
 });

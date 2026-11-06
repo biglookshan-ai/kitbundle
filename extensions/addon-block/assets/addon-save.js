@@ -3295,11 +3295,11 @@
             var p = { _cgp_grp: grp };
             if (b.offerId) p._cgp_lo = b.offerId;
             if (b.bid) p._cgp_bid = b.bid; // which bundle group (main discount)
-            // No visible "Bundle: name (code)" property — a static line property
-            // would linger after the kit is broken. The name + code ride in the
-            // discount MESSAGE instead (see bundleLabel in run.js), so they appear
-            // only while the kit is complete and the discount applies, and vanish
-            // automatically the moment a bundle item is removed.
+            // The bundle's name + code, for staff only (hidden: underscore). Customers
+            // see the discount name "Bundle & Save N%" (run.js) instead, which only
+            // shows while the kit is complete, so no visible property can linger
+            // on a broken kit.
+            p._cgp_kit = b.code ? b.name + " · " + b.code : b.name;
             if (extra) for (var k in extra) p[k] = extra[k];
             return p;
           };
