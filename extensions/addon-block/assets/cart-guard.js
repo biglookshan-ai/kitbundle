@@ -180,6 +180,7 @@
 
     var updates = {};
     var n = 0;
+    var giftLeft = {};
     items.forEach(function (it) {
       var p = props(it);
       if (!p._cgp_gift || !p._cgp_main) return; // older lines: leave alone
@@ -189,8 +190,12 @@
         target = want[k].seen ? 0 : want[k].qty; // one line per part
         want[k].seen = true;
       } else {
+        // Free gifts: at most (main units × per) per gift, summed over its
+        // lines (the same gift can sit on two lines with different labels).
         var per = Math.max(1, parseInt(p._cgp_per, 10) || 1);
-        target = Math.min(it.quantity, (mains[String(p._cgp_main)] || 0) * per);
+        var left = k in giftLeft ? giftLeft[k] : (mains[String(p._cgp_main)] || 0) * per;
+        target = Math.min(it.quantity, left);
+        giftLeft[k] = left - target;
       }
       if (it.quantity !== target) {
         updates[it.key] = target;
