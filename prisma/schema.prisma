@@ -240,3 +240,21 @@ model ShopSettings {
   offerTag  String  @default("kitbundle")
   updatedAt DateTime @updatedAt @default(now())
 }
+
+// Unused since 2026-11-09 (the "added to the order only" idea was dropped);
+// kept so the applied migration still matches the schema.
+model IncludedOrder {
+  id              String   @id @default(cuid())
+  shop            String
+  orderId         String
+  orderName       String   @default("")
+  status          String   @default("pending")
+  detail          String   @default("")
+  campaignIdsJson String   @default("[]")
+  attempts        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([shop, orderId])
+  @@index([shop, createdAt])
+}
