@@ -4145,7 +4145,7 @@
     }
     // Add-on deals (kind "deal", % off a reward) aren't free gifts: the gift
     // picker ignores them (the discount Function applies them at checkout).
-    if (raw && raw.length) raw = raw.filter(function (e) { return e && e.kind !== "deal"; });
+    if (raw && raw.length) raw = raw.filter(function (e) { return e && e.kind !== "deal" && !e.included; }); // included parts: added + shown by the cart guard, not here
     if (!raw || !raw.length) return;
     // Normalise the product's gift_trigger entries into the campaign shape used
     // by the promo UI + the commit's gift-add (accepts both `triggers`/`gifts`

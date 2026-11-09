@@ -6,8 +6,20 @@
 {%- endif -%}
 {%- comment -%} This product triggers a gift campaign (self-contained stamp). {%- endcomment -%}
 {%- assign has_gifts = false -%}
+{%- assign has_included = false -%}
 {%- if gift_trigger != blank and gift_trigger.value.size > 0 -%}
   {%- assign has_gifts = true -%}
+  {%- for e in gift_trigger.value -%}
+    {%- if e.included -%}{%- assign has_included = true -%}{%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+
+{%- comment -%}
+  Comes with included parts (added in the cart by the KitBundle cart guard):
+  "Buy it now" would skip the cart, so it's hidden here.
+{%- endcomment -%}
+{%- if has_included -%}
+  <style>.shopify-payment-button { display: none !important; }</style>
 {%- endif -%}
 
 {%- comment -%}

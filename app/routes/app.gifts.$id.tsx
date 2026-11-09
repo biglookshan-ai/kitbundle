@@ -916,7 +916,7 @@ export default function GiftCampaignEditor() {
                 {(
                   [
                     { value: "gift", title: "Free gift", desc: "Shown as a free gift with a FREE tag. Customers can choose “No thanks”." },
-                    { value: "included", title: "Included with the product", desc: "Shown under “Includes”: no price, no FREE tag, can't be removed." },
+                    { value: "included", title: "Included with the product (like a bundle)", desc: "Not shown on the product page. Whenever the product goes into the cart (from any page), its parts are added with it and listed right under it with no price, and they follow its quantity. “Buy it now” is hidden on that product. Needs the “KitBundle cart guard” app embed switched on in the theme editor." },
                   ] as const
                 ).map((m) => (
                   <label key={m.value} className={`kb-radio${(c.presentation ?? "gift") === m.value ? " is-on" : ""}`}>
