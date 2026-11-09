@@ -9,9 +9,7 @@ client_id = "f7b9d6e29086498ce53bd02ed0d8ff44"
 # read/write_products: read + write the offer config product metafield.
 # write_discounts: create the automatic discount that activates the Function.
 # read_inventory + read_locations: per-location stock in the Gifts views.
-# read_orders + write_order_edits: "Added to the order only" campaigns add the
-# included parts to new orders at £0 (order lines only, no customer details).
-scopes = "read_products,write_products,write_discounts,read_inventory,read_locations,read_orders,write_order_edits"
+scopes = "read_products,write_products,write_discounts,read_inventory,read_locations"
 use_legacy_install_flow = false
 
 [webhooks]
@@ -34,11 +32,6 @@ api_version = "2026-10"
   [[webhooks.subscriptions]]
   uri = "/webhooks/collections"
   topics = [ "collections/update", "collections/delete" ]
-
-  # Gifts: "Added to the order only" campaigns add their parts to new orders.
-  [[webhooks.subscriptions]]
-  uri = "/webhooks/orders/create"
-  topics = [ "orders/create" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/compliance"

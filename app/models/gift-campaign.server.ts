@@ -148,10 +148,7 @@ export async function saveCampaign(
     subtitle: c.subtitle ?? "",
     hideWhenSoldOut: !!c.hideWhenSoldOut,
     kind: c.kind === "deal" ? "deal" : "gift",
-    presentation:
-      c.kind !== "deal" && (c.presentation === "included" || c.presentation === "order")
-        ? c.presentation
-        : "gift",
+    presentation: c.kind !== "deal" && c.presentation === "included" ? "included" : "gift",
     notSoldSeparately: c.kind !== "deal" && !!c.notSoldSeparately,
     dealPercent: dealPct(c),
     rewardCollectionsJson: JSON.stringify(c.kind === "deal" ? c.rewardCollections ?? [] : []),

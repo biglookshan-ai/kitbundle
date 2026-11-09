@@ -90,11 +90,9 @@ export type GiftCampaign = {
   kind: "gift" | "deal";
   /**
    * Gift only. "gift" = a free gift the shopper can decline; "included" =
-   * shown as part of the product ("Includes"), no price, no "No thanks";
-   * "order" = never shown to shoppers: added to the order at £0 right after
-   * it's placed (packing slip / EasyScan show it, like a Bundles.app kit).
+   * shown as part of the product ("Includes"), no price, no "No thanks".
    */
-  presentation: "gift" | "included" | "order";
+  presentation: "gift" | "included";
   /**
    * Gift only. The reward products can't be bought on their own: the checkout
    * rule blocks them unless the cart holds enough of a qualifying product.
@@ -367,7 +365,7 @@ export function rowToCampaign(row: any): GiftCampaign {
       qty: g.qty ?? legacyQ,
     })),
     kind: row.kind === "deal" ? "deal" : "gift",
-    presentation: row.presentation === "included" || row.presentation === "order" ? row.presentation : "gift",
+    presentation: row.presentation === "included" ? "included" : "gift",
     notSoldSeparately: !!row.notSoldSeparately,
     dealPercent: dealPct({ dealPercent: row.dealPercent ?? 10 }),
     rewardCollections: parseRefs(row.rewardCollectionsJson),

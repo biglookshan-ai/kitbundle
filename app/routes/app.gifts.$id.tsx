@@ -38,7 +38,6 @@ import {
 import { previewCoverage } from "../modules/gifts/engine.server";
 import { listPool } from "../modules/gifts/pool.server";
 import { listEvents } from "../modules/gifts/history.server";
-import { recentIncludedOrders } from "../modules/gifts/included-orders.server";
 import {
   PageHead,
   Panel,
@@ -204,16 +203,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     handle: p.handle,
     image: p.image,
   }));
-  const [times, history, recentOrders] = campaign
+  const [times, history] = campaign
     ? await Promise.all([
         prisma.giftCampaign.findFirst({
           where: { shop: session.shop, id: campaign.id },
           select: { createdAt: true, updatedAt: true },
         }),
         listEvents(session.shop, campaign.id),
-        recentIncludedOrders(session.shop, campaign.id),
       ])
-    : [null, [], []];
+    : [null, []];
   return {
     campaign: c,
     isNew: !campaign,
@@ -225,7 +223,6 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     createdAt: times?.createdAt?.toISOString() ?? null,
     updatedAt: times?.updatedAt?.toISOString() ?? null,
     history,
-    recentOrders,
   };
 };
 
@@ -311,7 +308,6 @@ export default function GiftCampaignEditor() {
     createdAt,
     updatedAt,
     history,
-    recentOrders,
   } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
@@ -921,7 +917,6 @@ export default function GiftCampaignEditor() {
                   [
                     { value: "gift", title: "Free gift", desc: "Shown as a free gift with a FREE tag. Customers can choose “No thanks”." },
                     { value: "included", title: "Included with the product", desc: "Shown under “Includes”: no price, no FREE tag, can't be removed." },
-                    { value: "order", title: "Added to the order only", desc: "Customers never see it (product page, cart, checkout). Right after an order is placed, the parts are added to it at £0, so the packing slip and EasyScan show them and stock goes down. Every gift is added." },
                   ] as const
                 ).map((m) => (
                   <label key={m.value} className={`kb-radio${(c.presentation ?? "gift") === m.value ? " is-on" : ""}`}>
@@ -929,9 +924,7 @@ export default function GiftCampaignEditor() {
                       type="radio"
                       name="presentation"
                       checked={(c.presentation ?? "gift") === m.value}
-                      onChange={() =>
-                        patch(m.value === "order" ? { presentation: m.value, rewardMode: "all" } : { presentation: m.value })
-                      }
+                      onChange={() => patch({ presentation: m.value })}
                     />
                     <span>
                       <b>{m.title}</b>
@@ -961,10 +954,6 @@ export default function GiftCampaignEditor() {
                   </div>
                 ) : null}
               </div>
-              {c.presentation === "order" ? (
-                <IncludedOrders orders={recentOrders} />
-              ) : (
-              <>
               <Field label="Badge text" help="Shown on product / search.">
                 <Input
                   value={c.badgeText}
@@ -996,65 +985,12 @@ export default function GiftCampaignEditor() {
                   gift is sold out the whole group hides.
                 </div>
               </div>
-              </>
-              )}
             </div>
           </Panel>
           )}
         </div>
       </div>
     </GiftsShell>
-  );
-}
-
-type IncludedOrderRow = {
-  orderId: string;
-  orderName: string;
-  status: string;
-  detail: string;
-  attempts: number;
-  createdAt: string;
-};
-
-const ORDER_TONE: Record<string, "ok" | "warn" | "info" | "danger"> = {
-  added: "ok",
-  skipped: "warn",
-  failed: "danger",
-  pending: "info",
-  working: "info",
-};
-
-/** "Added to the order only": what happens + the latest orders it filled. */
-function IncludedOrders({ orders }: { orders: IncludedOrderRow[] }) {
-  return (
-    <div className="kb-stack kb-stack--tight">
-      <div className="kb-sub">
-        Nothing is shown on the product page, in the cart or at checkout. A few
-        seconds after an order is placed, every gift above is added to it at £0
-        (line quantity × each gift&apos;s Qty) without emailing the customer.
-        Orders that are cancelled or already fulfilled are left alone.
-      </div>
-      <div className="kb-lfield__label">Latest orders</div>
-      {orders.length === 0 ? (
-        <div className="kb-muted">No orders yet.</div>
-      ) : (
-        orders.map((o) => (
-          <div key={o.orderId} className="kb-inline" style={{ gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="kb-title"
-              style={{ fontWeight: 600, color: "var(--link)" }}
-              onClick={() => window.open(`shopify:admin/orders/${o.orderId.split("/").pop()}`, "_top")}
-            >
-              {o.orderName || o.orderId.split("/").pop()}
-            </button>
-            <Pill tone={ORDER_TONE[o.status] ?? "info"}>{o.status}</Pill>
-            <span className="kb-sub">{o.detail}</span>
-            <span className="kb-muted">{fmtWhen(o.createdAt)}</span>
-          </div>
-        ))
-      )}
-    </div>
   );
 }
 

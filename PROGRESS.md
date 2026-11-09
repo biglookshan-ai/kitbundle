@@ -16,13 +16,6 @@
 - (待定)App Store 提审:目前仅自家店使用,是否上架待用户决定
 
 ## 🏁 最近完成
-- **2026-11-09 赠品新显示方式「Added to the order only」(只进订单)**(代码已推,**待申请订单权限 + app deploy**):
-  - 🙈 客人在产品页 / 购物车 / 结账都看不到;下单后几秒,程序用 Shopify「编辑订单」把配件以 £0 加进订单(不发邮件给客人),打单 / EasyScan / 扣库存都按普通一行 —— 和 Bundles.app 套装效果一样
-  - 🛒 任何入口下单都算(产品页、合集快速加购、立即购买、草稿订单),按订单行数量 × 每个赠品的 Qty;已取消 / 已发货的订单不动
-  - 🔁 每张订单只处理一次(数据库唯一记录,重复的 webhook 不会加两次;订单里已有的配件数量会扣掉);失败的由定时器重试最多 4 次
-  - 📋 活动页显示「Latest orders」:哪些订单加了、失败原因
-  - 🔐 新权限 `read_orders` + `write_order_edits`、webhook `orders/create`;**订单属受保护客户数据,deploy 前要在 Dev Dashboard 申请 Protected customer data access**(只用订单行,不用姓名地址)
-  - 🧩 产品页、折扣程序、结账校验都跳过这类活动(标记里 `order: true`);迁移 `20261109000000_included_orders`(表 IncludedOrder)
 - **2026-11-05 包含项不能点 + 购物车守卫**(代码已推,**待 app deploy**):
   - 🚫 产品页「Includes」里的配件不再是链接(图和名字都点不进产品页)
   - 🛡 新 App embed「KitBundle cart guard」(主题编辑器 → App embeds 打开一次):主产品删掉 / 减少后,对应的赠品 / 包含项自动删掉 / 减到相符数量;购物车里包含项的产品链接去掉
