@@ -89,6 +89,14 @@ describe("gift rules", () => {
     reset();
     expect(freeOf([main(1, [{ id: "c1", rewardMode: "all", giftIds: gifts }]), gift(99, 1, 5)])).toEqual({});
   });
+  it("order-only campaign → nothing free in the cart", () => {
+    reset();
+    const lines = [
+      main(1, [{ id: "c1", order: true, rewardMode: "all", giftIds: gifts }]),
+      gift(11, 1, 50),
+    ];
+    expect(freeOf(lines)).toEqual({});
+  });
   it("no trigger in the cart → nothing free", () => {
     reset();
     expect(freeOf([gift(11, 1, 50)])).toEqual({});

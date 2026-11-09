@@ -79,6 +79,7 @@ export const prismaMock = {
   giftSyncLog: table("giftSyncLog"),
   giftSchedulerState: table("giftSchedulerState"),
   giftOnlyMark: table("giftOnlyMark"),
+  includedOrder: table("includedOrder"),
   session: table("session"),
   $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
 };

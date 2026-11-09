@@ -87,7 +87,8 @@ model GiftCampaign {
   // recognised however it was added to the cart). 2026-10-22, Smart Fusion × lenses.
   kind          String    @default("gift")
   // Gift only: "gift" = shown as a free gift the shopper can decline;
-  // "included" = shown as part of the product ("Includes"), no price, no opt-out.
+  // "included" = shown as part of the product ("Includes"), no price, no opt-out;
+  // "order" = never shown: added to the order at £0 after checkout (2026-11-09).
   presentation  String    @default("gift")
   // Gift only: the reward products can't be bought on their own — the checkout
   // rule blocks them unless the cart has enough of a qualifying product.
@@ -239,4 +240,24 @@ model ShopSettings {
   tagOffers Boolean @default(false)
   offerTag  String  @default("kitbundle")
   updatedAt DateTime @updatedAt @default(now())
+}
+
+// Gifts module — "Added to the order only" campaigns (2026-11-09): one row per
+// order we added included parts to (or tried to). Unique per order so a
+// re-delivered orders/create webhook can't add the parts twice; orders that
+// need nothing leave no row. The scheduler retries "failed" rows.
+model IncludedOrder {
+  id              String   @id @default(cuid())
+  shop            String
+  orderId         String   // gid://shopify/Order/...
+  orderName       String   @default("")
+  status          String   @default("pending") // pending | working | added | skipped | failed
+  detail          String   @default("")
+  campaignIdsJson String   @default("[]")
+  attempts        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([shop, orderId])
+  @@index([shop, createdAt])
 }

@@ -115,6 +115,7 @@ export function cartValidationsGenerateRun(input) {
         e &&
         e.id &&
         e.kind !== "deal" &&
+        !e.order && // order-only parts are added after checkout, never bought
         campaignDateOk(e, today) &&
         !(
           Array.isArray(e.triggerVariants) &&

@@ -45,6 +45,9 @@ describe("gift guard", () => {
   it("ignores carts without gift-only products", () => {
     expect(errorsOf([other(4), main(1, [camp()])])).toEqual([]);
   });
+  it("an order-only campaign grants no cart allowance (parts are added after checkout)", () => {
+    expect(errorsOf([main(1, [camp({ order: true })]), usb(1)]).length).toBe(1);
+  });
   it("a gift line can't qualify another gift", () => {
     const giftAsTrigger = { ...main(1, [camp()]), cgpGift: { value: "x" } };
     expect(errorsOf([giftAsTrigger, usb(1)]).length).toBe(1);

@@ -526,6 +526,8 @@ export function run(input) {
       (e) =>
         e &&
         e.id &&
+        // "Added to the order only" parts never go through the cart.
+        !e.order &&
         // Date gate: an ended (or not-yet-started) campaign grants no
         // allowance, so its gift lines stay at full price at checkout.
         campaignDateOk(e, today) &&

@@ -18,6 +18,7 @@
 import prisma from "../../db.server";
 import { unauthenticated } from "../../shopify.server";
 import { syncAll } from "./engine.server";
+import { retryIncludedOrders } from "./included-orders.server";
 
 const BACKSTOP_MS = 30 * 60 * 1000;
 const FIRST_TICK_MS = 45 * 1000;
@@ -105,6 +106,8 @@ async function runShop(shop: string, now: Date, force = false) {
 
 /** One scheduler pass over every shop that has gift campaigns. */
 export async function schedulerTick(now = new Date()) {
+  // "Added to the order only": retry orders whose parts failed to add.
+  await retryIncludedOrders(now).catch((e) => console.error("[gifts] included retry error", e));
   const shops = await prisma.giftCampaign.findMany({
     distinct: ["shop"],
     select: { shop: true },

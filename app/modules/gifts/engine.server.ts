@@ -177,6 +177,9 @@ function campaignEntry(c: GiftCampaign, tz: string, rewardIds: string[] = []) {
     ...(c.kind === "deal" ? { kind: "deal", pct: dealPct(c) } : {}),
     // Shown as part of the product ("Includes"), no price, can't be declined.
     ...(c.kind !== "deal" && c.presentation === "included" ? { included: true } : {}),
+    // Never shown to shoppers: added to the order after it's placed. The page,
+    // the discount and the checkout rule all skip these entries.
+    ...(c.kind !== "deal" && c.presentation === "order" ? { order: true } : {}),
     startsAt: c.startsAt || "",
     endsAt: c.endsAt || "",
   };
