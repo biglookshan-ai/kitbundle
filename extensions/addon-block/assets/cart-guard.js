@@ -300,7 +300,13 @@
         window.location.reload();
         return true;
       }
-      if (st && st.sections) render(st);
+      if (st && st.sections) {
+        if (st.items && typeof st.item_count === "number") {
+          lastCart = st;
+          fresh = true;
+        }
+        render(st);
+      }
       else if (st) {
         // /cart/add.js returns the added items only: fetch fresh sections.
         var d = drawer();
@@ -342,74 +348,170 @@
     document.head.appendChild(st);
   }
 
-  function rowsFor(i) {
-    return ["CartDrawer-Item-", "CartItem-"]
-      .map(function (p) {
-        return document.getElementById(p + (i + 1));
-      })
-      .filter(Boolean);
+  // Included-part rows, recognised straight from the DOM (their "Included
+  // with:" line), so they never show as an ordinary product, not even for the
+  // moment between the theme re-rendering and our next cart read.
+  function isIncRow(row) {
+    return Array.prototype.some.call(row.querySelectorAll("dt"), function (dt) {
+      return /^\s*Included with/i.test(dt.textContent);
+    });
   }
-  function decorate(cart) {
-    var items = (cart && cart.items) || [];
+  function styleRow(row) {
+    row.classList.add("kb-inc-row");
+    var tot = row.querySelector(".cart-item__totals");
+    if (tot && !tot.querySelector(".kb-inc-tag")) {
+      var tag = document.createElement("span");
+      tag.className = "kb-inc-tag";
+      tag.textContent = "Included";
+      tot.appendChild(tag);
+    }
+    var input = row.querySelector("input.quantity__input, input[name='updates[]']");
+    var n = input ? parseInt(input.value, 10) || 1 : 1;
+    var q = row.querySelector(".cart-item__quantity-wrapper, .cart-item__quantity");
+    var qs = row.querySelector(".kb-inc-qty");
+    if (q && n > 1 && !qs) {
+      qs = document.createElement("span");
+      qs.className = "kb-inc-qty";
+      q.appendChild(qs);
+    }
+    if (qs && qs.textContent !== (n > 1 ? "× " + n : "")) qs.textContent = n > 1 ? "× " + n : "";
+    // Internal part names start with "#": shoppers shouldn't see it.
+    var nm = row.querySelector(".cart-item__name");
+    if (nm && nm.childNodes.length === 1 && /^\s*#/.test(nm.textContent)) {
+      nm.textContent = nm.textContent.replace(/^\s*#\s*/, "");
+    }
+    Array.prototype.forEach.call(row.querySelectorAll('a[href*="/products/"]'), function (a) {
+      var m = /variant=(\d+)/.exec(a.getAttribute("href") || "");
+      if (m) row.setAttribute("data-kb-vid", m[1]);
+      a.removeAttribute("href");
+      a.setAttribute("aria-disabled", "true");
+      a.setAttribute("tabindex", "-1");
+      a.style.pointerEvents = "none";
+      a.style.textDecoration = "none";
+    });
+  }
+  function rowVid(row) {
+    if (row.getAttribute("data-kb-vid")) return row.getAttribute("data-kb-vid");
+    var a = row.querySelector('a[href*="variant="]');
+    var m = a && /variant=(\d+)/.exec(a.getAttribute("href"));
+    return m ? m[1] : "";
+  }
+  function decorate() {
+    var rows = document.querySelectorAll('[id^="CartDrawer-Item-"], [id^="CartItem-"]');
     var any = false;
+    Array.prototype.forEach.call(rows, function (row) {
+      if (!isIncRow(row)) return;
+      any = true;
+      styleRow(row);
+    });
+    if (any) styles();
+    // Sit right under the main product (needs the cart: which main it's for).
+    var items = (lastCart && lastCart.items) || [];
+    if (!any || !items.length) return;
     items.forEach(function (it, i) {
       var p = props(it);
-      if (!(p._cgp_inc || p["Included with"])) return;
-      any = true;
-      // The main line it belongs to (same row prefix).
+      if (!(p._cgp_inc || p["Included with"]) || !p._cgp_main) return;
       var mi = -1;
       items.forEach(function (m, j) {
         if (mi < 0 && isMain(m) && String(m.variant_id) === String(p._cgp_main)) mi = j;
       });
-      rowsFor(i).forEach(function (row) {
-        // Only the row that really is this line (row numbers shift while the
-        // theme re-renders).
-        var vid = String(it.variant_id);
-        if (row.getAttribute("data-kb-vid") !== vid && !row.querySelector('a[href*="variant=' + vid + '"]')) return;
-        row.setAttribute("data-kb-vid", vid);
-        row.classList.add("kb-inc-row");
-        var tot = row.querySelector(".cart-item__totals");
-        if (tot && !tot.querySelector(".kb-inc-tag")) {
-          var tag = document.createElement("span");
-          tag.className = "kb-inc-tag";
-          tag.textContent = "Included";
-          tot.appendChild(tag);
-        }
-        var q = row.querySelector(".cart-item__quantity, .cart-item__quantity-wrapper");
-        if (q && it.quantity > 1 && !row.querySelector(".kb-inc-qty")) {
-          var qs = document.createElement("span");
-          qs.className = "kb-inc-qty";
-          qs.textContent = "× " + it.quantity;
-          q.appendChild(qs);
-        }
-        // Internal part names start with "#": shoppers shouldn't see it.
-        var nm = row.querySelector(".cart-item__name");
-        if (nm && nm.childNodes.length === 1 && /^\s*#/.test(nm.textContent)) {
-          nm.textContent = nm.textContent.replace(/^\s*#\s*/, "");
-        }
-        Array.prototype.forEach.call(row.querySelectorAll('a[href*="/products/"]'), function (a) {
-          a.removeAttribute("href");
-          a.setAttribute("aria-disabled", "true");
-          a.setAttribute("tabindex", "-1");
-          a.style.pointerEvents = "none";
-          a.style.textDecoration = "none";
-        });
-        // Sit right under the main product (after its other parts).
-        if (mi < 0) return;
-        var prefix = row.id.replace(/\d+$/, "");
+      if (mi < 0) return;
+      ["CartDrawer-Item-", "CartItem-"].forEach(function (prefix) {
+        var row = document.getElementById(prefix + (i + 1));
         var main = document.getElementById(prefix + (mi + 1));
-        if (!main || main.parentNode !== row.parentNode) return;
+        // Row numbers only match the cart we read if the variants agree.
+        if (!row || !main || rowVid(row) !== String(it.variant_id) || rowVid(main) !== String(p._cgp_main)) return;
+        if (main.parentNode !== row.parentNode) return;
         var at = main;
-        while (at.nextElementSibling && at.nextElementSibling.classList.contains("kb-inc-row") && at.nextElementSibling !== row) {
+        while (at.nextElementSibling && at.nextElementSibling !== row && at.nextElementSibling.classList.contains("kb-inc-row")) {
           at = at.nextElementSibling;
         }
         if (at.nextElementSibling !== row) at.after(row);
       });
     });
-    if (any) styles();
+  }
+
+  /* ---------- Quantity changes: main + its parts in ONE request ---------- */
+
+  // The theme changes one line (`line` = row number, or `id`). If that's a
+  // main product with parts, change the parts in the same request, so the
+  // cart never shows them out of step; a part on its own can't be changed.
+  function bundleUpdates(cart, body) {
+    var items = cart.items || [];
+    var it = body.line
+      ? items[Number(body.line) - 1]
+      : items.filter(function (x) {
+          return x.key === body.id || String(x.variant_id) === String(body.id);
+        })[0];
+    if (!it) return null;
+    var q = Math.max(0, parseInt(body.quantity, 10) || 0);
+    var p = props(it);
+    var units = function (vid, self, selfQty) {
+      return items.reduce(function (n, x) {
+        if (!isMain(x) || String(x.variant_id) !== String(vid)) return n;
+        return n + (x === self ? selfQty : x.quantity);
+      }, 0);
+    };
+    var up = {};
+    if (p._cgp_inc && p._cgp_main) {
+      up[it.key] = units(p._cgp_main) * Math.max(1, parseInt(p._cgp_per, 10) || 1);
+      return up;
+    }
+    if (!isMain(it)) return null;
+    var u = units(it.variant_id, it, q);
+    var n = 0;
+    items.forEach(function (x) {
+      var xp = props(x);
+      if (!xp._cgp_gift || String(xp._cgp_main) !== String(it.variant_id)) return;
+      var per = Math.max(1, parseInt(xp._cgp_per, 10) || 1);
+      // Included parts follow the main; free gifts only go down with it.
+      up[x.key] = xp._cgp_inc ? u * per : Math.min(x.quantity, u * per);
+      n++;
+    });
+    if (!n) return null;
+    up[it.key] = q;
+    return up;
+  }
+
+  function remember(r) {
+    // Keep our copy of the cart in step with what the theme is about to render.
+    r.clone()
+      .json()
+      .then(function (st) {
+        if (st && st.items && typeof st.item_count === "number") {
+          delete st.sections;
+          lastCart = st;
+          fresh = true;
+        }
+      })
+      .catch(function () {});
+    return r;
+  }
+
+  function changeAsBundle(input, init, body) {
+    version++;
+    var cartP = fresh && lastCart ? Promise.resolve(lastCart) : getCart();
+    return cartP
+      .then(function (cart) {
+        lastCart = cart;
+        var up = bundleUpdates(cart, body);
+        if (!up) return origFetch(input, init);
+        var nb = { updates: up };
+        if (body.sections) nb.sections = body.sections;
+        if (body.sections_url) nb.sections_url = body.sections_url;
+        var headers = { "Content-Type": "application/json", Accept: "application/json" };
+        headers[OWN] = "1";
+        return origFetch("/cart/update.js", { method: "POST", headers: headers, body: JSON.stringify(nb) });
+      })
+      .then(function (r) {
+        return r.ok ? remember(r) : r;
+      });
   }
 
   /* ---------- Run after every cart change ---------- */
+
+  var fresh = false; // lastCart matches the rendered cart
+  var version = 0; // bumps on every cart request from the theme / other apps
 
   function check() {
     if (busy) {
@@ -417,10 +519,17 @@
       return;
     }
     busy = true;
+    var v = version;
     getCart()
       .then(function (cart) {
         lastCart = cart;
+        fresh = true;
         return loadStamps(cart).then(function () {
+          // The cart changed meanwhile: plan again on the new one.
+          if (v !== version) {
+            again = true;
+            return false;
+          }
           return apply(plan(cart));
         });
       })
@@ -432,7 +541,7 @@
       .catch(function () {})
       .then(function () {
         busy = false;
-        decorate(lastCart);
+        decorate();
         if (again) {
           again = false;
           setTimeout(check, 50);
@@ -440,28 +549,43 @@
       });
   }
 
+  var CHANGE_RE = /\/cart\/change(\.js)?(\?|$)/;
   window.fetch = function (input, init) {
     var url = typeof input === "string" ? input : (input && input.url) || "";
     var own = init && init.headers && (init.headers[OWN] || (init.headers.get && init.headers.get(OWN)));
-    var p = origFetch.apply(this, arguments);
-    if (!own && CART_RE.test(url)) {
-      lastCart = null; // stale until the next check
-      p.then(function () {
-        setTimeout(check, 150);
-      }, function () {});
+    if (own || !CART_RE.test(url)) return origFetch.apply(this, arguments);
+    version++;
+    var p;
+    var body = null;
+    if (CHANGE_RE.test(url) && init && typeof init.body === "string") {
+      try {
+        body = JSON.parse(init.body);
+      } catch (e) {}
     }
+    if (body && (body.line || body.id) && body.quantity !== undefined) {
+      p = changeAsBundle(input, init, body);
+    } else {
+      if (!/\/cart\/change/.test(url)) fresh = false; // add / update / clear: re-read
+      p = origFetch.apply(this, arguments);
+    }
+    p.then(function () {
+      setTimeout(check, 150);
+    }, function () {});
     return p;
   };
 
-  // Keep the look when the theme re-renders its cart.
-  var t = null;
-  new MutationObserver(function () {
-    if (!lastCart) return;
-    clearTimeout(t);
-    t = setTimeout(function () {
-      decorate(lastCart);
-    }, 80);
-  }).observe(document.documentElement, { childList: true, subtree: true });
+  // Style included rows the moment the theme renders them (before paint).
+  var styling = false;
+  var mo = new MutationObserver(function () {
+    if (styling) return;
+    styling = true;
+    try {
+      decorate();
+    } catch (e) {}
+    mo.takeRecords();
+    styling = false;
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", check);
   else check();
