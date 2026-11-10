@@ -49,4 +49,8 @@ describe("gift guard", () => {
     const giftAsTrigger = { ...main(1, [camp()]), cgpGift: { value: "x" } };
     expect(errorsOf([giftAsTrigger, usb(1)]).length).toBe(1);
   });
+  it("a free item (_cgp_free) doesn't count as the qualifying purchase", () => {
+    const freeMain = { ...main(1, [camp()]), cgpFree: { value: "g1" } };
+    expect(errorsOf([freeMain, usb(1)]).length).toBe(1);
+  });
 });

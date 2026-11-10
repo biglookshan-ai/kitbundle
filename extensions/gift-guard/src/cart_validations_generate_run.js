@@ -99,6 +99,7 @@ export function cartValidationsGenerateRun(input) {
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // a kit component isn't a unit
+    if (/** @type {any} */ (line)?.cgpFree?.value) continue; // a free item isn't a purchase
     const product = /** @type {any} */ (line?.merchandise)?.product;
     const raw = product?.giftTrigger?.value;
     if (!raw) continue;

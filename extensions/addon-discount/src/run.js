@@ -136,12 +136,32 @@ function groupAllowsVariant(group, variantId) {
   return ids.some((g) => gidTail(g) === tail);
 }
 
+/**
+ * Is this accessory line's variant one the group OFFERS? An accessory with
+ * `variantIds` offers only those variants (the storefront shows nothing else);
+ * without the check a hand-made cart could swap in a pricier variant of the
+ * same product and still get the group's %. No list = every variant.
+ */
+function accVariantOk(group, pid, variantId) {
+  const accessories = Array.isArray(group?.accessories) ? group.accessories : [];
+  const a = accessories.find((x) => x?.productId === pid);
+  const ids = a?.variantIds;
+  if (!Array.isArray(ids) || ids.length === 0) return true;
+  const tail = gidTail(variantId);
+  return ids.some((g) => gidTail(g) === tail);
+}
+
+/** A group that is not on offer: archived, or hidden while being edited. */
+function offGroup(group) {
+  return !!(group?.archived || group?.hidden);
+}
+
 /** Find the bundle group with this group id inside a main's config. */
 function findBundleById(config, bid) {
   if (!bid) return null;
   const groups = Array.isArray(config?.groups) ? config.groups : [];
   for (const group of groups) {
-    if (group?.archived) continue;
+    if (offGroup(group)) continue;
     if (group?.type === "bundle" && group?.id === bid) return group;
   }
   return null;
@@ -158,7 +178,7 @@ function findBundleById(config, bid) {
 function findBundleByOffer(config, offerId) {
   const groups = Array.isArray(config?.groups) ? config.groups : [];
   for (const group of groups) {
-    if (group?.archived) continue;
+    if (offGroup(group)) continue;
     if (group?.type === "bundle" && group?.offerId === offerId) return group;
   }
   return null;
@@ -229,6 +249,8 @@ export function run(input) {
   const mainQtyByGrp = new Map(); // tag -> backing main quantity
   /** @type {Array<{config: any, mainQty: number, variantId: string|undefined}>} */
   const mainLines = [];
+  /** @type {Map<string, Array<{pid: string, vid: string, qty: number, main: boolean}>>} */
+  const linesByGrp = new Map(); // kit instance tag -> its lines (variant-aware checks)
 
   for (const line of lines) {
     const merch = /** @type {any} */ (line?.merchandise);
@@ -256,6 +278,9 @@ export function run(input) {
         qtyByGrp.set(grp, qmap);
       }
       qmap.set(pid, (qmap.get(pid) ?? 0) + qty);
+      const list = linesByGrp.get(grp) ?? [];
+      list.push({ pid, vid: String(variantId ?? ""), qty, main: !(/** @type {any} */ (line)?.cgpFor?.value) });
+      linesByGrp.set(grp, list);
     }
 
     // A line only acts as a MAIN (its config drives add-on/free/bundle prices)
@@ -281,6 +306,27 @@ export function run(input) {
       }
     }
   }
+
+  // A kit counts only the variants its bundle is for: the main's `mainVariantIds`
+  // and each accessory's offered `variantIds`. Off-list lines don't complete the
+  // kit and get no bundle price (a hand-made cart can't swap in pricier variants).
+  /** @param {string} grp @param {any} group */
+  const kitView = (grp, group) => {
+    const present = new Set();
+    /** @type {Map<string, number>} */
+    const qmap = new Map();
+    let mainQty = 0;
+    for (const l of linesByGrp.get(grp) ?? []) {
+      if (l.main) {
+        if (groupAllowsVariant(group, l.vid)) mainQty += l.qty;
+        continue;
+      }
+      if (!groupHasProduct(group, l.pid) || !accVariantOk(group, l.pid, l.vid)) continue;
+      present.add(l.pid);
+      qmap.set(l.pid, (qmap.get(l.pid) ?? 0) + l.qty);
+    }
+    return { present, qmap, mainQty };
+  };
 
   // ---- GIFT-CAMPAIGN node: a gift, time-gated by the node, given when one of
   // the campaign's trigger products is in the cart. Allowance scales with the
@@ -383,12 +429,14 @@ export function run(input) {
       if (!config) continue; // kit main removed
       const group = findBundleByOffer(config, limitedOfferId);
       if (!group || !group.limited || !group.limited.enabled) continue;
-      if (!allPresentUnder(group, presentByGrp.get(grp))) continue;
+      const kv = kitView(grp, group);
+      if (!kv.mainQty || !allPresentUnder(group, kv.present)) continue;
       // A bundle is one deep discount on the WHOLE kit: the main (no `_addon_for`)
       // always qualifies; an accessory must belong to this group. (Tag-based so a
       // product that is itself a configured main can still be discounted here.)
       const isAcc = !!(/** @type {any} */ (line)?.cgpFor?.value);
-      if (isAcc && !groupHasProduct(group, pid)) continue;
+      if (isAcc && (!groupHasProduct(group, pid) || !accVariantOk(group, pid, line?.merchandise?.id))) continue;
+      if (!isAcc && !groupAllowsVariant(group, /** @type {any} */ (line?.merchandise)?.id)) continue;
 
       const deep = clampPercent(group.limited.discountPercent);
       if (deep <= 0) continue;
@@ -397,7 +445,7 @@ export function run(input) {
       // GREATER of two combining product discounts on the same line, so we emit
       // the FULL deep %: max(main's normal %, deep %) = deep inside the window;
       // after expiry this node is time-gated off and only the main % remains.
-      const cap = kitCount(group, mainQtyByGrp.get(grp) ?? 0, qtyByGrp.get(grp));
+      const cap = kitCount(group, kv.mainQty, kv.qmap);
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       limited.push({
@@ -417,13 +465,15 @@ export function run(input) {
   //    quantity to the allowance ONCE; bundle/free groups are handled separately.
   /** @type {Map<string, {percent: number, allowance: number}>} */
   const addonEligible = new Map();
+  /** @type {Map<string, Set<string>|null>} */ // add-on product -> offered variant tails (null = any)
+  const addonVariants = new Map();
   for (const { config, mainQty, variantId } of mainLines) {
     if (mainQty <= 0) continue;
     /** @type {Map<string, number>} */
     const lineBest = new Map();
     const groups = Array.isArray(config?.groups) ? config.groups : [];
     for (const group of groups) {
-      if (group?.archived) continue;
+      if (offGroup(group)) continue;
       if (group?.type === "bundle" || group?.type === "free") continue;
       // Only count this main toward the cap if its variant participates in the
       // group. Otherwise a hidden-add-on variant (e.g. Kit4) would let extra
@@ -440,6 +490,10 @@ export function run(input) {
         );
         if (percent <= 0) continue;
         lineBest.set(apid, Math.max(lineBest.get(apid) ?? 0, percent));
+        // offered variants of this add-on (null = any variant)
+        const vids = Array.isArray(accessory?.variantIds) && accessory.variantIds.length ? accessory.variantIds.map(gidTail) : null;
+        const prevV = addonVariants.get(apid);
+        addonVariants.set(apid, prevV === null || vids === null ? null : new Set([...(prevV ?? []), ...vids]));
       }
     }
     for (const [apid, percent] of lineBest) {
@@ -455,12 +509,19 @@ export function run(input) {
   //     Hard-capped to ONE free unit per gift product, regardless of main qty.
   /** @type {Map<string, number>} */
   const freeRemaining = new Map();
-  for (const { config } of mainLines) {
+  /** @type {Map<string, Set<string>|null>} */ // free product -> offered variant tails (null = any)
+  const freeVariants = new Map();
+  for (const { config, variantId } of mainLines) {
     for (const group of Array.isArray(config?.groups) ? config.groups : []) {
-      if (group?.type !== "free" || group?.archived) continue;
+      if (group?.type !== "free" || offGroup(group)) continue;
+      if (!groupAllowsVariant(group, variantId)) continue; // this main variant doesn't come with it
       for (const accessory of group?.accessories ?? []) {
         const apid = accessory?.productId;
-        if (typeof apid === "string") freeRemaining.set(apid, 1);
+        if (typeof apid !== "string") continue;
+        freeRemaining.set(apid, 1);
+        const vids = Array.isArray(accessory?.variantIds) && accessory.variantIds.length ? accessory.variantIds.map(gidTail) : null;
+        const prevV = freeVariants.get(apid);
+        freeVariants.set(apid, prevV === null || vids === null ? null : new Set([...(prevV ?? []), ...vids]));
       }
     }
   }
@@ -510,6 +571,7 @@ export function run(input) {
   for (const line of lines) {
     if (/** @type {any} */ (line)?.cgpGift?.value) continue; // a gift isn't a trigger
     if (/** @type {any} */ (line)?.cgpFor?.value) continue; // component, not a unit
+    if (/** @type {any} */ (line)?.cgpFree?.value) continue; // a free item isn't a purchase
     const raw = /** @type {any} */ (line?.merchandise)?.product?.giftTrigger
       ?.value;
     if (!raw) continue;
@@ -752,14 +814,15 @@ export function run(input) {
       if (grp && bid) {
         const config = mainConfigByGrp.get(grp);
         const group = findBundleById(config, bid);
-        if (group && allPresentUnder(group, presentByGrp.get(grp))) {
+        const kv = group ? kitView(grp, group) : null;
+        if (group && kv && groupAllowsVariant(group, /** @type {any} */ (line?.merchandise)?.id) && allPresentUnder(group, kv.present)) {
           // "end"-mode limited bundle: full price outside the window (the deep
           // price is the time-gated limited node's job); the main node gives 0.
           const endMode =
             group.limited && group.limited.enabled && group.limited.mode === "end";
           const pct = endMode ? 0 : clampPercent(group.discountPercent);
           // Only complete kits get the bundle price — extra mains stay full price.
-          const cap = kitCount(group, mainQtyByGrp.get(grp) ?? 0, qtyByGrp.get(grp));
+          const cap = kitCount(group, kv.mainQty, kv.qmap);
           const qty = Math.min(lineQty, cap);
           if (pct > 0 && qty > 0) {
             discounts.push({
@@ -791,7 +854,9 @@ export function run(input) {
         if (
           group &&
           groupHasProduct(group, pid) &&
-          allPresentUnder(group, present)
+          accVariantOk(group, pid, /** @type {any} */ (line?.merchandise)?.id) &&
+          kitView(grp, group).mainQty > 0 &&
+          allPresentUnder(group, kitView(grp, group).present)
         ) {
           const endMode = group.limited && group.limited.mode === "end";
           // A bundle is ONE discount on the whole kit: the group %, not any
@@ -803,9 +868,11 @@ export function run(input) {
         // Plain bundle line: best matching bundle group by membership, using the
         // single group discount (one price for the whole kit).
         for (const group of config?.groups ?? []) {
-          if (group?.type !== "bundle" || group?.archived) continue;
+          if (group?.type !== "bundle" || offGroup(group)) continue;
           if (!groupHasProduct(group, pid)) continue;
-          if (!allPresentUnder(group, present)) continue;
+          if (!accVariantOk(group, pid, /** @type {any} */ (line?.merchandise)?.id)) continue;
+          const kv = kitView(grp, group);
+          if (!kv.mainQty || !allPresentUnder(group, kv.present)) continue;
           const percent = clampPercent(group.discountPercent);
           if (percent > best) {
             best = percent;
@@ -816,11 +883,8 @@ export function run(input) {
 
       if (best <= 0) continue;
       // Cap to complete kits so extra mains don't inflate the discounted count.
-      const cap = kitCount(
-        bestGroup,
-        mainQtyByGrp.get(grp) ?? 0,
-        qtyByGrp.get(grp),
-      );
+      const bkv = kitView(grp, bestGroup);
+      const cap = kitCount(bestGroup, bkv.mainQty, bkv.qmap);
       const qty = Math.min(lineQty, cap);
       if (qty <= 0) continue;
       discounts.push({
@@ -833,6 +897,8 @@ export function run(input) {
       // configured free accessory of a main that's in the cart.
       const rem = freeRemaining.get(pid) ?? 0;
       if (rem <= 0) continue; // not eligible, or the free unit is used up
+      const fv = freeVariants.get(pid);
+      if (fv && !fv.has(gidTail(/** @type {any} */ (line?.merchandise)?.id))) continue; // variant not offered
       freeRemaining.set(pid, rem - 1);
       discounts.push({
         message: "Free gift",
@@ -846,6 +912,8 @@ export function run(input) {
       if (!(/** @type {any} */ (line)?.cgpFor?.value)) continue;
       const e = addonEligible.get(pid);
       if (!e) continue;
+      const av = addonVariants.get(pid);
+      if (av && !av.has(gidTail(/** @type {any} */ (line?.merchandise)?.id))) continue; // variant not offered
       const rem = remaining.get(pid) ?? 0;
       if (rem <= 0) continue;
       const qty = Math.min(lineQty, rem);
