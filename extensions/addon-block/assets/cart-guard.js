@@ -10,6 +10,10 @@
  *   on the product page. They're listed right under their main product with no
  *   price, no quantity box and no link.
  * - Free gifts never exceed (main units × per); they go when the main goes.
+ * - Free gifts for a main added anywhere but its own product page (collection /
+ *   search cards, recommendations, other apps; 2026-11-10): the product page's
+ *   default picks are added with it. A gift the customer deletes from the cart
+ *   isn't added again in this visit.
  * The checkout rule still blocks anything that slips through. */
 (function () {
   "use strict";
@@ -140,7 +144,109 @@
     return t + v;
   }
 
-  // What the cart should hold. Returns { updates: {key: qty}, adds: [...] }.
+  // Campaigns live today for this main variant (after overlap rules).
+  function liveFor(it, v) {
+    var t = today();
+    return winners(
+      (stamps[it.handle] || []).filter(function (e) {
+        return (
+          e && e.id && e.kind !== "deal" && dateOk(e, t) &&
+          !(e.triggerVariants && e.triggerVariants.length && e.triggerVariants.map(String).indexOf(v) < 0)
+        );
+      }),
+    );
+  }
+
+  /* ---------- Free gifts for mains added outside their product page ---------- */
+
+  // main variant id → units added (by the theme / other apps) that brought no gifts
+  var pending = {};
+  function declKey(camp, main) {
+    return "kbdecl:" + camp + "|" + main;
+  }
+  function declined(camp, main) {
+    try {
+      return sessionStorage.getItem(declKey(camp, main)) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+  function decline(camp, main) {
+    try {
+      sessionStorage.setItem(declKey(camp, main), "1");
+    } catch (e) {}
+  }
+  // The product this page shows, when KitBundle's block is on it: that block
+  // adds the customer's gift picks (or "No thanks") itself.
+  function pageVids() {
+    if (!document.querySelector("script[data-cgp-gifts]")) return [];
+    var m = window.ShopifyAnalytics && ShopifyAnalytics.meta && ShopifyAnalytics.meta.product;
+    return m && m.variants
+      ? m.variants.map(function (v) {
+          return String(v.id);
+        })
+      : [];
+  }
+  // Lines in an /cart/add request: JSON ({items} or one item), form data or a query string.
+  function addedLines(init) {
+    var b = init && init.body;
+    var out = [];
+    if (!b) return out;
+    try {
+      if (typeof b === "string") {
+        var t = b.trim();
+        if (t.charAt(0) === "{") {
+          var j = JSON.parse(t);
+          (Array.isArray(j.items) ? j.items : [j]).forEach(function (x) {
+            if (x && x.id) out.push({ id: String(x.id), q: parseInt(x.quantity, 10) || 1, p: x.properties || {} });
+          });
+          return out;
+        }
+        b = new URLSearchParams(t);
+      }
+      if (typeof b.get === "function" && typeof b.forEach === "function") {
+        var id = b.get("id");
+        if (id) {
+          var p = {};
+          b.forEach(function (val, k) {
+            var m = /^properties\[(.+)\]$/.exec(k);
+            if (m) p[m[1]] = val;
+          });
+          out.push({ id: String(id), q: parseInt(b.get("quantity"), 10) || 1, p: p });
+        }
+      }
+    } catch (e) {}
+    return out;
+  }
+  function noteAdd(init) {
+    var lines = addedLines(init);
+    if (!lines.length) return;
+    var own = pageVids();
+    var brought = {};
+    lines.forEach(function (l) {
+      if (l.p._cgp_gift && l.p._cgp_main) brought[String(l.p._cgp_main)] = 1;
+    });
+    lines.forEach(function (l) {
+      if (l.p._cgp_gift || l.p._addon_for || l.p._cgp_free) return;
+      if (brought[l.id] || own.indexOf(l.id) >= 0) return;
+      pending[l.id] = (pending[l.id] || 0) + l.q;
+    });
+  }
+  // The customer removing a free gift in the cart: don't bring it back this visit.
+  function noteRemove(body) {
+    var items = (lastCart && lastCart.items) || [];
+    var it = body.line
+      ? items[Number(body.line) - 1]
+      : items.filter(function (x) {
+          return x.key === body.id || String(x.variant_id) === String(body.id);
+        })[0];
+    var p = it && props(it);
+    if (p && p._cgp_gift && p._cgp_main && !p._cgp_inc && (parseInt(body.quantity, 10) || 0) === 0) {
+      decline(p._cgp_gift, String(p._cgp_main));
+    }
+  }
+
+  // What the cart should hold. Returns { updates: {key: qty}, adds: [...], gifts: [...] }.
   function plan(cart) {
     var items = cart.items || [];
     var mains = {}; // variant id → units
@@ -154,16 +260,9 @@
 
     // Included parts each main variant needs: "camp|main|giftId" → need.
     var want = {};
-    var t = today();
     Object.keys(mains).forEach(function (v) {
       var it = mainLine[v];
-      var valid = (stamps[it.handle] || []).filter(function (e) {
-        return (
-          e && e.id && e.kind !== "deal" && dateOk(e, t) &&
-          !(e.triggerVariants && e.triggerVariants.length && e.triggerVariants.map(String).indexOf(v) < 0)
-        );
-      });
-      winners(valid).forEach(function (e) {
+      liveFor(it, v).forEach(function (e) {
         if (!e.included) return;
         (e.giftIds || []).forEach(function (gid, i) {
           var h = (e.gifts || [])[i];
@@ -209,7 +308,52 @@
       .filter(function (w) {
         return !w.seen && w.qty > 0;
       });
-    return { updates: n ? updates : null, adds: adds };
+
+    // Free gifts for mains just added without them (see noteAdd).
+    var gifts = [];
+    Object.keys(pending).forEach(function (v) {
+      var it = mainLine[v];
+      if (!it) return; // not in the cart (yet): try on the next check
+      var added = Math.min(pending[v], mains[v]);
+      delete pending[v];
+      liveFor(it, v).forEach(function (e) {
+        if (e.included || declined(e.id, v)) return;
+        var have = items.filter(function (x) {
+          var p = props(x);
+          return p._cgp_gift === e.id && String(p._cgp_main) === v && !p._cgp_inc;
+        });
+        if (have.length) {
+          // The customer already has this campaign's gifts for this main: one
+          // more set of the same gifts per unit added, up to the allowance.
+          var byGift = {};
+          have.forEach(function (x) {
+            var g = (byGift[x.product_id] = byGift[x.product_id] || { line: x, qty: 0 });
+            g.qty += x.quantity;
+          });
+          Object.keys(byGift).forEach(function (pid) {
+            var g = byGift[pid];
+            var per = qtyOf(e, String(pid));
+            var to = Math.min(g.qty + per * added, per * mains[v]);
+            if (to > g.qty && !(g.line.key in updates)) {
+              updates[g.line.key] = g.line.quantity + (to - g.qty);
+              n++;
+            }
+          });
+          return;
+        }
+        // None yet: the product page's default picks.
+        var list = (e.giftIds || [])
+          .map(function (gid, i) {
+            var h = (e.gifts || [])[i];
+            return h ? { gid: String(gid), handle: h, per: qtyOf(e, String(gid)), allowed: (e.giftVariants || {})[gid] || [] } : null;
+          })
+          .filter(Boolean);
+        if (!list.length) return;
+        var k = e.rewardMode === "all" ? list.length : Math.max(1, Math.min(Number(e.chooseCount) || 1, list.length));
+        gifts.push({ camp: e.id, main: v, list: list, k: k, units: added, label: label(it), until: e.endsLabel || "" });
+      });
+    });
+    return { updates: n ? updates : null, adds: adds, gifts: gifts };
   }
 
   /* ---------- Applying + re-rendering the theme's cart ---------- */
@@ -265,6 +409,45 @@
       });
   }
 
+  // An in-stock variant of a gift (one it's offered in), or null.
+  function giftVariant(w) {
+    return origFetch("/products/" + encodeURIComponent(w.handle) + ".js", { headers: { Accept: "application/json" } })
+      .then(json)
+      .then(function (p) {
+        var v = ((p && p.variants) || []).filter(function (x) {
+          return x.available && (!w.allowed.length || w.allowed.map(String).indexOf(String(x.id)) >= 0);
+        })[0];
+        return v ? v.id : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+  // The add-to-cart lines for the default gifts (the first k in stock, in the campaign's order).
+  function giftItems(pl) {
+    return Promise.all(
+      pl.gifts.map(function (g) {
+        return Promise.all(g.list.map(giftVariant)).then(function (ids) {
+          var out = [];
+          g.list.forEach(function (w, i) {
+            if (!ids[i] || out.length >= g.k) return;
+            var pr = {
+              _cgp_gift: g.camp,
+              _cgp_main: g.main,
+              _cgp_per: String(w.per),
+              "Free gift": "with " + g.label,
+            };
+            if (g.until) pr["Free until"] = g.until;
+            out.push({ id: ids[i], quantity: w.per * g.units, properties: pr });
+          });
+          return out;
+        });
+      }),
+    ).then(function (lists) {
+      return [].concat.apply([], lists);
+    });
+  }
+
   function apply(pl) {
     var steps = Promise.resolve(null);
     var changed = false;
@@ -274,11 +457,12 @@
         return post("/cart/update.js", { updates: pl.updates });
       });
     }
-    if (pl.adds.length) {
+    if (pl.adds.length || pl.gifts.length) {
       steps = steps
         .then(function (st) {
-          return Promise.all(pl.adds.map(variantFor)).then(function (ids) {
-            var items = [];
+          return Promise.all([Promise.all(pl.adds.map(variantFor)), giftItems(pl)]).then(function (res) {
+            var ids = res[0];
+            var items = res[1].slice();
             pl.adds.forEach(function (w, i) {
               if (!ids[i]) return;
               items.push({
@@ -567,7 +751,9 @@
         body = JSON.parse(init.body);
       } catch (e) {}
     }
+    if (/\/cart\/add/.test(url)) noteAdd(init);
     if (body && (body.line || body.id) && body.quantity !== undefined) {
+      noteRemove(body);
       p = changeAsBundle(input, init, body);
     } else {
       if (!/\/cart\/change/.test(url)) fresh = false; // add / update / clear: re-read
