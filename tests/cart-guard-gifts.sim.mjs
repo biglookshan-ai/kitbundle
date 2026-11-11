@@ -184,5 +184,25 @@ await test("included part (existing behaviour) still added and follows the main"
   assert.equal(cart.find((l) => l.variant_id === 901).properties._cgp_inc, "1");
 });
 
+await test("cart quantity of the main 1 → 2 → 1: its gifts follow (2, then 1)", async () => {
+  const w = page();
+  await w.fetch("/cart/add.js", json({ items: [{ id: 101, quantity: 1 }] })); await settle();
+  let main = cart.find((l) => l.variant_id === 101);
+  await w.fetch("/cart/change.js", json({ id: main.key, quantity: 2 })); await settle();
+  assert.equal(qty(101), 2); assert.equal(qty(501, "camp_all"), 2); assert.equal(qty(611, "camp_all"), 2);
+  main = cart.find((l) => l.variant_id === 101);
+  await w.fetch("/cart/change.js", json({ id: main.key, quantity: 1 })); await settle();
+  assert.equal(qty(501, "camp_all"), 1); assert.equal(qty(611, "camp_all"), 1);
+});
+await test("a deleted gift doesn't come back when the main's quantity goes up", async () => {
+  const w = page();
+  await w.fetch("/cart/add.js", json({ items: [{ id: 101, quantity: 1 }] })); await settle();
+  const rod = cart.find((l) => l.variant_id === 611);
+  await w.fetch("/cart/change.js", json({ id: rod.key, quantity: 0 })); await settle();
+  const main = cart.find((l) => l.variant_id === 101);
+  await w.fetch("/cart/change.js", json({ id: main.key, quantity: 3 })); await settle();
+  assert.equal(qty(611), 0); assert.equal(qty(501, "camp_all"), 3);
+});
+
 console.log(results.join("\n"));
 process.exit(results.some((r) => r.startsWith("FAIL")) ? 1 : 0);

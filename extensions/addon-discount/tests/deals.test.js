@@ -2,7 +2,8 @@
 // product → ONE reward unit per trigger unit gets pct% off, recognised by
 // product id however the reward was added (no `_cgp_gift` needed).
 import { describe, expect, it } from "vitest";
-import { run } from "../src/run.js";
+// these tests check which units get which discount (before partial lines become whole-line amounts, see wholelines.test.js)
+import { compute as run } from "../src/run.js";
 
 const P = (n) => `gid://shopify/Product/${n}`;
 const V = (n) => `gid://shopify/ProductVariant/${n}`;

@@ -9,7 +9,8 @@
  *   in the cart gets its parts (main units × each part's qty), added here, not
  *   on the product page. They're listed right under their main product with no
  *   price, no quantity box and no link.
- * - Free gifts never exceed (main units × per); they go when the main goes.
+ * - Free gifts never exceed (main units × per); they go when the main goes, and follow it when the customer changes
+ *   the main's quantity in the cart (2026-11-11).
  * - Free gifts for a main added anywhere but its own product page (collection /
  *   search cards, recommendations, other apps; 2026-11-10): the product page's
  *   default picks are added with it. A gift the customer deletes from the cart
@@ -649,12 +650,16 @@
     if (!isMain(it)) return null;
     var u = units(it.variant_id, it, q);
     var n = 0;
+    var seenGift = {};
     items.forEach(function (x) {
       var xp = props(x);
       if (!xp._cgp_gift || String(xp._cgp_main) !== String(it.variant_id)) return;
       var per = Math.max(1, parseInt(xp._cgp_per, 10) || 1);
-      // Included parts follow the main; free gifts only go down with it.
-      up[x.key] = xp._cgp_inc ? u * per : Math.min(x.quantity, u * per);
+      // Included parts and free gifts follow the main, up and down (user 11/11: the cart shows a gift's quantity, it
+      // has no box of its own). The same gift on two lines (different labels): the first line carries it, the rest go.
+      var gk = (xp._cgp_gift || "") + "|" + xp._cgp_main + "|" + x.product_id;
+      up[x.key] = seenGift[gk] ? 0 : u * per;
+      seenGift[gk] = 1;
       n++;
     });
     if (!n) return null;

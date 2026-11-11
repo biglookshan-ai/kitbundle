@@ -230,7 +230,51 @@ function accPercent(group, pid) {
  * @param {RunInput} input
  * @returns {FunctionRunResult}
  */
+/**
+ * Discounts on PART of a line (e.g. a combo deal for 1 of 2 units, the 1st of 4 accessories, gifts above the
+ * allowance) used to name the units: { cartLine: { id, quantity: n } }. Shopify then SPLITS the line in the cart and at
+ * checkout (one line discounted, one not), so the customer sees the same product twice (user 11/11). Same money,
+ * no split: give the whole line the equivalent fixed amount (unit price × n × %), not shared between units.
+ * @param {FunctionRunResult} result
+ * @param {RunInput} input
+ * @returns {FunctionRunResult}
+ */
+function wholeLines(result, input) {
+  const byId = new Map();
+  for (const l of input?.cart?.lines ?? []) {
+    byId.set(l.id, { qty: Number(l?.quantity) || 0, unit: Number(/** @type {any} */ (l)?.cost?.amountPerQuantity?.amount) || 0 });
+  }
+  const out = [];
+  for (const d of result.discounts || []) {
+    const pct = Number(/** @type {any} */ (d)?.value?.percentage?.value);
+    const targets = /** @type {any[]} */ (d.targets || []);
+    const partial = targets.some((t) => {
+      const l = t?.cartLine && byId.get(t.cartLine.id);
+      return l && t.cartLine.quantity != null && t.cartLine.quantity < l.qty;
+    });
+    if (!partial || !(pct > 0)) { out.push(d); continue; }
+    for (const t of targets) {
+      const l = t?.cartLine && byId.get(t.cartLine.id);
+      const n = t?.cartLine?.quantity != null ? Math.min(t.cartLine.quantity, l ? l.qty : 0) : (l ? l.qty : 0);
+      if (!l || n <= 0) continue;
+      if (n >= l.qty) { out.push({ ...d, targets: [t] }); continue; }
+      const amount = Math.round(l.unit * n * pct) / 100;
+      if (!(amount > 0)) continue;
+      out.push({ message: d.message, targets: [{ cartLine: { id: t.cartLine.id } }], value: { fixedAmount: { amount: amount.toFixed(2), appliesToEachItem: false } } });
+    }
+  }
+  return { ...result, discounts: out };
+}
+
+/**
+ * @param {RunInput} input
+ * @returns {FunctionRunResult}
+ */
 export function run(input) {
+  return wholeLines(compute(input), input);
+}
+
+export function compute(input) {
   const lines = input?.cart?.lines ?? [];
   if (lines.length === 0) return EMPTY;
   // Store-local date ("YYYY-MM-DD") for gift-campaign date windows.

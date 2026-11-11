@@ -77,14 +77,14 @@
           "targets": [
             {
               "cartLine": {
-                "id": "gid://shopify/CartLine/2",
-                "quantity": 2
+                "id": "gid://shopify/CartLine/2"
               }
             }
           ],
           "value": {
-            "percentage": {
-              "value": "10.0"
+            "fixedAmount": {
+              "amount": "130.00",
+              "appliesToEachItem": false
             }
           }
         }

@@ -1,7 +1,8 @@
 // Carts a customer could build by calling Shopify's cart API by hand (no product page, no cart UI): none of them may
 // get more off than the shop's own offers allow. (11/10 pre-launch check of the new cart.)
 import { describe, test, expect } from "vitest";
-import { run } from "../src/run.js";
+// these tests check which units get which discount (before partial lines become whole-line amounts, see wholelines.test.js)
+import { compute as run } from "../src/run.js";
 
 const P = (n) => "gid://shopify/Product/" + n, V = (n) => "gid://shopify/ProductVariant/" + n;
 let lid = 0;
