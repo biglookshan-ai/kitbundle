@@ -26,3 +26,9 @@
 - KitBundle:`npx shopify app release --version kitbundle-128`
 - 主题:推主题仓库 `docs/releases/2026-11-17-unified-atc-button/before/snippets/buy-buttons.liquid`
 - 测试主题上留着 `kbtest-addon-save.js/.css` 两个临时文件(没被引用,不影响),要删时再删
+
+## ✅ 上线(2026-11-17)
+- KitBundle `CI=1 shopify app deploy --allow-updates` → **kitbundle-129**;正式店先确认新版生效(旧主题下也正常)
+- 主题:推前拉正式 buy-buttons 和 before/ 一致 → `--allow-live --nodelete` 推 3 个文件 → 拉回逐字节一致
+- 正式店复测:普通 £11.19 / 数量 2 £22.38;Smart Fusion £65.00 / + Motor 3 items £289.00 / 6 items £578.00;ColourFlex 套装 3 items £49.19;卖完 NOT AVAILABLE;手机两行;两个按钮真实加购成功
+- ⚠️ 真实加购测试在用户 Chrome 购物车里做的,恢复时被 KitBundle 购物车守卫打乱(13 件 → 11 件,Smart Fusion + Motor 套装和赠品那几行),没能精确还原,已告知用户
