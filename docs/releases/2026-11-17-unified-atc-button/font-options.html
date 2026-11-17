@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>加购按钮字体 · 参考 Moment</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap">
+<style>
+  :root { --sys: system_ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f3f3; color: #1c222d; font-family: var(--sys); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1000px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { font-size: 13px; color: #555; margin: 0 0 20px; line-height: 1.7; }
+  h2 { font-size: 15px; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #ddd; }
+  .card { background: #fff; border-radius: 8px; padding: 16px 20px 20px; margin-bottom: 12px; }
+  .card__t { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .card__d { font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.55; }
+  .spec { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; background: #f4f4f4; padding: 1px 6px; border-radius: 3px; }
+  .ref { display: block; border-radius: 6px; box-shadow: 0 0 0 1px #e6e6e6; }
+  .rows { display: flex; flex-direction: column; gap: 12px; }
+  .lab { font-size: 11px; color: #888; margin-bottom: 4px; }
+
+  /* same row as the live product page */
+  .row { display: flex; gap: 15px; width: 599px; }
+  .qty { flex: 0 0 142px; height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px;
+         border-radius: 4px; box-shadow: 0 0 0 1px rgba(28,34,45,.1); font-size: 16px; }
+  .qty i { font-style: normal; font-size: 18px; font-weight: 300; }
+  .atc { position: relative; overflow: hidden; z-index: 0; flex: 1; min-height: 47px; border: 0; border-radius: 8px;
+         background: #fcc900; color: #1c222d; cursor: pointer; display: flex; align-items: center; justify-content: center;
+         gap: .4em; padding: 0 14px; text-transform: uppercase; line-height: 1.2; transition: color .5s ease; }
+  .atc::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 0; z-index: -1; border-radius: 8px; background: #000; transition: width .5s ease-out; }
+  .atc:hover { color: #fff; } .atc:hover::before { width: 100%; }
+  .atc.is-hover { color: #fff; } .atc.is-hover::before { width: 100%; transition: none; }
+  .atc span { white-space: nowrap; }
+  .atc.two { flex-direction: column; gap: 0; }
+
+  .cur { font-family: var(--sys); font-size: 16px; font-weight: 300; letter-spacing: .06em; }
+  .optA { font-family: "Geist", var(--sys); font-size: 12px; font-weight: 400; letter-spacing: .12em; }
+  .optB { font-family: var(--sys); font-size: 12px; font-weight: 500; letter-spacing: .12em; }
+
+  .phone .row { width: 345px; }
+  .phone .qty { flex-basis: 104px; padding: 0 8px; font-size: 14px; }
+  .phone .atc { padding: 0 8px; }
+  .phonebox { width: 375px; background: #fff; border-radius: 16px; padding: 14px 15px 16px; box-shadow: 0 0 0 1px #ddd; }
+  .grid2 { display: flex; gap: 14px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>加购按钮字体 · 参考 Moment</h1>
+  <p class="lead">
+    只改按钮里的<b>字</b>：大小、字距、粗细、全大写参考 Moment；按钮的黄底黑字、尺寸、划黑动画都不变。<br>
+    Moment 实测：<span class="spec">Geist · 12px · 字重 400（写的 500，但它只加载了 400 / 600，实际显示是 400）· 全大写 · 字距 0.12em</span>
+  </p>
+
+  <h2>参考：Moment 原样</h2>
+  <div class="card">
+    <img class="ref" src="shots/ref-moment.png" alt="Moment add to cart button" width="464" height="90">
+  </div>
+
+  <h2>电脑</h2>
+  <div class="card">
+    <div class="rows">
+      <div><div class="lab">现在（网站字体 · 16px · 细体 300 · 字距 0.06em）</div>
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc cur"><span>Add to cart</span><span>- £65.00</span></button></div></div>
+      <div><div class="lab">方案 A：Geist 字体（和 Moment 一样）· 12px · 400 · 字距 0.12em</div>
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc optA"><span>Add to cart</span><span>- £65.00</span></button></div></div>
+      <div><div class="lab">方案 B：网站现有字体 · 12px · 中粗 500 · 字距 0.12em（不加字体文件）</div>
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc optB"><span>Add to cart</span><span>- £65.00</span></button></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card__t">长一点的文字 + 鼠标移上去</div>
+    <div class="rows">
+      <div><div class="lab">方案 A</div>
+        <div class="row"><div class="qty"><i>−</i>2<i>+</i></div><button class="atc optA"><span>Add 6 items to cart</span><span>- £578.00</span></button></div></div>
+      <div><div class="lab">方案 A · 鼠标移上去</div>
+        <div class="row"><div class="qty"><i>−</i>2<i>+</i></div><button class="atc optA is-hover"><span>Add 6 items to cart</span><span>- £578.00</span></button></div></div>
+      <div><div class="lab">方案 B</div>
+        <div class="row"><div class="qty"><i>−</i>2<i>+</i></div><button class="atc optB"><span>Add 6 items to cart</span><span>- £578.00</span></button></div></div>
+      <div><div class="lab">方案 B · 鼠标移上去</div>
+        <div class="row"><div class="qty"><i>−</i>2<i>+</i></div><button class="atc optB is-hover"><span>Add 6 items to cart</span><span>- £578.00</span></button></div></div>
+    </div>
+  </div>
+
+  <h2>手机（375 宽）</h2>
+  <div class="grid2 phone">
+    <div class="phonebox"><div class="lab">方案 A</div>
+      <div class="rows">
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc optA"><span>Add to cart</span><span>- £65.00</span></button></div>
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc optA two"><span>Add 3 items to cart</span><span>£289.00</span></button></div>
+      </div></div>
+    <div class="phonebox"><div class="lab">方案 B</div>
+      <div class="rows">
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc optB"><span>Add to cart</span><span>- £65.00</span></button></div>
+        <div class="row"><div class="qty"><i>−</i>1<i>+</i></div><button class="atc optB two"><span>Add 3 items to cart</span><span>£289.00</span></button></div>
+      </div></div>
+  </div>
+  <p class="lead" style="margin-top:14px">
+    方案 A 要往主题里加一个 Geist 字体文件（免费开源字体，约 30KB，只给加购按钮用，放在自己主题里，不从 Google 加载）。<br>
+    方案 B 用网站现在的字体，不加任何东西；在 Mac 上是苹果系统字体，在 Windows 上是 Segoe UI，所以字形和 Moment 不完全一样。
+  </p>
+</div>
+</body>
+</html>

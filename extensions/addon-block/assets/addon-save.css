@@ -2569,14 +2569,18 @@ a.cgp-modal__cname:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4em;
+  gap: 0.45em;
   min-height: 47px; /* same height as the theme's quantity + button row */
   padding: 0 14px;
   background: var(--cgp-cta-bg, #fcc900);
   color: var(--cgp-cta-text, #1c222d);
-  font-weight: 300;
+  /* Same label type as the theme button: Geist 12px regular, caps, 0.12em.
+     The @font-face "CGP Geist" is declared by the theme's buy-buttons snippet. */
+  font-family: "CGP Geist", var(--cgp-cta-family, inherit), sans-serif;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
   line-height: 1.2;
   opacity: 1;
   transition: color 0.5s ease;
@@ -2610,7 +2614,7 @@ a.cgp-modal__cname:hover {
 }
 .cgp-cta__price {
   display: inline-flex;
-  gap: 0.4em;
+  gap: 0.45em;
 }
 .cgp-cta__price[hidden] {
   display: none;
@@ -2668,7 +2672,6 @@ a.cgp-modal__cname:hover {
     width: 30px;
   }
   .cgp-addon .cgp-buyrow > .cgp-cta {
-    letter-spacing: 0.05em;
     padding: 0 8px;
   }
 }
