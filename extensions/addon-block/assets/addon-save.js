@@ -196,21 +196,15 @@
           if (cs.borderRadius)
             root.style.setProperty("--cgp-cta-radius", cs.borderRadius);
           if (cs.fontSize) root.style.setProperty("--cgp-cta-font", cs.fontSize);
-          if (cs.fontWeight)
-            root.style.setProperty("--cgp-cta-weight", cs.fontWeight);
           // Family/tracking/leading matter as much as the numeric weight — the
           // same 500 in a different face or with extra letter-spacing reads as
           // a different thickness.
           if (cs.fontFamily)
             root.style.setProperty("--cgp-cta-family", cs.fontFamily);
-          if (cs.letterSpacing)
-            root.style.setProperty("--cgp-cta-spacing", cs.letterSpacing);
           if (cs.lineHeight && cs.lineHeight !== "normal")
             root.style.setProperty("--cgp-cta-line", cs.lineHeight);
           var h = parseFloat(cs.minHeight) || btn.offsetHeight || 0;
           if (h > 0) root.style.setProperty("--cgp-cta-height", h + "px");
-          if (cs.textTransform)
-            root.style.setProperty("--cgp-cta-transform", cs.textTransform);
           return;
         }
       }
@@ -610,43 +604,82 @@
     count += ctx.freeItems.length;
     count += campaignGiftUnits(addUnitsOf(plan));
 
-    // Total summary lives ABOVE the button; the button label stays static so it
-    // can carry Pre-Order / Sold-out states without us overwriting it.
+    // Quantity box sits LEFT of the button (same pairing as the theme's own
+    // product form). Skipped when a "No bundle" card owns quantity itself.
     if (ctx.summaryEl) {
       ctx.summaryEl.innerHTML = "";
-      if (count > 0) {
+      if (count > 0 && !ctx.hasDefaultCard && themeQtyInput()) {
         ctx.summaryEl.hidden = false;
-        // Two separate boxes on one row (like the theme's own quantity + button
-        // pairing): quantity on the left, the totals panel on the right. Quantity
-        // is skipped when a "No bundle" card already owns it with its own stepper.
-        if (!ctx.hasDefaultCard && themeQtyInput()) {
-          var qbox = el("div", "cgp-total__qtybox");
-          qbox.appendChild(buildTotalQty(ctx));
-          ctx.summaryEl.appendChild(qbox);
-          hideThemeQty();
-        }
-        var sum = el("div", "cgp-total__sum");
-        sum.appendChild(
-          el(
-            "span",
-            "cgp-total__count",
-            count + (count > 1 ? " items" : " item"),
-          ),
-        );
-        sum.appendChild(
-          el("span", "cgp-total__price", money(total, ctx.currency)),
-        );
-        ctx.summaryEl.appendChild(sum);
+        var qbox = el("div", "cgp-total__qtybox");
+        qbox.appendChild(buildTotalQty(ctx));
+        ctx.summaryEl.appendChild(qbox);
+        hideThemeQty();
       } else {
         ctx.summaryEl.hidden = true;
       }
     }
-    // Label + disabled state mirror the theme's own button ("Pre-Order Now",
-    // "Sold out", …) — never a hardcoded "Add to cart" when the theme says otherwise.
-    if (cta && !cta.classList.contains("is-done") && !cta.classList.contains("is-loading")) {
-      cta.textContent = ctx.ctaLabel || "Add to cart";
-      cta.disabled = !!ctx.nativeDisabled;
+    // The button carries the total: "ADD TO CART - £65.00", or
+    // "ADD 3 ITEMS TO CART - £318.00" once anything beyond the main product
+    // (bundle parts, add-ons, gifts) is going in.
+    ctx.ctaCount = count;
+    ctx.ctaTotal = total;
+    ctx.ctaOnlyMain =
+      plan.bundles.length === 0 &&
+      plan.addonItems.length === 0 &&
+      count === plan.mainsForAddons;
+    paintCta(ctx);
+  }
+
+  // Head text of the button. Mirrors the theme's own label ("Add to cart",
+  // "Pre-Order Now", "Not Available"…) and only rewrites it into the
+  // "N items" form for the two buying labels we understand.
+  function ctaHead(ctx) {
+    var label = ctx.ctaLabel || "Add to cart";
+    if (ctx.nativeDisabled || ctx.ctaOnlyMain || !(ctx.ctaCount > 1)) return label;
+    var n = ctx.ctaCount;
+    if (/pre-?\s?order/i.test(label)) return "Pre-order " + n + " items";
+    if (/add to (cart|basket)/i.test(label)) return "Add " + n + " items to cart";
+    return label;
+  }
+
+  function paintCta(ctx) {
+    var cta = ctx.cta;
+    if (!cta || cta.classList.contains("is-loading")) return;
+    var showPrice = !ctx.nativeDisabled && ctx.ctaCount > 0;
+    if (!cta.__cgpBuilt) {
+      cta.textContent = "";
+      cta.appendChild(el("span", "cgp-cta__label"));
+      var pr = el("span", "cgp-cta__price");
+      pr.appendChild(el("span", "cgp-cta__sep", "-"));
+      pr.appendChild(el("span", "cgp-cta__amt"));
+      cta.appendChild(pr);
+      var sp = el("span", "cgp-cta__spin");
+      sp.appendChild(el("i"));
+      cta.appendChild(sp);
+      cta.__cgpBuilt = true;
     }
+    cta.querySelector(".cgp-cta__label").textContent = ctaHead(ctx);
+    cta.querySelector(".cgp-cta__amt").textContent = showPrice
+      ? money(ctx.ctaTotal || 0, ctx.currency)
+      : "";
+    cta.querySelector(".cgp-cta__price").hidden = !showPrice;
+    cta.disabled = !!ctx.nativeDisabled;
+    fitCta(cta);
+  }
+
+  // Label + amount don't fit on one line (narrow phones) → amount underneath.
+  function fitCta(cta) {
+    cta.classList.remove("cgp-cta--2l");
+    var label = cta.querySelector(".cgp-cta__label");
+    var price = cta.querySelector(".cgp-cta__price");
+    if (!label || !price || price.hidden || !cta.clientWidth) return;
+    var cs = getComputedStyle(cta);
+    var room =
+      cta.clientWidth -
+      parseFloat(cs.paddingLeft || 0) -
+      parseFloat(cs.paddingRight || 0);
+    if (label.scrollWidth + price.scrollWidth + parseFloat(cs.columnGap || 6) > room)
+      cta.classList.add("cgp-cta--2l");
   }
 
   function refreshMainInCart(ctx) {
@@ -3088,6 +3121,15 @@
 
   function setupCTA(ctx) {
     if (!ctx.cta) return;
+    // Quantity + button on one row. Older block markup has them as loose
+    // siblings — wrap them here so the layout doesn't depend on the block.
+    var parent = ctx.cta.parentNode;
+    if (parent && !parent.classList.contains("cgp-buyrow")) {
+      var row = el("div", "cgp-buyrow");
+      parent.insertBefore(row, ctx.summaryEl && ctx.summaryEl.parentNode === parent ? ctx.summaryEl : ctx.cta);
+      if (ctx.summaryEl && ctx.summaryEl.parentNode === parent) row.appendChild(ctx.summaryEl);
+      row.appendChild(ctx.cta);
+    }
     ctx.cta.addEventListener("click", function () {
       commit(ctx);
     });
@@ -3095,6 +3137,9 @@
     syncCtaFromNative(ctx);
     observeNativeButton(ctx);
     ctx.cta.hidden = false;
+    window.addEventListener("resize", function () {
+      fitCta(ctx.cta);
+    });
   }
 
   function nativeAddSelector() {
@@ -3142,17 +3187,17 @@
     if (!ctx.cta) return;
     var nb = nativeAddButton();
     if (!nb) return;
-    var txt = (nb.textContent || nb.value || "").replace(/\s+/g, " ").trim();
+    var lab = nb.querySelector(".product-form__submit-label");
+    var txt = ((lab ? lab.textContent : nb.textContent) || nb.value || "")
+      .replace(/\s+/g, " ")
+      .replace(/\s-\s*[^\s]*\d[\d.,]*\s*$/, "") // old theme: strip a trailing " - £65.00"
+      .trim();
     if (txt) ctx.ctaLabel = txt;
     ctx.nativeDisabled =
       nb.disabled === true ||
       nb.getAttribute("aria-disabled") === "true" ||
       nb.classList.contains("disabled");
-    var cta = ctx.cta;
-    if (!cta.classList.contains("is-loading") && !cta.classList.contains("is-done")) {
-      cta.textContent = ctx.ctaLabel || "Add to cart";
-      cta.disabled = !!ctx.nativeDisabled;
-    }
+    paintCta(ctx);
   }
 
   // A pre-order / inventory app may relabel the native button after load —
@@ -3244,7 +3289,6 @@
   function commit(ctx) {
     var cta = ctx.cta;
     if (!cta) return;
-    var original = cta.textContent;
     cta.disabled = true;
     cta.classList.add("is-loading");
 
@@ -3444,27 +3488,21 @@
         });
       })
       .then(function () {
-        cta.classList.remove("is-loading");
-        cta.classList.add("is-done");
-        cta.textContent = "✓ Added to cart";
         ctx.mainInCart = true; // the main is now in the cart
         clearSelection(ctx);
         document.dispatchEvent(new CustomEvent("cgp:addon:added"));
         return refreshCartUI(true); // explicit add → open the drawer
       })
       .then(function () {
-        setTimeout(function () {
-          cta.classList.remove("is-done");
-          cta.disabled = false;
-          // Restore the theme button's own label (Pre-order now / Add to cart).
-          cta.textContent = original;
-          updateCTA(ctx);
-        }, 1800);
+        // Like the theme: spinner until the drawer opens, then the live label.
+        cta.classList.remove("is-loading");
+        cta.disabled = false;
+        updateCTA(ctx);
       })
       .catch(function (err) {
         cta.classList.remove("is-loading");
         cta.disabled = false;
-        cta.textContent = original;
+        paintCta(ctx);
         try {
           console.error("[cgp] add to cart failed:", err);
         } catch (e) {}

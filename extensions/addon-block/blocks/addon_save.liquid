@@ -131,8 +131,15 @@
       config: a product with ONLY a gift campaign still needs our CTA, or the
       theme's own button adds the main product without the gifts.
     {%- endcomment -%}
-    <div class="cgp-total" data-cgp-summary hidden></div>
-    <button class="cgp-cta" type="button" data-cgp-cta hidden></button>
+    {%- comment -%}
+      One row like the theme's own product form: quantity on the left, the
+      add-to-cart (label + live total) on the right. The quantity box only
+      appears when there's no "No Bundle" card (that card owns its quantity).
+    {%- endcomment -%}
+    <div class="cgp-buyrow">
+      <div class="cgp-total" data-cgp-summary hidden></div>
+      <button class="cgp-cta" type="button" data-cgp-cta hidden></button>
+    </div>
     <div class="cgp-addon__loading" data-cgp-loading>{{ 'Loading…' }}</div>
   </div>
 

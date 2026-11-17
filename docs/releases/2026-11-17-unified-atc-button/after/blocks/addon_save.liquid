@@ -1,0 +1,271 @@
+{%- assign addon_config = product.metafields.custom.addon_config -%}
+{%- assign gift_trigger = product.metafields.custom.gift_trigger -%}
+{%- assign has_addon = false -%}
+{%- if addon_config != blank and addon_config.value.groups.size > 0 -%}
+  {%- assign has_addon = true -%}
+{%- endif -%}
+{%- comment -%} This product triggers a gift campaign (self-contained stamp). {%- endcomment -%}
+{%- assign has_gifts = false -%}
+{%- assign has_included = false -%}
+{%- if gift_trigger != blank and gift_trigger.value.size > 0 -%}
+  {%- assign has_gifts = true -%}
+  {%- for e in gift_trigger.value -%}
+    {%- if e.included -%}{%- assign has_included = true -%}{%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+
+{%- comment -%}
+  Comes with included parts (added in the cart by the KitBundle cart guard):
+  "Buy it now" would skip the cart, so it's hidden here.
+{%- endcomment -%}
+{%- if has_included -%}
+  <style>.shopify-payment-button { display: none !important; }</style>
+{%- endif -%}
+
+{%- comment -%}
+  "Not sold separately" (set by KitBundle on parts given with another product,
+  often £0): no add-to-cart here. The checkout rule blocks it on its own too.
+{%- endcomment -%}
+{%- assign kb_gift_only = product.metafields.custom.kb_gift_only -%}
+{%- if kb_gift_only != blank -%}
+  <style>
+    form[action*="/cart/add"] [name="add"],
+    form[action*="/cart/add"] .product-form__submit,
+    form[action*="/cart/add"] .product-form__quantity,
+    form[action*="/cart/add"] quantity-input,
+    .product-form__quantity,
+    .shopify-payment-button { display: none !important; }
+  </style>
+  <div class="cgp-gift-only">
+    Included with {{ kb_gift_only.value.with | default: 'another product' | escape }}. Not sold separately.
+  </div>
+{%- endif -%}
+
+{%- if has_addon or has_gifts -%}
+  <div
+    class="cgp-addon"
+    data-cgp-addon
+    data-product-id="{{ product.id }}"
+    data-product-handle="{{ product.handle }}"
+    data-currency="{{ cart.currency.iso_code | default: shop.currency }}"
+    data-show-strikethrough="{{ block.settings.show_strikethrough }}"
+    data-vat-rate="{{ block.settings.vat_rate | default: 0 }}"
+    data-bundle-layout="{{ block.settings.bundle_layout | default: 'card' }}"
+    data-default-card="{{ block.settings.show_default_card | default: true }}"
+    data-default-label="{{ block.settings.default_card_label | default: 'No Bundle' | escape }}"
+    style="
+      {%- if block.settings.accent_color != blank %}--cgp-accent: {{ block.settings.accent_color }};{% endif -%}
+      {%- if block.settings.cta_bg != blank %}--cgp-cta-bg: {{ block.settings.cta_bg }};{% endif -%}
+      {%- if block.settings.cta_text != blank %}--cgp-cta-text: {{ block.settings.cta_text }};{% endif -%}
+      {%- if block.settings.gift_heading_color != blank %}--cgp-gift-heading: {{ block.settings.gift_heading_color }};{% endif -%}
+      --cgp-cta-radius: {{ block.settings.cta_radius | default: 12 }}px;
+      --cgp-cta-font: {{ block.settings.cta_font_size | default: 16 }}px;
+    "
+  >
+    {%- comment -%} Gift campaigns this product triggers (self-contained). {%- endcomment -%}
+    {%- if has_gifts -%}
+      <script type="application/json" data-cgp-gifts>
+        {{ gift_trigger.value | json }}
+      </script>
+      <div class="cgp-gift-promo" data-cgp-giftpromo hidden></div>
+    {%- endif -%}
+
+    {%- if has_addon -%}
+      {%- comment -%} Config is handed to JS as JSON; JS fetches each product's live price/variants. {%- endcomment -%}
+      <script type="application/json" data-cgp-config>
+        {{ addon_config.value | json }}
+      </script>
+
+      {%- comment -%}
+        Inventory map (handle -> total available, or null when untracked). The AJAX
+        product JSON omits inventory_quantity, so we read it here via all_products
+        for the main + every bundle accessory. Used for whole-kit stock.
+      {%- endcomment -%}
+      <script type="application/json" data-cgp-inventory>
+        {
+        {%- assign main_qty = 0 -%}{%- assign main_tracked = false -%}
+        {%- for v in product.variants -%}
+          {%- if v.inventory_management -%}{%- assign main_tracked = true -%}{%- if v.inventory_quantity > 0 -%}{%- assign main_qty = main_qty | plus: v.inventory_quantity -%}{%- endif -%}{%- endif -%}
+        {%- endfor -%}
+        "{{ product.handle }}": {% if main_tracked %}{{ main_qty }}{% else %}null{% endif %}
+        {%- for group in addon_config.value.groups -%}
+          {%- if group.type == "bundle" -%}
+            {%- for a in group.accessories -%}
+              {%- assign ap = all_products[a.handle] -%}
+              {%- if ap != blank -%}
+                {%- assign aq = 0 -%}{%- assign atr = false -%}
+                {%- for v in ap.variants -%}
+                  {%- if v.inventory_management -%}{%- assign atr = true -%}{%- if v.inventory_quantity > 0 -%}{%- assign aq = aq | plus: v.inventory_quantity -%}{%- endif -%}{%- endif -%}
+                {%- endfor -%}
+                ,"{{ a.handle }}": {% if atr %}{{ aq }}{% else %}null{% endif %}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endif -%}
+        {%- endfor -%}
+        }
+      </script>
+
+      <div class="cgp-addon__free" data-cgp-free hidden></div>
+
+      <div class="cgp-addon__bundles" data-cgp-bundles hidden>
+        <div class="cgp-addon__sec-head">
+          <h2 class="cgp-addon__heading">{{ block.settings.bundle_heading | escape }}</h2>
+          <div class="cgp-addon__counter" data-cgp-bundle-counter></div>
+        </div>
+        <div class="cgp-addon__bundle-list" data-cgp-bundle-list></div>
+      </div>
+
+      <div class="cgp-addon__addons" data-cgp-addons hidden>
+        <div class="cgp-addon__sec-head">
+          <h2 class="cgp-addon__heading">{{ block.settings.heading | escape }}</h2>
+          <div class="cgp-addon__counter" data-cgp-counter></div>
+        </div>
+        <div class="cgp-addon__tabs" data-cgp-tabs role="tablist"></div>
+        <div class="cgp-addon__grid" data-cgp-grid aria-live="polite"></div>
+      </div>
+
+    {%- endif -%}
+
+    {%- comment -%}
+      Totals + add-to-cart belong to the whole widget, not just the add-on
+      config: a product with ONLY a gift campaign still needs our CTA, or the
+      theme's own button adds the main product without the gifts.
+    {%- endcomment -%}
+    {%- comment -%}
+      One row like the theme's own product form: quantity on the left, the
+      add-to-cart (label + live total) on the right. The quantity box only
+      appears when there's no "No Bundle" card (that card owns its quantity).
+    {%- endcomment -%}
+    <div class="cgp-buyrow">
+      <div class="cgp-total" data-cgp-summary hidden></div>
+      <button class="cgp-cta" type="button" data-cgp-cta hidden></button>
+    </div>
+    <div class="cgp-addon__loading" data-cgp-loading>{{ 'Loading…' }}</div>
+  </div>
+
+  {%- if has_addon -%}
+    <div class="cgp-modal" data-cgp-modal hidden>
+      <div class="cgp-modal__backdrop" data-cgp-modal-close></div>
+      <div class="cgp-modal__dialog" role="dialog" aria-modal="true">
+        <button class="cgp-modal__x" data-cgp-modal-close aria-label="Close">&times;</button>
+        <div class="cgp-modal__body" data-cgp-modal-body></div>
+      </div>
+    </div>
+  {%- endif -%}
+
+  <script src="{{ 'addon-save.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Bundle & Add-ons",
+  "target": "section",
+  "stylesheet": "addon-save.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "bundle_heading",
+      "label": "Bundle section heading",
+      "default": "Bundle & Save"
+    },
+    {
+      "type": "select",
+      "id": "bundle_layout",
+      "label": "Bundle layout",
+      "options": [
+        { "value": "card", "label": "Slider (cards)" },
+        { "value": "list", "label": "List (stacked rows)" }
+      ],
+      "default": "card",
+      "info": "Slider shows 3 cards per view and scrolls horizontally with nav buttons for more. List shows stacked rows with inline detail (paged at 4). Both share the same card styling."
+    },
+    {
+      "type": "checkbox",
+      "id": "show_default_card",
+      "label": "Show a “just the product” option first",
+      "default": true,
+      "info": "Adds a first card for buying the product on its own (no bundle), selected by default — so customers know a bundle is optional."
+    },
+    {
+      "type": "text",
+      "id": "default_card_label",
+      "label": "“No bundle” card badge label",
+      "default": "No Bundle"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Add-on section heading",
+      "default": "Add On & Save"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_strikethrough",
+      "label": "Show original price struck through",
+      "default": true
+    },
+    {
+      "type": "number",
+      "id": "vat_rate",
+      "label": "VAT rate for price labels (%)",
+      "info": "0 = off. When set (e.g. 20), bundle prices show “ex VAT” and the savings show “inc VAT” (× the rate). For tax-inclusive markets."
+    },
+    {
+      "type": "header",
+      "content": "Add to cart button"
+    },
+    {
+      "type": "paragraph",
+      "content": "Match the button to your theme — set its colour, text colour, corner radius and text size."
+    },
+    {
+      "type": "color",
+      "id": "cta_bg",
+      "label": "Button colour",
+      "default": "#2b44ff"
+    },
+    {
+      "type": "color",
+      "id": "cta_text",
+      "label": "Button text colour",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "cta_radius",
+      "label": "Corner radius",
+      "min": 0,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "cta_font_size",
+      "label": "Text size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Widget accent"
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Highlight colour (selected items, prices)",
+      "default": "#2b44ff"
+    },
+    {
+      "type": "color",
+      "id": "gift_heading_color",
+      "label": "Free gift heading colour",
+      "info": "Colour of the gift section's title (e.g. “Free item with purchase”). Leave empty to use the theme's text colour."
+    }
+  ]
+}
+{% endschema %}

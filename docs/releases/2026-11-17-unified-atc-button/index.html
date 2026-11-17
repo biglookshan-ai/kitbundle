@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统一加购按钮 · 改前 / 改后对比（2026-11-17）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f3f3f3; color: #1c222d;
+    font-family: system_ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1400px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { font-size: 13px; color: #555; margin: 0 0 8px; line-height: 1.7; }
+  .meta { font-size: 12px; color: #777; margin: 0 0 22px; }
+  .meta b { color: #1c222d; }
+  h2 { font-size: 15px; margin: 34px 0 12px; padding-bottom: 6px; border-bottom: 1px solid #ddd; }
+  .case { background: #fff; border-radius: 8px; padding: 14px 18px 18px; margin-bottom: 12px; }
+  .case__title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .case__desc { font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.55; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .pair.phone { grid-template-columns: 375px 375px; justify-content: start; }
+  .col__tag {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 4px; margin-bottom: 8px;
+  }
+  .col__tag.b { background: #eee; color: #555; }
+  .col__tag.a { background: #fff3c2; color: #6b5400; }
+  .shot {
+    display: block; max-width: 100%; height: auto; border-radius: 6px;
+    box-shadow: 0 0 0 1px #e6e6e6; background: #fff;
+  }
+  .single { display: flex; gap: 18px; flex-wrap: wrap; }
+  .single figure { margin: 0; }
+  .single figcaption { font-size: 12px; color: #666; margin-top: 6px; }
+  ul.changes { font-size: 13px; line-height: 1.75; padding-left: 20px; margin: 0; }
+  table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+  th, td { border-bottom: 1px solid #eee; padding: 7px 8px; text-align: left; vertical-align: top; }
+  th { color: #666; font-weight: 600; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #f4f4f4; padding: 1px 5px; border-radius: 3px; }
+  .note { font-size: 12px; color: #777; margin-top: 10px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>统一加购按钮 · 改前 / 改后对比</h1>
+  <p class="lead">
+    普通产品和 KitBundle 产品的加购按钮统一成一种：黄底黑字、全大写、细体、不带图标，鼠标移上去黑色从左往右划过、字变白。
+    左边数量、右边按钮，按钮文字带总金额并随选项实时更新；有套装配件、加购配件或赠品时显示「ADD N ITEMS TO CART」。
+  </p>
+  <p class="meta">
+    「改前」= 2026-11-17 正式店截图（正式主题 #183074816378 + 当时的 KitBundle）。
+    「改后」= 同一产品在测试主题 #186525057402 上的截图（KitBundle 用这次的新代码），截图尺寸 1:1。
+    <br>状态：<b>已在测试主题实测通过，尚未上正式店。</b>
+  </p>
+
+  <h2>① 普通产品（主题自带按钮）· Thunderbolt 5 Cable - Braided Series</h2>
+  <div class="case">
+    <div class="case__title">电脑</div>
+    <div class="case__desc">去掉购物车图标；全大写细体；金额跟着款式和数量变（实测 0.3m → 0.5m：£11.19 → £12.00；数量 1 → 2 → 3：£12 → £24 → £36）。</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-plain-desktop.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-plain-desktop.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">手机（375 宽）</div>
+    <div class="case__desc">数量框从 142px 收窄到 104px，给按钮留出放金额的位置。</div>
+    <div class="pair phone">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-plain-mobile.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-plain-mobile.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">卖完（2m 款）</div>
+    <div class="case__desc">样子跟原来一样，只是改成全大写细体；不显示金额。另外：卖完时鼠标移上去不再划黑（原来会划，看起来像能点）。</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-plain-soldout.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-plain-soldout.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">鼠标移上去（改后）</div>
+    <div class="case__desc">主题原有的划过动画，没改。</div>
+    <div class="single"><figure><img class="shot" src="shots/after-plain-desktop-hover.png" alt=""></figure></div>
+  </div>
+
+  <h2>② KitBundle 产品 · 只买主产品 · PDMOVIE SMART FUSION</h2>
+  <div class="case">
+    <div class="case__title">电脑</div>
+    <div class="case__desc">原来：数量框 + 「1 item £65.00」总价框一行，按钮单独一行。改后：总价框去掉，金额进按钮，数量和按钮一行，和普通产品完全一样（高度都是 47px）。</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-kb-gift-desktop.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-kb-gift-desktop.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">手机</div>
+    <div class="pair phone">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-kb-gift-mobile.png" alt=""></div>
+      <div><span class="col__tag a">改后（带赠品时的样子，见下一节）</span><img class="shot" src="shots/after-kb-gifts-on-mobile.png" alt=""></div>
+    </div>
+  </div>
+
+  <h2>③ KitBundle 产品 · 带免费赠品 · SMART FUSION + Motor</h2>
+  <div class="case">
+    <div class="case__title">电脑</div>
+    <div class="case__desc">主产品 + 2 个免费赠品 = 3 件，按钮显示 ADD 3 ITEMS TO CART - £289.00。实测：数量改 2 → ADD 6 ITEMS TO CART - £578.00；勾「No thanks」→ 变回 ADD TO CART - £289.00。</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-kb-gifts-on-desktop.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-kb-gifts-on-desktop.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">手机</div>
+    <div class="case__desc">文字一行放不下时，金额自动换到第二行，按钮高度不变。</div>
+    <div class="pair phone">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-kb-gifts-on-mobile.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-kb-gifts-on-mobile.png" alt=""></div>
+    </div>
+  </div>
+
+  <h2>④ KitBundle 产品 · 选了套装 · Thunderbolt 5 Cable - ColourFlex（Thunder 5 Kit）</h2>
+  <div class="case">
+    <div class="case__title">电脑</div>
+    <div class="case__desc">这类产品有「No Bundle」卡片，数量在每张卡片上自己选，所以按钮左边没有数量框、按钮整行宽（和原来一样）。</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-kb-bundle-desktop.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-kb-bundle-desktop.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">手机</div>
+    <div class="pair phone">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/before-kb-bundle-mobile.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/after-kb-bundle-mobile.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">鼠标移上去 / 点了之后（改后）</div>
+    <div class="case__desc">原来 KitBundle 按钮移上去只是稍微变淡；现在和主题一样划黑。点击后原来是变淡 +「✓ Added to cart」，现在和主题一样转圈，加好后直接打开侧边购物车。</div>
+    <div class="single">
+      <figure><img class="shot" src="shots/after-kb-bundle-hover.png" alt=""><figcaption>鼠标移上去</figcaption></figure>
+      <figure><img class="shot" src="shots/after-kb-bundle-loading.png" alt=""><figcaption>加载中</figcaption></figure>
+    </div>
+  </div>
+
+  <h2>⑤ 改了什么</h2>
+  <div class="case">
+    <table>
+      <tr><th style="width:140px">地方</th><th>文件</th><th>改动</th></tr>
+      <tr><td>主题（普通产品）</td><td><code>snippets/buy-buttons.liquid</code></td><td>去掉购物车图标；按钮里加金额（款式价 × 数量）；附上各款式价格给脚本用</td></tr>
+      <tr><td></td><td><code>assets/cgp-atc.css</code>（新）</td><td>全大写、细体、字距；卖完不显示金额、不划黑；手机数量框 104px；放不下时金额换行</td></tr>
+      <tr><td></td><td><code>assets/cgp-atc.js</code>（新）</td><td>切换款式、改数量时实时更新金额</td></tr>
+      <tr><td>KitBundle</td><td><code>assets/addon-save.js</code></td><td>按钮文字 =「主题按钮文字 - 总额」，有配件 / 赠品时 =「ADD N ITEMS TO CART - 总额」；去掉总价框；数量和按钮包成一行；加载转圈；只读主题按钮的文字部分（不带金额）</td></tr>
+      <tr><td></td><td><code>assets/addon-save.css</code></td><td>新按钮样式（同主题）、划黑动画、数量框同主题（47px、细线 − +）、卖完、加载、手机</td></tr>
+      <tr><td></td><td><code>blocks/addon_save.liquid</code></td><td>数量和按钮包进同一行（脚本也会自己包，旧版 block 也能用）</td></tr>
+    </table>
+    <p class="note">
+      件数怎么算：主产品或套装里的每一件 × 数量 + 加购配件 + 赠品。只有主产品时显示 ADD TO CART；预售时显示 PRE-ORDER NOW - 金额（有配件时 PRE-ORDER N ITEMS - 金额）。
+    </p>
+  </div>
+
+  <h2>⑥ 上线顺序和还原</h2>
+  <div class="case">
+    <ul class="changes">
+      <li><b>先上 KitBundle，再推主题。</b>反过来的话，中间那段时间旧 KitBundle 会把主题按钮里的金额一起抄过去，显示成「ADD TO CART-£289.00」挤在一起（测试时看到过）。</li>
+      <li>还原主题：把本文件夹（主题仓库同名文件夹）<code>before/snippets/buy-buttons.liquid</code> 推回正式主题即可；两个新文件不引用就不起作用。</li>
+      <li>还原 KitBundle：<code>npx shopify app release --version kitbundle-128</code>（上线前的版本）。</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

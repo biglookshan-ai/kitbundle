@@ -2497,3 +2497,178 @@ a.cgp-modal__cname:hover {
   font-size: 14px;
   color: inherit;
 }
+
+/* ==================================================================
+   UNIFIED ADD-TO-CART (2026-11-17) — same button as the theme's product
+   page: yellow / ink, ALL CAPS, light weight, no icon, live total in the
+   label ("ADD 3 ITEMS TO CART - £318.00"), black sweep from the left on
+   hover. Quantity box on the left, button on the right, one row.
+   ================================================================== */
+.cgp-buyrow {
+  display: flex;
+  align-items: stretch;
+  gap: 15px;
+  margin-top: 14px;
+}
+.cgp-buyrow > .cgp-total {
+  flex: 0 0 142px;
+  margin: 0 !important;
+  display: flex;
+}
+.cgp-buyrow > .cgp-total[hidden] {
+  display: none;
+}
+/* Quantity box = the theme's quantity input look. */
+.cgp-buyrow .cgp-total__qtybox {
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: var(--inputs-radius, 4px);
+  box-shadow: 0 0 0 1px rgba(var(--cgp-fg, 28, 34, 45), 0.1);
+  background: #fff;
+  padding: 0 4px;
+  min-height: 47px; /* = theme quantity box (45px + its 1px borders) */
+}
+.cgp-buyrow .cgp-total__qty {
+  width: 100%;
+  justify-content: space-between;
+}
+.cgp-buyrow .cgp-total__qty .cgp-bundle__qtybtn {
+  width: 36px;
+  height: 36px;
+  font-size: 0; /* glyphs drawn below as thin lines, like the theme's icons */
+  position: relative;
+}
+.cgp-buyrow .cgp-total__qty .cgp-bundle__qtybtn::before,
+.cgp-buyrow .cgp-total__qty .cgp-bundle__qtybtn:last-child::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+.cgp-buyrow .cgp-total__qty .cgp-bundle__qtybtn:last-child::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+.cgp-buyrow .cgp-total__qty .cgp-bundle__qtyn {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.cgp-addon .cgp-buyrow > .cgp-cta {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  margin: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  min-height: 47px; /* same height as the theme's quantity + button row */
+  padding: 0 14px;
+  background: var(--cgp-cta-bg, #fcc900);
+  color: var(--cgp-cta-text, #1c222d);
+  font-weight: 300;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  opacity: 1;
+  transition: color 0.5s ease;
+}
+.cgp-addon .cgp-buyrow > .cgp-cta[hidden] {
+  display: none !important;
+}
+/* Theme hover: black fills in from the left, label turns white. */
+.cgp-addon .cgp-buyrow > .cgp-cta::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgb(var(--color-button-hover, 0, 0, 0));
+  transition: width 0.5s ease-out;
+}
+.cgp-addon .cgp-buyrow > .cgp-cta:not(:disabled):hover {
+  opacity: 1;
+  color: rgb(var(--color-button-text-hover, 255, 255, 255));
+}
+.cgp-addon .cgp-buyrow > .cgp-cta:not(:disabled):hover::before {
+  width: 100%;
+}
+.cgp-cta__label,
+.cgp-cta__price {
+  white-space: nowrap;
+}
+.cgp-cta__price {
+  display: inline-flex;
+  gap: 0.4em;
+}
+.cgp-cta__price[hidden] {
+  display: none;
+}
+.cgp-addon .cgp-buyrow > .cgp-cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+/* Adding: label hidden, spinner in the middle (like the theme). */
+.cgp-cta__spin {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.cgp-cta__spin i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(28, 34, 45, 0.25);
+  border-top-color: currentColor;
+  animation: cgp-cta-spin 0.8s linear infinite;
+}
+@keyframes cgp-cta-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cgp-addon .cgp-buyrow > .cgp-cta.is-loading {
+  opacity: 1;
+  cursor: progress;
+}
+.cgp-cta.is-loading .cgp-cta__label,
+.cgp-cta.is-loading .cgp-cta__price {
+  visibility: hidden;
+}
+.cgp-cta.is-loading .cgp-cta__spin {
+  display: flex;
+}
+/* Too long for one line: amount on a second line. */
+.cgp-addon .cgp-buyrow > .cgp-cta.cgp-cta--2l {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.25;
+}
+.cgp-cta--2l .cgp-cta__sep {
+  display: none;
+}
+@media screen and (max-width: 749px) {
+  .cgp-buyrow > .cgp-total {
+    flex-basis: 104px;
+  }
+  .cgp-buyrow .cgp-total__qty .cgp-bundle__qtybtn {
+    width: 30px;
+  }
+  .cgp-addon .cgp-buyrow > .cgp-cta {
+    letter-spacing: 0.05em;
+    padding: 0 8px;
+  }
+}

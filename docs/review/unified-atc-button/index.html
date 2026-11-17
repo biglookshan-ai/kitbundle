@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统一加购按钮 · 各状态预览</title>
+<style>
+  :root {
+    --font: system_ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+    --yellow: #fcc900;
+    --ink: #1c222d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #f3f3f3;
+    font-family: var(--font);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 800px; margin: 0 auto; padding: 28px 40px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { font-size: 13px; color: #555; margin: 0 0 22px; line-height: 1.6; }
+  h2 {
+    font-size: 15px; margin: 34px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid #ddd;
+  }
+  .state {
+    background: #fff; border-radius: 8px; padding: 14px 20px 18px;
+    margin-bottom: 12px;
+  }
+  .state__tag { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .state__sel { font-size: 12px; color: #666; margin-bottom: 12px; }
+  .note { font-size: 12px; color: #777; margin-top: 10px; line-height: 1.55; }
+
+  /* ---------- THE COMPONENT (what would ship) ---------- */
+  .atc-row {
+    display: flex; gap: 15px; align-items: stretch;
+    width: 599px; /* desktop product column width measured on the live site */
+  }
+  .qty {
+    flex: 0 0 142px; height: 47px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 6px;
+    border-radius: 4px; box-shadow: 0 0 0 1px rgba(28, 34, 45, .1);
+    font-size: 16px; background: #fff;
+  }
+  .qty button {
+    width: 36px; height: 36px; border: 0; background: none; font-size: 18px;
+    color: var(--ink); cursor: pointer; font-family: inherit;
+  }
+  .qty span { min-width: 24px; text-align: center; }
+
+  .atc {
+    position: relative; overflow: hidden; flex: 1 1 auto; min-width: 0;
+    min-height: 47px; border: 0; border-radius: 8px; cursor: pointer;
+    background: var(--yellow); color: var(--ink);
+    font-family: var(--font); font-size: 16px; font-weight: 300;
+    text-transform: uppercase; letter-spacing: .06em; line-height: 1.2;
+    display: flex; align-items: center; justify-content: center; padding: 0 14px;
+    transition: color .5s ease;
+  }
+  /* Theme hover: black sweeps in from the left, label turns white. */
+  .atc::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: #000; border-radius: 8px; transition: width .5s ease-out;
+  }
+  .atc > span { position: relative; z-index: 1; white-space: nowrap; }
+  .atc:not(:disabled):hover { color: #fff; }
+  .atc:not(:disabled):hover::before { width: 100%; }
+
+  /* Frozen frames for the static previews */
+  .atc.is-mid::before { width: 52%; transition: none; }
+  .atc.is-mid { color: #6f7378; transition: none; }
+  .atc.is-full::before { width: 100%; transition: none; }
+  .atc.is-full { color: #fff; transition: none; }
+
+  .atc:disabled { cursor: not-allowed; opacity: .5; }
+
+  .atc.is-loading > span:not(.spin) { visibility: hidden; }
+  .atc .spin {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center; z-index: 1;
+  }
+  .atc.is-loading .spin { display: flex; }
+  .spin i {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid rgba(28, 34, 45, .25); border-top-color: var(--ink);
+    animation: r .8s linear infinite;
+  }
+  @keyframes r { to { transform: rotate(360deg); } }
+
+  /* ---------- Mobile ---------- */
+  .phone {
+    width: 375px; background: #fff; border-radius: 18px; padding: 16px 15px 20px;
+    box-shadow: 0 0 0 1px #ddd;
+  }
+  .phone .atc-row { width: 345px; gap: 10px; }
+  .phone .qty { flex-basis: 104px; height: 47px; font-size: 14px; padding: 0 2px; }
+  .phone .qty button { width: 30px; }
+  .phone .atc { font-size: 13px; letter-spacing: .05em; padding: 0 8px; }
+  .phone .atc > span { white-space: normal; text-align: center; }
+  .phone .atc .l2 { display: block; }
+  .phones { display: flex; gap: 10px; flex-wrap: wrap; }
+  .phones .cap { font-size: 12px; color: #666; margin: 0 0 8px; }
+
+  /* Before/after strip */
+  .old-cta {
+    width: 599px; min-height: 53px; border-radius: 8px; background: var(--yellow);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 500; text-transform: capitalize;
+  }
+  .old-total { display: flex; gap: 12px; width: 599px; margin-bottom: 8px; }
+  .old-total .b {
+    border: 1px solid #e3e3e3; border-radius: 6px; height: 48px; display: flex;
+    align-items: center; padding: 0 14px; font-size: 14px;
+  }
+  .old-total .b.sum { flex: 1; justify-content: space-between; }
+
+  /* ---------- Interactive demo ---------- */
+  .demo .opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip {
+    border: 1px solid #ccc; border-radius: 6px; padding: 7px 12px; font-size: 13px;
+    background: #fff; cursor: pointer; font-family: inherit; color: var(--ink);
+  }
+  .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .demo .grp { font-size: 12px; color: #666; margin: 10px 0 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>统一加购按钮 · 各状态预览</h1>
+  <p class="lead">
+    普通产品和 KitBundle 产品用同一个按钮：黄底黑字、全大写、细体、不带图标，鼠标移上去时黑色从左往右划过、字变白。<br>
+    左边数量、右边按钮。按钮文字带上总金额，随选项自动更新；有配件或赠品时改成「ADD N ITEMS TO CART」。<br>
+    下面的价格都是<b>示例</b>，只用来看样式。最后一节可以自己点选项试试按钮怎么变。
+  </p>
+
+  <h2>① 改前 / 改后对比（KitBundle 产品页）</h2>
+  <div class="state">
+    <div class="state__tag">现在</div>
+    <div class="state__sel">数量和总价一行，按钮单独一行，首字母大写、中粗</div>
+    <div class="old-total"><div class="b">− &nbsp;1&nbsp; +</div><div class="b sum"><span style="color:#666;font-size:12px">1 item</span><b style="font-size:18px">£65.00</b></div></div>
+    <div class="old-cta">Add To Cart</div>
+  </div>
+  <div class="state">
+    <div class="state__tag">改后</div>
+    <div class="state__sel">数量在左、按钮在右，金额进按钮里，总价框去掉</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Add to cart - £65.00</span></button></div>
+  </div>
+
+  <h2>② 普通产品（主题自带按钮）</h2>
+  <div class="state">
+    <div class="state__tag">默认</div>
+    <div class="state__sel">数量 1</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Add to cart - £65.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">数量改成 2</div>
+    <div class="state__sel">只是同一个产品买多件，不算「加了别的东西」，所以文字不变、金额翻倍</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>2</span><button>+</button></div>
+      <button class="atc"><span>Add to cart - £130.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">鼠标移上去 · 划过中</div>
+    <div class="state__sel">黑色从左往右铺（0.5 秒），和现在主题按钮一样</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc is-mid"><span>Add to cart - £65.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">鼠标移上去 · 铺满</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc is-full"><span>Add to cart - £65.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">点了之后 · 加载中</div>
+    <div class="state__sel">文字隐藏、中间转圈；加好后直接打开侧边购物车，按钮回到原样</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc is-loading"><span>Add to cart - £65.00</span><span class="spin"><i></i></span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">卖完</div>
+    <div class="state__sel">变淡、鼠标变「禁止」，不显示金额</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc" disabled><span>Sold out</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">预售</div>
+    <div class="state__sel">预售 app 把文字改成 Pre-Order Now 时，照样带上金额</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Pre-order now - £65.00</span></button></div>
+  </div>
+
+  <h2>③ KitBundle 产品（套装 / 配件 / 赠品）</h2>
+  <div class="state">
+    <div class="state__tag">默认（No Bundle）</div>
+    <div class="state__sel">只买主产品 × 1</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Add to cart - £65.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">选了套装</div>
+    <div class="state__sel">Smart Fusion + Motor 套装 × 1 = 2 件</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Add 2 items to cart - £229.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">套装 + 加购配件</div>
+    <div class="state__sel">套装（2 件）+ Handwheel 配件 = 3 件</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Add 3 items to cart - £318.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">带免费赠品</div>
+    <div class="state__sel">主产品 × 1 + 赠品 USB Upgrader（免费）= 2 件，金额不变</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc"><span>Add 2 items to cart - £65.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">套装 × 2 + 赠品</div>
+    <div class="state__sel">数量 2：套装 2 套（4 件）+ 赠品 2 个 = 6 件</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>2</span><button>+</button></div>
+      <button class="atc"><span>Add 6 items to cart - £458.00</span></button></div>
+  </div>
+  <div class="state">
+    <div class="state__tag">鼠标移上去（KitBundle 也一样）</div>
+    <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+      <button class="atc is-full"><span>Add 3 items to cart - £318.00</span></button></div>
+  </div>
+
+  <h2>④ 手机（375 宽）</h2>
+  <p class="note" style="margin-top:0">
+    现在手机上数量框占 142px，按钮只剩 169px，「ADD 3 ITEMS TO CART - £318.00」放不下一行。
+    方案：手机上数量框收窄到 104px（和现在 KitBundle 的一样），文字太长时金额换到第二行，按钮高度不变。
+  </p>
+  <div class="phones">
+    <div class="phone">
+      <p class="cap">默认，一行放得下</p>
+      <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+        <button class="atc"><span>Add to cart - £65.00</span></button></div>
+      <p class="cap" style="margin-top:16px">有配件，金额换第二行</p>
+      <div class="atc-row"><div class="qty"><button>−</button><span>1</span><button>+</button></div>
+        <button class="atc"><span>Add 3 items to cart<span class="l2">£318.00</span></span></button></div>
+      <p class="cap" style="margin-top:16px">金额四位数</p>
+      <div class="atc-row"><div class="qty"><button>−</button><span>2</span><button>+</button></div>
+        <button class="atc"><span>Add 6 items to cart<span class="l2">£1,458.00</span></span></button></div>
+    </div>
+  </div>
+
+  <h2>⑤ 自己点点看（会实时变）</h2>
+  <div class="state demo">
+    <div class="grp">选套装</div>
+    <div class="opts" id="bundles">
+      <button class="chip on" data-b="none">No Bundle · £65.00</button>
+      <button class="chip" data-b="motor">Smart Fusion + Motor · £229.00（2 件）</button>
+    </div>
+    <div class="grp">加购配件（可多选）</div>
+    <div class="opts" id="addons">
+      <button class="chip" data-a="hw">Handwheel · £89.00</button>
+      <button class="chip" data-a="wk">Small Wheel Kit · £39.00</button>
+    </div>
+    <div class="grp">免费赠品</div>
+    <div class="opts" id="gift">
+      <button class="chip on" data-g="1">USB Upgrader（免费）</button>
+      <button class="chip" data-g="0">No thanks</button>
+    </div>
+    <div class="grp">库存</div>
+    <div class="opts" id="stock">
+      <button class="chip on" data-s="in">有货</button>
+      <button class="chip" data-s="pre">预售</button>
+      <button class="chip" data-s="out">卖完</button>
+    </div>
+    <div style="height:14px"></div>
+    <div class="atc-row">
+      <div class="qty"><button id="minus">−</button><span id="q">1</span><button id="plus">+</button></div>
+      <button class="atc" id="cta"><span id="lbl"></span><span class="spin"><i></i></span></button>
+    </div>
+    <p class="note">规则：件数 = 主产品或套装里的每一件 × 数量 + 加购配件 + 赠品 × 数量。只有主产品时显示 ADD TO CART；多了任何别的东西就显示 ADD N ITEMS TO CART。点按钮可以看到加载转圈。</p>
+  </div>
+
+</div>
+<script>
+  var s = { b: "none", a: {}, g: true, q: 1, stock: "in" };
+  var BUNDLE = { none: { price: 65, items: 1 }, motor: { price: 229, items: 2 } };
+  var ADDON = { hw: 89, wk: 39 };
+  function gbp(n) { return "£" + n.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function render() {
+    var b = BUNDLE[s.b], items = b.items * s.q, total = b.price * s.q;
+    Object.keys(s.a).forEach(function (k) { if (s.a[k]) { items += 1; total += ADDON[k]; } });
+    if (s.g) items += s.q;
+    var cta = document.getElementById("cta"), lbl = document.getElementById("lbl");
+    cta.disabled = s.stock === "out";
+    if (s.stock === "out") { lbl.textContent = "Sold out"; return; }
+    var verb = s.stock === "pre" ? "Pre-order now" : "Add to cart";
+    var head = items === s.q ? verb : (s.stock === "pre" ? "Pre-order " + items + " items" : "Add " + items + " items to cart");
+    lbl.textContent = head + " - " + gbp(total);
+    document.getElementById("q").textContent = s.q;
+  }
+  function chips(id, fn) {
+    document.getElementById(id).addEventListener("click", function (e) {
+      var c = e.target.closest(".chip"); if (!c) return; fn(c, this); render();
+    });
+  }
+  chips("bundles", function (c, g) { g.querySelectorAll(".chip").forEach(function (x) { x.classList.remove("on"); }); c.classList.add("on"); s.b = c.dataset.b; });
+  chips("addons", function (c) { c.classList.toggle("on"); s.a[c.dataset.a] = c.classList.contains("on"); });
+  chips("gift", function (c, g) { g.querySelectorAll(".chip").forEach(function (x) { x.classList.remove("on"); }); c.classList.add("on"); s.g = c.dataset.g === "1"; });
+  chips("stock", function (c, g) { g.querySelectorAll(".chip").forEach(function (x) { x.classList.remove("on"); }); c.classList.add("on"); s.stock = c.dataset.s; });
+  document.getElementById("minus").onclick = function () { if (s.q > 1) { s.q--; render(); } };
+  document.getElementById("plus").onclick = function () { s.q++; render(); };
+  document.getElementById("cta").onclick = function () {
+    var c = this; c.classList.add("is-loading");
+    setTimeout(function () { c.classList.remove("is-loading"); }, 1200);
+  };
+  render();
+</script>
+</body>
+</html>
