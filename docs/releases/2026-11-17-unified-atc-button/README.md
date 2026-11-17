@@ -32,3 +32,11 @@
 - 主题:推前拉正式 buy-buttons 和 before/ 一致 → `--allow-live --nodelete` 推 3 个文件 → 拉回逐字节一致
 - 正式店复测:普通 £11.19 / 数量 2 £22.38;Smart Fusion £65.00 / + Motor 3 items £289.00 / 6 items £578.00;ColourFlex 套装 3 items £49.19;卖完 NOT AVAILABLE;手机两行;两个按钮真实加购成功
 - ⚠️ 真实加购测试在用户 Chrome 购物车里做的,恢复时被 KitBundle 购物车守卫打乱(13 件 → 11 件,Smart Fusion + Motor 套装和赠品那几行),没能精确还原,已告知用户
+
+## 🔤 字体调整(2026-11-17 同日第二次上线)
+- 参考 Moment 加购按钮:Geist 12px 常规 400、全大写、字距 0.12em(Moment 写 500 但只加载 400/600,实际显示 400)
+- 字体:Geist Regular(npm `geist` 1.9.2 原版 woff2,SIL OFL 1.1),主题 `assets/cgp-geist-regular.woff2`,在 buy-buttons 里声明 `@font-face "CGP Geist"` + preload;KitBundle 按钮用同一个字体名(靠主题声明,没有就退回系统字体)
+- KitBundle `addon-save.css`:按钮固定 12px / 400 / 0.12em(不再跟主题抄字号);上线 **kitbundle-130**
+- 主题:buy-buttons + cgp-atc.css + 字体文件,推后拉回逐字一致
+- 正式店复测:普通 ADD TO CART - £11.19 / 数量 2 £22.38;Smart Fusion + Motor ADD 3 ITEMS TO CART - £289.00;ColourFlex 套装 £49.19;卖完 NOT AVAILABLE;手机两行;Geist 已加载;按钮 47px。这次没做真实加购(只改字体样式,加购逻辑没动)
+- 还原:KitBundle `npx shopify app release --version kitbundle-129`;主题推 `font-before/`(主题仓库)

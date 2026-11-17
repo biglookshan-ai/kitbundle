@@ -2,8 +2,8 @@
   "slug": "unified-atc-button",
   "title": "Unified add-to-cart button",
   "title_zh": "统一加购按钮",
-  "summary": "Normal and KitBundle products share one add-to-cart button: all caps, light, no icon, black sweep on hover, quantity left, live total in the label (ADD N ITEMS TO CART when bundle parts, add-ons or gifts are included). Already live.",
-  "summary_zh": "普通产品和 KitBundle 产品用同一个加购按钮：全大写细体、无图标、hover 划黑，左数量右按钮，按钮里带实时总额（有配件 / 赠品时 ADD N ITEMS TO CART）。已上线。",
+  "summary": "Normal and KitBundle products share one add-to-cart button: Geist 12px caps with 0.12em spacing (after Moment), no icon, black sweep on hover, quantity left, live total in the label (ADD N ITEMS TO CART when bundle parts, add-ons or gifts are included). Live.",
+  "summary_zh": "普通产品和 KitBundle 产品用同一个加购按钮：Geist 12px 全大写、字距 0.12em（参考 Moment），无图标、hover 划黑，左数量右按钮，按钮里带实时总额（有配件 / 赠品时 ADD N ITEMS TO CART）。已上线。",
   "areas": [
     "product",
     "module"
@@ -55,10 +55,8 @@
   "rounds": [
     {
       "option": "A",
-      "optionName": "Unified button (live)",
-      "optionName_zh": "统一按钮（已上线）",
-      "notes": "Record of the change that went live on 17 Nov 2026 (KitBundle kitbundle-129 + 3 theme files). Before = live screenshots that morning, after = same products after the change.",
-      "notes_zh": "11/17 已上线改动的记录（KitBundle kitbundle-129 + 主题 3 个文件）。改前 = 当天上午正式店截图，改后 = 同样产品改完后的截图。",
+      "notes": "Button text now follows Moment's add-to-cart: Geist 12px, regular, all caps, 0.12em letter spacing (live 17 Nov, KitBundle kitbundle-130 + theme). All 'after' screenshots are the final live version; the overview has a new 'Label font after Moment' section.",
+      "notes_zh": "按钮文字改成参考 Moment：Geist 12px 常规、全大写、字距 0.12em（11/17 已上线，KitBundle kitbundle-130 + 主题）。所有「改后」截图换成最终上线版；总览新增「字体参考 Moment」一节。",
       "files": {
         "overview": {
           "d": "overview.html"

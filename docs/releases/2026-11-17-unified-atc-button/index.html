@@ -54,7 +54,7 @@
   <p class="meta">
     「改前」= 2026-11-17 正式店截图（正式主题 #183074816378 + 当时的 KitBundle）。
     「改后」= 同一产品在测试主题 #186525057402 上的截图（KitBundle 用这次的新代码），截图尺寸 1:1。
-    <br>状态：<b>✅ 2026-11-17 已上线</b>（KitBundle kitbundle-129 → 正式主题 3 个文件）。上线后在正式店复测通过，见最后一节。
+    <br>状态：<b>✅ 2026-11-17 已上线</b>（KitBundle kitbundle-129 → 正式主题 3 个文件）；同日按 Moment 改了字体（kitbundle-130，见第 ⑦ 节）。上线后在正式店复测通过，见最后一节。
   </p>
 
   <h2>① 普通产品（主题自带按钮）· Thunderbolt 5 Cable - Braided Series</h2>
@@ -173,7 +173,52 @@
     </div>
   </div>
 
-  <h2>⑦ 上线顺序和还原</h2>
+  <h2>⑦ 字体调整 · 参考 Moment（同日第二次上线）</h2>
+  <div class="case">
+    <div class="case__title">参考：Moment 的加购按钮</div>
+    <div class="case__desc">Moment 实测：Geist 字体 · 12px · 常规（400）· 全大写 · 字距 0.12em。我们只照它的字，按钮的黄底黑字、尺寸、划黑动画不变。</div>
+    <div class="single"><figure><img class="shot" src="shots/ref-moment.png" alt=""></figure></div>
+  </div>
+  <div class="case">
+    <div class="case__title">普通产品 · 电脑</div>
+    <div class="case__desc">原来：网站字体 16px 细体 300、字距 0.06em。现在：Geist 12px 常规、字距 0.12em。</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/after-plain-desktop.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/live-font-plain-desktop.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">普通产品 · 手机</div>
+    <div class="pair phone">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/after-plain-mobile.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/font-plain-mobile.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">KitBundle 带赠品 · 电脑</div>
+    <div class="pair">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/font-before-kb-gifts-desktop.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/live-font-kb-gifts-row.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">KitBundle 带赠品 · 手机</div>
+    <div class="pair phone">
+      <div><span class="col__tag b">改前</span><img class="shot" src="shots/after-kb-gifts-on-mobile.png" alt=""></div>
+      <div><span class="col__tag a">改后</span><img class="shot" src="shots/live-font-kb-gifts-mobile.png" alt=""></div>
+    </div>
+  </div>
+  <div class="case">
+    <div class="case__title">KitBundle 套装 · 卖完 · 鼠标移上去（改后）</div>
+    <div class="single">
+      <figure><img class="shot" src="shots/font-kb-bundle-desktop.png" alt=""><figcaption>套装</figcaption></figure>
+      <figure><img class="shot" src="shots/live-font-plain-soldout.png" alt=""><figcaption>卖完</figcaption></figure>
+      <figure><img class="shot" src="shots/font-plain-hover.png" alt=""><figcaption>鼠标移上去</figcaption></figure>
+    </div>
+    <p class="note">字体文件：Geist Regular（Vercel 官方，SIL 开源字体授权，授权文本在主题仓库 docs/fonts/Geist-OFL.txt），45KB，放在主题 assets/cgp-geist-regular.woff2，只在产品页加载、预加载，字体没到时先用系统字体显示。上线：KitBundle kitbundle-130 → 正式主题 3 个文件（buy-buttons、cgp-atc.css、字体），正式店复测通过。还原：KitBundle <code>release --version kitbundle-129</code>；主题推 font-before/ 里的两个文件。</p>
+  </div>
+
+  <h2>⑧ 上线顺序和还原</h2>
   <div class="case">
     <ul class="changes">
       <li><b>先上 KitBundle，再推主题。</b>反过来的话，中间那段时间旧 KitBundle 会把主题按钮里的金额一起抄过去，显示成「ADD TO CART-£289.00」挤在一起（测试时看到过）。</li>
