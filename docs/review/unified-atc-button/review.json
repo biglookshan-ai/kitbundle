@@ -1,11 +1,12 @@
 {
   "slug": "unified-atc-button",
-  "title": "Unified add-to-cart button",
-  "title_zh": "统一加购按钮",
-  "summary": "Normal and KitBundle products share one add-to-cart button: Geist 12px caps with 0.12em spacing (after Moment), no icon, black sweep on hover, quantity left, live total in the label (ADD N ITEMS TO CART when bundle parts, add-ons or gifts are included). Live.",
-  "summary_zh": "普通产品和 KitBundle 产品用同一个加购按钮：Geist 12px 全大写、字距 0.12em（参考 Moment），无图标、hover 划黑，左数量右按钮，按钮里带实时总额（有配件 / 赠品时 ADD N ITEMS TO CART）。已上线。",
+  "title": "Unified add-to-cart and buy buttons",
+  "title_zh": "统一加购和全站购买按钮",
+  "summary": "Product page add-to-cart (normal and KitBundle) plus every other buying button on the site (cart, side cart, product cards, Black Friday, bundle popup, wishlist, Notify me) now share one style: Geist 12px caps, yellow for buying, outlined for other actions. Live.",
+  "summary_zh": "产品页加购（普通和 KitBundle）和全站其他购买按钮（购物车、侧边购物车、商品卡片、黑五、套装弹窗、收藏夹、到货提醒）统一成一套样式：Geist 12px 全大写，买是黄色，其他是白底黑框。已上线。",
   "areas": [
     "product",
+    "collection",
     "module"
   ],
   "project": "KitBundle · Theme",
@@ -50,28 +51,59 @@
         "d": ".before/kb-bundle.html",
         "m": ".before/kb-bundle.m.html"
       }
+    },
+    {
+      "id": "buy-buttons",
+      "name": "Site-wide buy buttons overview",
+      "name_zh": "全站购买按钮总览",
+      "path": "/cart, /collections/*, /pages/wish-list …",
+      "isNew": true
+    },
+    {
+      "id": "cart",
+      "name": "Cart & checkout buttons",
+      "name_zh": "购物车按钮",
+      "path": "/cart",
+      "before": {
+        "d": ".before/cart.html"
+      }
+    },
+    {
+      "id": "cards",
+      "name": "Product cards & other buy buttons",
+      "name_zh": "卡片和其他购买按钮",
+      "path": "/collections/*",
+      "before": {
+        "d": ".before/cards.html"
+      }
+    },
+    {
+      "id": "wishlist",
+      "name": "Wishlist & Notify me",
+      "name_zh": "收藏夹和到货提醒",
+      "path": "/pages/wish-list",
+      "before": {
+        "d": ".before/wishlist.html"
+      }
     }
   ],
   "rounds": [
     {
       "option": "A",
-      "notes": "Button text now follows Moment's add-to-cart: Geist 12px, regular, all caps, 0.12em letter spacing (live 17 Nov, KitBundle kitbundle-130 + theme). All 'after' screenshots are the final live version; the overview has a new 'Label font after Moment' section.",
-      "notes_zh": "按钮文字改成参考 Moment：Geist 12px 常规、全大写、字距 0.12em（11/17 已上线，KitBundle kitbundle-130 + 主题）。所有「改后」截图换成最终上线版；总览新增「字体参考 Moment」一节。",
+      "notes": "Final live version (18 Nov): all other buy buttons now match the product page button. New pages: Site-wide buy buttons overview, Cart & checkout, Product cards, Wishlist & Notify me (use Compare with before). Card cart icons keep their grey; checkout page button still needs someone with checkout-settings access.",
+      "notes_zh": "最终上线版（11/18）：全站其他购买按钮统一成产品页同款。新增页面：全站购买按钮总览、购物车、卡片、收藏夹和到货提醒（可开「Compare with before」对比）。卡片小图标保持灰色；结账页按钮还要有结账设置权限的人改。",
       "files": {
-        "overview": {
-          "d": "overview.html"
+        "buy-buttons": {
+          "d": "buy-buttons.html"
         },
-        "plain": {
-          "d": "plain.html",
-          "m": "plain.m.html"
+        "cart": {
+          "d": "cart.html"
         },
-        "kb-gifts": {
-          "d": "kb-gifts.html",
-          "m": "kb-gifts.m.html"
+        "cards": {
+          "d": "cards.html"
         },
-        "kb-bundle": {
-          "d": "kb-bundle.html",
-          "m": "kb-bundle.m.html"
+        "wishlist": {
+          "d": "wishlist.html"
         }
       },
       "resolves": []
