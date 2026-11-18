@@ -17,11 +17,12 @@
 - (待定)App Store 提审:目前仅自家店使用,是否上架待用户决定
 
 ## 🏁 最近完成
-- **2026-11-18 产品页重新显示「随产品附带」(代码已提交,待 app deploy)**:用户发现 SMART FUSION 选「Smart Fusion」款式时产品页看不到 Upgrader
+- **2026-11-18 产品页重新显示「随产品附带」(kitbundle-131 已上线并实测;还原 `npx shopify app release --version kitbundle-130`)**:用户发现 SMART FUSION 选「Smart Fusion」款式时产品页看不到 Upgrader
   - 👀 「随产品附带」活动重新在产品页列在「Includes」下(无价格、不用勾选),只在活动适用的款式显示,切款式跟着变;11/09 起这块被整段过滤掉了
   - 🛒 加购仍然只加主产品,配件照旧由购物车守卫加(不会加两份);只有随产品附带活动的产品不会接管主题的加购按钮
   - 📝 后台选项说明改成「Listed under “Includes” on the product page」
-  - ✅ 正式店产品页 iframe 换脚本实测:Smart Fusion 显示 Includes、按钮「Add 2 items」;切 + Motor 消失、显示送 2 件配件;拦截加购请求只有主产品 1 件
+  - 🚀 上线后正式店实测:前台脚本已是 kitbundle-131;Smart Fusion 显示 Includes、加购只发主产品 1 件;切 + Motor 送 2 件配件照旧带上
+  - ✅ 上线前正式店产品页 iframe 换脚本实测:Smart Fusion 显示 Includes、按钮「Add 2 items」;切 + Motor 消失、显示送 2 件配件;拦截加购请求只有主产品 1 件
   - 🧭 起因:同事把原活动「SMART FUSION only USB」改成 3D Air 送 KANDAO,Upgrader 掉了「不单卖」标记出现在合集;用户已复制新建同名活动
 - **2026-11-11 部分数量折扣不再拆行 + 赠品跟着主产品(kitbundle-128 已上线并实测)**:用户发现主产品改成 2 个后变成两行、赠品出现数量框
   - 🧾 折扣程序:只给一行里部分数量的折扣(加购优惠 1 配 1、套装多出的配件、超量赠品)改成整行同额固定金额,Shopify 不再把一行拆成两行(购物车和结账都是一行);测试 48 个(新增 wholelines.test.js,用 Shopify 官方格式校验)
