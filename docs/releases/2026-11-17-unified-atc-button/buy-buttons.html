@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全站购买按钮统一 · 改前 / 改后（2026-11-18）</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f3f3; color: #1c222d; font-family: system_ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { font-size: 13px; color: #555; margin: 0 0 6px; line-height: 1.7; }
+  .meta { font-size: 12px; color: #777; margin: 0 0 18px; }
+  h2 { font-size: 15px; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #ddd; }
+  .case { background: #fff; border-radius: 8px; padding: 14px 18px 18px; margin-bottom: 12px; }
+  .t { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .d { font-size: 12px; color: #666; margin-bottom: 12px; line-height: 1.55; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+  .b { background: #eee; color: #555; } .a { background: #fff3c2; color: #6b5400; }
+  img { display: block; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 0 0 1px #e6e6e6; background: #fff; }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; } .row figure { margin: 0; } .row figcaption { font-size: 12px; color: #666; margin-top: 6px; }
+  .warn { background: #fff8e6; border: 1px solid #f3dca4; border-radius: 8px; padding: 12px 16px; font-size: 13px; line-height: 1.7; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #f4f4f4; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>全站购买按钮统一 · 改前 / 改后</h1>
+  <p class="lead">购物车、侧边购物车、黑五卡片、套装弹窗、Setup Kit、联合推广的按钮统一成产品页加购按钮的样子（黄底黑字、Geist 12px 全大写、字距 0.12em、圆角 8px、鼠标移上去黑色划过）。Check out 去掉锁图标；Continue shopping 改白底黑框；卡片上的小购物车图标平时灰底深色图标、移上去变黄、加好变黑。</p>
+  <p class="meta">改前 = 2026-11-18 正式店截图；改后 = 同样页面加上新样式文件（cgp-buy.css）后的截图。<b>还没上正式店。</b></p>
+
+  <h2>一、购物车</h2>
+  <div class="case"><div class="t">购物车页 Check out</div><div class="d">去掉锁图标，全大写细字；高度保留 54px。鼠标移上去黑色划过。</div>
+    <div class="pair"><div><span class="tag b">改前</span><img src="audit/cart-page-desktop.png" alt=""></div><div><span class="tag a">改后</span><img src="audit/after-cart-page-desktop.png" alt=""><div style="height:8px"></div><img src="audit/after-cart-page-hover.png" alt=""></div></div></div>
+  <div class="case"><div class="t">侧边购物车 View full cart</div>
+    <div class="pair"><div><span class="tag b">改前</span><img src="audit/cart-drawer-desktop.png" alt=""></div><div><span class="tag a">改后</span><img src="audit/after-cart-drawer.png" alt=""></div></div></div>
+  <div class="case"><div class="t">手机购物车底部悬浮条 · 购物车空时 Continue shopping</div>
+    <div class="row"><figure><span class="tag a">改后</span><img src="audit/after-cart-mobile-bar.png" alt=""><figcaption>手机底部 Check out</figcaption></figure><figure><span class="tag a">改后</span><img src="audit/after-continue-shopping.png" alt=""><figcaption>Continue shopping：白底黑框（原来是黄色大按钮）</figcaption></figure></div></div>
+
+  <h2>二、商品卡片小图标</h2>
+  <div class="case"><div class="t">合集 / 搜索 / Shop Similar / 购物车推荐 / 黑五网格的圆形购物车图标</div><div class="d">原来灰底浅灰图标，现在灰底（和旁边爱心同色）深色图标，鼠标移上去变黄，加进购物车后变黑。</div>
+    <div class="pair"><div><span class="tag b">改前</span><img src="audit/collection-card.png" alt="" style="max-width:240px"></div><div><span class="tag a">改后</span><img src="audit/after-collection-card.png" alt="" style="max-width:240px"><div style="height:8px"></div><img src="audit/after-card-icon-hover.png" alt="" style="max-width:160px"><div class="d" style="margin-top:4px">鼠标移上去</div></div></div></div>
+  <div class="case"><div class="t">产品页 Recommended Accessories 图标</div><div class="d">原来是另一种深一点的灰，现在和上面统一。</div>
+    <div class="pair"><div><span class="tag b">改前</span><img src="audit/pdp-recommended-accessories.png" alt=""></div><div><span class="tag a">改后（鼠标移上去）</span><img src="audit/after-accessories-hover.png" alt="" style="max-width:200px"></div></div></div>
+
+  <h2>三、其他文字按钮</h2>
+  <div class="case"><div class="t">黑五 Top Deals 卡片 Add to cart</div><div class="d">原来 #ffcc00 + 14px 特粗；现在和全站一样。高度按卡片保留 42px。</div>
+    <div class="pair"><div><span class="tag b">改前</span><img src="audit/bf-top-deals-card.png" alt="" style="max-width:240px"></div><div><span class="tag a">改后</span><img src="audit/after-bf-card.png" alt="" style="max-width:240px"><div style="height:8px"></div><img src="audit/after-bf-hover.png" alt="" style="max-width:300px"></div></div></div>
+  <div class="case"><div class="t">套装弹窗 Add to cart（搜索 / 合集卡片上点「N Bundles」打开）</div>
+    <div class="row"><figure><span class="tag a">改后</span><img src="audit/after-bundle-popup.png" alt=""></figure><figure><span class="tag a">改后 · 鼠标移上去</span><img src="audit/after-bundle-popup-hover.png" alt=""></figure></div></div>
+  <div class="case"><div class="t">Setup Kit「Add selected to cart」、联合推广卡片按钮</div><div class="d">正式店上目前没有产品开着这两个模块，按代码一起统一，以后打开就是同一个样子。</div></div>
+
+  <h2>四、结账页</h2>
+  <div class="warn">
+    结账页按钮现在是<b>深灰底白字</b>（截图见盘点页）。改它要在后台「设置 → 结账 → 自定义」（checkout 编辑器），<b>你的账号没有这个权限</b>（打开显示「You need permission to view this feature」），要店主或有结账设置权限的人来改：
+    <br>① 按钮颜色（Buttons / Primary button）背景 <code>#FCC900</code>、文字 <code>#1C222D</code>
+    <br>② 字体可以从 Shopify 字体列表里选（没有 Geist）；全大写、字距、划黑动画只有 Shopify Plus 能改
+  </div>
+
+  <h2>五、不动的</h2>
+  <div class="case"><div class="d" style="margin:0">Shop Pay / PayPal / Google Pay 快捷支付按钮（品牌规定）；卡片上的「N Bundles」红色小标签（是优惠标签，不是购买按钮）；首页横幅 Shop Now；数量、款式、收藏、到货提醒等。</div></div>
+
+  <h2>六、改了什么 / 怎么还原</h2>
+  <div class="case"><div class="d" style="margin:0">
+    主题只加了一个新文件 <code>assets/cgp-buy.css</code>，并在 <code>layout/theme.liquid</code> 的 <code>&lt;/head&gt;</code> 前加了 3 行（声明 Geist 字体 + 引入这个样式文件）。其他功能的文件一个都没改。<br>
+    还原：把 theme.liquid 里这 3 行删掉（或推回改前那份）就全部恢复。字体文件 45KB，以后每页都会加载（侧边购物车每页都有）。
+  </div></div>
+</div>
+</body>
+</html>

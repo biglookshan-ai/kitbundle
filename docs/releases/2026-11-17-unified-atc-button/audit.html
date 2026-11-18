@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全站购买按钮盘点（2026-11-18）</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f3f3; color: #1c222d; font-family: system_ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 28px 32px 60px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { font-size: 13px; color: #555; margin: 0 0 18px; line-height: 1.7; }
+  h2 { font-size: 15px; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #ddd; }
+  .item { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+  .item.wide { grid-template-columns: 1fr; }
+  .t { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .where { font-size: 12px; color: #777; margin-bottom: 8px; }
+  .now, .plan { font-size: 12.5px; line-height: 1.6; margin: 4px 0; }
+  .now b { color: #8a5a00; } .plan b { color: #1a6b2f; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; margin-right: 6px; }
+  .tag.y { background: #fff3c2; color: #6b5400; } .tag.g { background: #e6f4ea; color: #1a6b2f; } .tag.r { background: #fde8e6; color: #9c2b1f; } .tag.k { background: #eee; color: #555; }
+  img { display: block; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 0 0 1px #e6e6e6; background: #fff; }
+  .spec { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; background: #f4f4f4; padding: 1px 6px; border-radius: 3px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { color: #666; font-weight: 600; }
+  .target { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .demo { min-width: 300px; height: 47px; border-radius: 8px; background: #fcc900; color: #1c222d; display: flex; align-items: center; justify-content: center; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-family: "Geist", system_ui, sans-serif; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400&display=swap">
+</head>
+<body>
+<div class="page">
+  <h1>全站购买按钮盘点</h1>
+  <p class="lead">
+    目标样式 = 产品页现在的加购按钮：黄底黑字、Geist 12px 常规、全大写、字距 0.12em、鼠标移上去黑色从左划过字变白、圆角 8px。<br>
+    以下都是 2026-11-18 在正式店实测的。<span class="tag y">要改</span>文字按钮，能直接统一；<span class="tag k">待定</span>要你定怎么处理；<span class="tag r">受限</span>Shopify 只让改一部分。
+  </p>
+  <div class="item wide"><div class="target"><div class="demo">Add to cart - £65.00</div><span class="where">产品页现在的样子（目标）</span></div></div>
+
+  <h2>一、购物车（侧边购物车 + 购物车页）</h2>
+  <div class="item">
+    <div>
+      <div class="t"><span class="tag y">要改</span>购物车页「Check out」</div>
+      <div class="where">/cart 右侧汇总 · 手机底部悬浮条也是同一个按钮</div>
+      <p class="now"><b>现在：</b>黄底，<span class="spec">系统字体 16px 粗体 700</span>，首字母大写，前面有锁图标，高 54px，圆角 10px，鼠标移上去只是稍微变暗</p>
+      <p class="plan"><b>改成：</b>CHECK OUT，Geist 12px 全大写，划黑动画，圆角 8px。高度可保留 54px（这是页面上最重要的按钮）</p>
+    </div>
+    <img src="audit/cart-page-desktop.png" alt="">
+  </div>
+  <div class="item">
+    <div>
+      <div class="t"><span class="tag y">要改</span>侧边购物车「View full cart」</div>
+      <div class="where">每页右侧弹出的购物车底部 · 侧边购物车目前没有直接结账按钮，只能先进购物车页</div>
+      <p class="now"><b>现在：</b>和 Check out 同款（16px 粗体、高 50px、圆角 10px）</p>
+      <p class="plan"><b>改成：</b>VIEW FULL CART，同目标样式</p>
+    </div>
+    <img src="audit/cart-drawer-desktop.png" alt="">
+  </div>
+  <div class="item wide">
+    <div>
+      <div class="t"><span class="tag y">要改</span>「Continue shopping」</div>
+      <div class="where">购物车空的时候（侧边购物车 + 购物车页）</div>
+      <p class="now"><b>现在：</b>和 Check out 同款黄色大按钮</p>
+      <p class="plan"><b>改成：</b>同目标样式（或改成白底黑框的次要按钮，见下面待定问题）</p>
+    </div>
+  </div>
+  <div class="item wide">
+    <div>
+      <div class="t"><span class="tag k">不动</span>Shop Pay / PayPal / Google Pay 快捷支付按钮</div>
+      <p class="now">Shopify 和支付公司规定的品牌按钮，颜色字体不能改（只能调高度和圆角）。现在高 42px，可以让它们和上面的按钮圆角一致。</p>
+    </div>
+  </div>
+
+  <h2>二、结账页（Shopify Checkout）</h2>
+  <div class="item">
+    <div>
+      <div class="t"><span class="tag r">受限</span>结账页主按钮「Review order / Pay now」</div>
+      <div class="where">checkout 页面，Shopify 自己的页面，不在主题里</div>
+      <p class="now"><b>现在：</b><span class="spec">深灰底 #525252 白字</span>，Helvetica Neue 14px，圆角 12px —— 和网站其他地方差最多</p>
+      <p class="plan"><b>能改：</b>在后台「设置 → 结账 → 自定义」（checkout 编辑器）把按钮颜色改成黄底 #fcc900 + 深色字；字体可以从 Shopify 字体列表里选一个接近的</p>
+      <p class="plan" style="color:#9c2b1f"><b style="color:#9c2b1f">改不了：</b>全大写、字距、用我们自己的 Geist 文件、划黑动画 —— 这些只有 Shopify Plus 能改（我们是 Advanced）</p>
+    </div>
+    <img src="audit/checkout-button.png" alt="">
+  </div>
+
+  <h2>三、商品卡片上的小加购按钮（图标）</h2>
+  <div class="item">
+    <div>
+      <div class="t"><span class="tag k">待定</span>卡片右下角的圆形购物车图标</div>
+      <div class="where">合集页、搜索结果页、搜索弹窗、产品页 Shop Similar、购物车页推荐、黑五页 Deals 网格（同一个按钮，全站用得最多，单合集页就有几百个）</div>
+      <p class="now"><b>现在：</b>32×32 灰色圆形 <span class="spec">#eaeaea 底 + 灰图标</span>，没有文字</p>
+      <p class="plan"><b>建议：</b>卡片太小放不下「ADD TO CART」文字，保留图标；只统一颜色 / 鼠标移上去的效果（例如移上去变黄或变黑），和大按钮同一套颜色</p>
+    </div>
+    <img src="audit/collection-card.png" alt="" style="max-width:220px">
+  </div>
+  <div class="item">
+    <div>
+      <div class="t"><span class="tag k">待定</span>产品页「Recommended Accessories」小加购图标</div>
+      <div class="where">产品页推荐配件模块（另一套代码，和上面不完全一样）</div>
+      <p class="now"><b>现在：</b>32×32 圆形但颜色更深一点 <span class="spec">#dddddd</span></p>
+      <p class="plan"><b>建议：</b>和上一条合成同一个样式</p>
+    </div>
+    <img src="audit/pdp-recommended-accessories.png" alt="">
+  </div>
+
+  <h2>四、其他带文字的加购按钮</h2>
+  <div class="item">
+    <div>
+      <div class="t"><span class="tag y">要改</span>黑五页 Top Deals 卡片「Add to cart」</div>
+      <div class="where">/collections/bfcm 顶部 Top Deals（26 张卡）</div>
+      <p class="now"><b>现在：</b><span class="spec">#ffcc00</span>（和网站黄色 #fcc900 差一点），14px 特粗 800，高 42px，圆角 6px</p>
+      <p class="plan"><b>改成：</b>同目标样式，高度按卡片保留 42px</p>
+    </div>
+    <img src="audit/bf-top-deals-card.png" alt="" style="max-width:220px">
+  </div>
+  <div class="item wide">
+    <div>
+      <div class="t"><span class="tag y">要改</span>套装弹窗「Add bundle to cart」</div>
+      <div class="where">搜索 / 合集里点套装卡片弹出的窗口（KitBundle 套装进搜索）</div>
+      <p class="now"><b>现在：</b>14px 粗体 700，圆角 8px，首字母大写</p>
+      <p class="plan"><b>改成：</b>同目标样式</p>
+    </div>
+  </div>
+  <div class="item wide">
+    <div>
+      <div class="t"><span class="tag y">要改</span>Setup Kit「Add selected to cart · £…」、联合推广卡片的加购按钮</div>
+      <div class="where">产品页 Setup Kit 模块、联合推广（DZO × Thypoch 等）模块 —— 目前正式店上没看到有产品开着，按代码一起改，以后开了就是统一的</div>
+    </div>
+  </div>
+
+  <h2>五、不算购买按钮、不动的</h2>
+  <div class="item wide">
+    <table>
+      <tr><th>按钮</th><th>为什么不动</th></tr>
+      <tr><td>首页横幅「Shop Now」</td><td>是跳转链接，不是加购；白底小胶囊是横幅设计的一部分</td></tr>
+      <tr><td>数量 − / +、款式选择、KitBundle 卡片的选中圈 / 弹窗里的「Select」</td><td>是选择，不是购买</td></tr>
+      <tr><td>收藏爱心、Notify me（到货提醒）</td><td>不是购买</td></tr>
+      <tr><td>订单确认邮件里的按钮</td><td>邮件模板另算，要的话单独做</td></tr>
+    </table>
+  </div>
+</div>
+</body>
+</html>
