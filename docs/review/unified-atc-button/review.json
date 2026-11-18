@@ -90,9 +90,26 @@
   "rounds": [
     {
       "option": "A",
-      "notes": "Final live version (18 Nov): all other buy buttons now match the product page button. New pages: Site-wide buy buttons overview, Cart & checkout, Product cards, Wishlist & Notify me (use Compare with before). Card cart icons keep their grey; checkout page button still needs someone with checkout-settings access.",
-      "notes_zh": "最终上线版（11/18）：全站其他购买按钮统一成产品页同款。新增页面：全站购买按钮总览、购物车、卡片、收藏夹和到货提醒（可开「Compare with before」对比）。卡片小图标保持灰色；结账页按钮还要有结账设置权限的人改。",
+      "optionName": "Unified buy buttons (live)",
+      "optionName_zh": "统一购买按钮（已上线）",
+      "notes": "Final live version (17-18 Nov). Product page add-to-cart (normal and KitBundle) in Geist 12px caps with the live total, and every other buy button on the site in the same style: cart, side cart, product cards, Black Friday, bundle popup, wishlist, Notify me. Use Compare with before on each page. Checkout page button still needs someone with checkout-settings access.",
+      "notes_zh": "最终上线版（11/17-18）。产品页加购按钮（普通和 KitBundle）改成 Geist 12px 全大写并带实时总额，全站其他购买按钮统一成同一样式：购物车、侧边购物车、商品卡片、黑五、套装弹窗、收藏夹、到货提醒。每页可开「Compare with before」对比。结账页按钮还要有结账设置权限的人改。",
       "files": {
+        "overview": {
+          "d": "overview.html"
+        },
+        "plain": {
+          "d": "plain.html",
+          "m": "plain.m.html"
+        },
+        "kb-gifts": {
+          "d": "kb-gifts.html",
+          "m": "kb-gifts.m.html"
+        },
+        "kb-bundle": {
+          "d": "kb-bundle.html",
+          "m": "kb-bundle.m.html"
+        },
         "buy-buttons": {
           "d": "buy-buttons.html"
         },
