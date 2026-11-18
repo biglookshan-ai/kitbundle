@@ -3087,10 +3087,12 @@
   // hidden (so two buttons / two cart logics — or a pre-order app's handler —
   // can't fight ours), and our button MIRRORS it, so a theme state such as
   // "Pre-Order Now" or "Sold out" is preserved instead of a generic label.
-  // Gift campaigns inside their time window (any main variant).
+  // Gift campaigns inside their time window (any main variant). "Included"
+  // campaigns don't count: they're only shown on the page (the cart guard adds
+  // the parts), so on their own they don't need our add button.
   function giftsInWindow() {
     return (giftCampaigns || []).filter(function (c) {
-      return giftActive(c) && (c.giftHandles || []).length;
+      return !c.included && giftActive(c) && (c.giftHandles || []).length;
     });
   }
 
@@ -3388,6 +3390,9 @@
         // Live campaigns for the selected variant, after overlap rules (same as
         // the promo + the Function).
         liveCampaigns().forEach(function (c) {
+          // Included parts are added by the cart guard (from any page), not
+          // here — adding them too would double them up.
+          if (c.included) return;
           // One set per qualifying unit being added: each chosen gift at its
           // own quantity.
           var units = Math.max(1, addUnitsOf(plan));
@@ -4183,7 +4188,9 @@
     }
     // Add-on deals (kind "deal", % off a reward) aren't free gifts: the gift
     // picker ignores them (the discount Function applies them at checkout).
-    if (raw && raw.length) raw = raw.filter(function (e) { return e && e.kind !== "deal" && !e.included; }); // included parts: added + shown by the cart guard, not here
+    // Included parts: shown here under "Includes" (display only), added to the
+    // cart by the cart guard.
+    if (raw && raw.length) raw = raw.filter(function (e) { return e && e.kind !== "deal"; });
     if (!raw || !raw.length) return;
     // Normalise the product's gift_trigger entries into the campaign shape used
     // by the promo UI + the commit's gift-add (accepts both `triggers`/`gifts`
