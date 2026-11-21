@@ -1,0 +1,8 @@
+2026-11-21 (Asia/Shanghai)
+Code: 04850588817590f75cdb568ba4050ea1b7ad49e4
+Railway deployment: f2af1849-454a-4be3-9e2f-d4dcc797087e
+Railway status: SUCCESS
+Migration: 20261121000000_included_card_visibility successfully applied at 2026-11-21T02:16:06Z
+Shopify released: kitbundle-132
+Shopify version: 1260097208321
+Source theme files: unchanged
