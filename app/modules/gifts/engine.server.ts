@@ -175,8 +175,11 @@ function campaignEntry(c: GiftCampaign, tz: string, rewardIds: string[] = []) {
     // Add-on deal (2026-10-22): the reward products get `pct`% off, one unit per
     // qualifying unit, recognised by product id however they were added.
     ...(c.kind === "deal" ? { kind: "deal", pct: dealPct(c) } : {}),
-    // Shown as part of the product ("Includes"), no price, can't be declined.
-    ...(c.kind !== "deal" && c.presentation === "included" ? { included: true } : {}),
+    // Included parts stay in the stamp for the cart guard / checkout even when
+    // the merchant hides the product-page card. Omit the default for old stamps.
+    ...(c.kind !== "deal" && c.presentation === "included"
+      ? { included: true, ...(c.showIncludedCard === false ? { showIncludedCard: false } : {}) }
+      : {}),
     startsAt: c.startsAt || "",
     endsAt: c.endsAt || "",
   };

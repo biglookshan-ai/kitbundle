@@ -93,6 +93,8 @@ export type GiftCampaign = {
    * shown as part of the product ("Includes"), no price, no "No thanks".
    */
   presentation: "gift" | "included";
+  /** Included only: show the product-page Includes card; cart rules are unchanged. */
+  showIncludedCard: boolean;
   /**
    * Gift only. The reward products can't be bought on their own: the checkout
    * rule blocks them unless the cart holds enough of a qualifying product.
@@ -250,6 +252,7 @@ export function emptyCampaign(): GiftCampaign {
     giftProducts: [],
     kind: "gift",
     presentation: "gift",
+    showIncludedCard: true,
     notSoldSeparately: false,
     dealPercent: 10,
     rewardCollections: [],
@@ -366,6 +369,7 @@ export function rowToCampaign(row: any): GiftCampaign {
     })),
     kind: row.kind === "deal" ? "deal" : "gift",
     presentation: row.presentation === "included" ? "included" : "gift",
+    showIncludedCard: row.showIncludedCard !== false,
     notSoldSeparately: !!row.notSoldSeparately,
     dealPercent: dealPct({ dealPercent: row.dealPercent ?? 10 }),
     rewardCollections: parseRefs(row.rewardCollectionsJson),

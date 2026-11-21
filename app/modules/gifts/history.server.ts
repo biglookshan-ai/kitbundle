@@ -82,6 +82,8 @@ export function describeChanges(prev: GiftCampaign, next: GiftCampaign, tz: stri
     );
   if ((prev.presentation ?? "gift") !== (next.presentation ?? "gift"))
     out.push(next.presentation === "included" ? "Included like a bundle (added in the cart, no price)" : "Shown as a free gift");
+  if ((prev.showIncludedCard !== false) !== (next.showIncludedCard !== false))
+    out.push(next.showIncludedCard === false ? "Includes card hidden on the product page" : "Includes card shown on the product page");
   if (!!prev.notSoldSeparately !== !!next.notSoldSeparately)
     out.push(next.notSoldSeparately ? "Gifts can't be bought on their own" : "Gifts can be bought on their own again");
   if (prev.priority !== next.priority) out.push(`Priority ${prev.priority} → ${next.priority}`);

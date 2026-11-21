@@ -4,6 +4,13 @@ import { describeChanges } from "./history.server";
 import { emptyCampaign } from "../../models/gift-campaign";
 
 describe("campaign history", () => {
+  it("records Includes card visibility changes", () => {
+    const a = { ...emptyCampaign(), presentation: "included" as const };
+    const b = { ...a, showIncludedCard: false };
+    expect(describeChanges(a, b, "Europe/London")).toEqual(["Includes card hidden on the product page"]);
+    expect(describeChanges(b, a, "Europe/London")).toEqual(["Includes card shown on the product page"]);
+  });
+
   it("summarises status, dates, gifts and quantities in plain English", () => {
     const a = { ...emptyCampaign(), title: "Smart Fusion gifts", giftProducts: [{ id: "g1", title: "Lens Cloth", handle: "lc", qty: 1 }] };
     const b = {

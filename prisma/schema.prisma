@@ -89,6 +89,9 @@ model GiftCampaign {
   // Gift only: "gift" = shown as a free gift the shopper can decline;
   // "included" = shown as part of the product ("Includes"), no price, no opt-out.
   presentation  String    @default("gift")
+  // Included only: show the product-page Includes card. Parts still go into
+  // the cart when this is off. Existing campaigns keep showing the card.
+  showIncludedCard Boolean @default(true)
   // Gift only: the reward products can't be bought on their own — the checkout
   // rule blocks them unless the cart has enough of a qualifying product.
   notSoldSeparately Boolean @default(false)

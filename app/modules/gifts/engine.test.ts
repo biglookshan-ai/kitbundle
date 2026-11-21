@@ -374,6 +374,30 @@ describe("gift sync engine", () => {
     expect(db.giftOnlyMark.length).toBe(0);
   });
 
+  it("hides only the included card, keeps cart / checkout stamps, and syncs it back", async () => {
+    db.giftCampaign = [campaign("INC", {
+      allProducts: true, presentation: "included", notSoldSeparately: true,
+      giftProductsJson: JSON.stringify([{ id: P(99), title: "Part", handle: "part", qty: 2 }]),
+    })];
+    await syncAll(admin, "s");
+    const visible = JSON.parse(stamps[P(1)])[0];
+    const giftOnlyBefore = meta[`${P(99)} custom.kb_gift_only`];
+    expect(visible.included).toBe(true);
+    expect(visible.showIncludedCard).toBeUndefined(); // old stamps keep working
+    db.giftCampaign[0].showIncludedCard = false;
+    writes = [];
+    await syncAll(admin, "s");
+    expect(writes).toContain(P(1));
+    expect(JSON.parse(stamps[P(1)])[0]).toEqual({ ...visible, showIncludedCard: false });
+    expect(meta[`${P(99)} custom.kb_gift_only`]).toBe(giftOnlyBefore);
+    writes = [];
+    await syncProduct(admin, "s", P(1));
+    expect(writes).toEqual([]); // webhooks use exactly the same stamp
+    db.giftCampaign[0].showIncludedCard = true;
+    await syncAll(admin, "s");
+    expect(JSON.parse(stamps[P(1)])[0]).toEqual(visible);
+  });
+
   it("leaves a merchant's own seo.hidden alone", async () => {
     meta[`${P(99)} seo.hidden`] = "1";
     const A = db.giftCampaign.find((c) => c.id === "A")!;

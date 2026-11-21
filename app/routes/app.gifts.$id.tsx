@@ -916,7 +916,7 @@ export default function GiftCampaignEditor() {
                 {(
                   [
                     { value: "gift", title: "Free gift", desc: "Shown as a free gift with a FREE tag. Customers can choose “No thanks”." },
-                    { value: "included", title: "Included with the product (like a bundle)", desc: "Listed under “Includes” on the product page (no price, nothing to tick). Whenever the product goes into the cart (from any page), its parts are added with it and listed right under it with no price, and they follow its quantity. “Buy it now” is hidden on that product. Needs the “KitBundle cart guard” app embed switched on in the theme editor." },
+                    { value: "included", title: "Included with the product (like a bundle)", desc: "Parts are automatically added in the cart from any page, listed under the main product with no price, and follow its quantity. You can show or hide the “Includes” card on the product page below. “Buy it now” is hidden on that product. Needs the “KitBundle cart guard” app embed switched on in the theme editor." },
                   ] as const
                 ).map((m) => (
                   <label key={m.value} className={`kb-radio${(c.presentation ?? "gift") === m.value ? " is-on" : ""}`}>
@@ -933,6 +933,20 @@ export default function GiftCampaignEditor() {
                   </label>
                 ))}
               </div>
+              {c.presentation === "included" ? (
+                <div>
+                  <Switch
+                    label="Show Includes card on the product page"
+                    checked={c.showIncludedCard !== false}
+                    onChange={(v) => patch({ showIncludedCard: v })}
+                  />
+                  <div className="kb-sub" style={{ marginTop: 4 }}>
+                    Show the included parts below an “Includes” heading, with no price or checkbox.
+                    When off, the card is hidden; parts are still added automatically in the cart
+                    and follow the main product's quantity.
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <Checkbox
                   label="Not sold separately"

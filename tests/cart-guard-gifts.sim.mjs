@@ -184,6 +184,26 @@ await test("included part (existing behaviour) still added and follows the main"
   assert.equal(cart.find((l) => l.variant_id === 901).properties._cgp_inc, "1");
 });
 
+await test("hidden Includes card: part is still added, cannot be deleted, and follows main quantity / deletion", async () => {
+  const stamp = stampsOf["fusion-solo"][0];
+  stamp.showIncludedCard = false;
+  try {
+    const w = page({ ownProduct: "fusion-solo" });
+    await w.fetch("/cart/add.js", json({ items: [{ id: 801, quantity: 1 }] })); await settle();
+    assert.equal(qty(901, "camp_inc"), 1);
+    let part = cart.find((l) => l.variant_id === 901);
+    await w.fetch("/cart/change.js", json({ id: part.key, quantity: 0 })); await settle();
+    assert.equal(qty(901, "camp_inc"), 1);
+    const main = cart.find((l) => l.variant_id === 801);
+    await w.fetch("/cart/change.js", json({ id: main.key, quantity: 3 })); await settle();
+    assert.equal(qty(901, "camp_inc"), 3);
+    await w.fetch("/cart/change.js", json({ id: main.key, quantity: 0 })); await settle();
+    assert.equal(cart.length, 0);
+  } finally {
+    delete stamp.showIncludedCard;
+  }
+});
+
 await test("cart quantity of the main 1 → 2 → 1: its gifts follow (2, then 1)", async () => {
   const w = page();
   await w.fetch("/cart/add.js", json({ items: [{ id: 101, quantity: 1 }] })); await settle();

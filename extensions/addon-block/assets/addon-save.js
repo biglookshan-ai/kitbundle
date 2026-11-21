@@ -3809,7 +3809,11 @@
     var currency = root.getAttribute("data-currency") || "USD";
     // Time window, trigger-variant gate (hidden unless a qualifying variant is
     // selected) and overlap rules — the Function enforces the same at checkout.
-    var active = liveCampaigns();
+    // Resolve overlaps BEFORE hiding display-only cards: a hidden included
+    // campaign still wins / combines normally and still supplies its cart parts.
+    var active = liveCampaigns().filter(function (c) {
+      return !c.included || c.showIncludedCard !== false;
+    });
     if (!active.length) {
       host.hidden = true;
       return;
@@ -4201,6 +4205,7 @@
         // "Included" campaigns: shown as part of the product, every item, no
         // opt-out (and no price / FREE tag).
         included: !!e.included,
+        showIncludedCard: e.showIncludedCard !== false,
         rewardMode: e.included ? "all" : e.rewardMode || "fixed",
         perQualifying: Number(e.perQualifying) || 1,
         // Unified rule (same fallbacks as the discount Function): k different
